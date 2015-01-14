@@ -1,0 +1,39 @@
+#
+# $Id: fetchconfigtab,v 1.1 2007/01/11 15:11:38 djschaap Exp $
+#
+
+#
+# DEFAULT OPTIONS SECTION
+#
+#		model		options
+#
+default:	cisco-cat	user=backup,pass=fran,enable=jose
+default:	cisco-cat	timeout=10,keep=5
+default:	cisco-cat	changes_only=0,fetch_timeout=30
+default:	cisco-cat	repository=/var/fetchconfig
+
+default:	cisco-ios	user=backup,pass=fran,enable=jose
+default:	cisco-ios	timeout=10,keep=5,changes_only=0
+default:	cisco-ios	repository=/var/fetchconfig
+
+default:	fortigate	user=backup,pass=fran
+default:	fortigate	timeout=10,keep=5
+default:	fortigate	changes_only=0,fetch_timeout=30
+default:	fortigate	repository=/var/fetchconfig
+
+default:	procurve	user=backup,pass=fran,enable=jose
+default:	procurve	timeout=10,keep=5
+default:	procurve	changes_only=0,fetch_timeout=30
+default:	procurve	repository=/var/fetchconfig
+
+#
+# DEVICES SECTION
+#
+# model		dev-unique-id	hostname	device-specific-options
+#
+#cisco-ios	inet-gw		10.0.0.1
+#cisco-ios	vpn-gw		192.168.0.1	keep=10,changes_only=1
+#cisco-ios	ancient-ios	192.168.0.3	show_cmd=wrterm
+
+#cisco-cat	sales-sw	172.16.0.10
+#cisco-cat	eng-sw		172.16.0.11	keep=10,changes_only=1

@@ -1,0 +1,28 @@
+#!/bin/sh
+
+if [ -e /etc/sysconfig/fetchconfig ] ; then
+	. /etc/sysconfig/fetchconfig
+fi
+
+if [ -z "$FETCHCONF" ] ; then
+	/usr/bin/logger -p warning -t fetchconfig "no FETCHCONF specified; exiting"
+	exit 1
+fi
+
+if [ ! -f "$FETCHCONF" ] ; then
+	/usr/bin/logger -p warning -t fetchconfig "$FETCHCONF not found; exiting"
+	exit 1
+fi
+
+if ! egrep -q -v '^(\W*$|#|default:)' $FETCHCONF ; then
+	/usr/bin/logger -p warning -t fetchconfig "$FETCHCONF contains no devices; exiting"
+	exit 1
+fi
+
+/usr/bin/fetchconfig -devices=$FETCHCONF
+
+EXITVALUE=$?
+if [ $EXITVALUE != 0 ]; then
+    /usr/bin/logger -p warning -t fetchconfig "exited abnormally with [$EXITVALUE]"
+fi
+exit 0

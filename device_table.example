@@ -1,0 +1,105 @@
+#
+# $Id: device_table.example,v 1.19 2013/10/16 03:29:11 evertonm Exp $
+#
+
+# DEFAULT OPTIONS SECTION
+#
+#		model		options
+#
+default:	cisco-ios	user=backup,pass=fran,enable=jose
+default:	cisco-ios	timeout=10,keep=5,changes_only=0
+default:	cisco-ios	repository=/var/fetchconfig/save
+
+default:	cisco-cat	user=backup,pass=fran,enable=jose
+default:	cisco-cat	timeout=10,keep=5
+default:	cisco-cat	changes_only=0,fetch_timeout=30
+default:	cisco-cat	repository=/var/fetchconfig/save
+
+default:        parks           user=admin,pass=parks
+default:        parks           timeout=2,keep=5
+default:        parks           fetch_timeout=30,banner_timeout=60
+default:        parks           repository=/var/fetchconfig/save
+
+default:        riverstone      user=rs3,pass=100,enable=adm
+default:        riverstone      timeout=3,keep=3
+default:        riverstone      fetch_timeout=30
+default:        riverstone      repository=/var/fetchconfig/save
+
+default:	terayon-os	user=testuser,pass=testpassword,enable=testenable
+default:	terayon-os	timeout=60,keep=50,changes_only=0
+default:	terayon-os	repository=/var/fetchconfig/save
+
+default:        dmswitch        user=dm,pass=dmpass
+default:        dmswitch        timeout=10,keep=5,changes_only=0
+default:        dmswitch        repository=/var/fetchconfig/save
+
+default:	cisco-asa	timeout=10,keep=5,changes_only=1
+default:	cisco-asa	repository=/srv/fetchconfig
+
+default:        3com-msr        user=admin,pass=lab,enable=lab
+default:        3com-msr        timeout=10,keep=5,changes_only=0
+default:        3com-msr        repository=/var/fetchconfig/save
+
+default:        mikrotik        user=admin,pass=
+default:        mikrotik        timeout=10,keep=5,changes_only=0
+default:        mikrotik        repository=/var/fetchconfig/save
+
+default:	cisco-pix	timeout=10,keep=5,changes_only=1
+default:	cisco-pix	repository=/var/fetchconfig/save
+
+default:        tellabs-msr     user=usr,pass=pwd,enable=jose
+default:        tellabs-msr     timeout=10,keep=5,changes_only=0
+default:        tellabs-msr     fetch_timeout=1200
+default:        tellabs-msr     repository=/var/fetchconfig/save
+default:	tellabs-msr	filename_append_suffix=.txt
+
+default:	junos		user=juniper,pass=jun@321
+default:	junos		timeout=10,keep=5,changes_only=0
+default:	junos		filename_append_suffix=.txt
+default:	junos		repository=/var/fetchconfig/save
+
+default:	acme		user=admin,pass=acme
+default:	acme		timeout=10,keep=5,changes_only=0
+default:	acme		filename_append_suffix=.txt
+default:	acme		repository=/var/fetchconfig/save
+
+default:	mediant		user=Admin,pass=Admin
+default:	mediant		timeout=10,keep=5,changes_only=0
+default:	mediant		filename_append_suffix=.txt
+default:	mediant		repository=/var/fetchconfig/save
+
+# DEVICES SECTION
+#
+# model		dev-unique-id	hostname	device-specific-options
+#
+cisco-ios	inet-gw		10.0.0.1
+cisco-ios	vpn-gw		192.168.0.1	keep=10,changes_only=1
+cisco-ios	ancient-ios	192.168.0.3	show_cmd=wrterm
+
+cisco-cat	sales-sw	172.16.0.10
+cisco-cat	eng-sw		172.16.0.11	keep=10,changes_only=1
+
+parks           lab209r		10.30.0.6
+
+riverstone      lab3100         10.1.30.2
+
+terayon-os	cmts-1		10.10.1.1
+terayon-os	cmts-2		10.10.1.2
+
+dmswitch        lab3224F2       10.1.59.130
+
+cisco-asa	fw1-1		10.1.1.1	user=fwadmin,pass=fwpass,enable=fwpass
+
+3com-msr        lab20-11        10.0.0.147
+
+mikrotik        lab-rb800       10.0.0.147
+
+cisco-pix	lab-pix		10.0.0.1	user=pixadmin,pass=pixpass,enable=pixenable
+
+tellabs-msr     8800-lab        1.1.1.1
+
+junos		ex4200-1	10.1.0.100
+
+acme		sbc1		10.2.2.2
+
+mediant		gateway1	11.0.0.2

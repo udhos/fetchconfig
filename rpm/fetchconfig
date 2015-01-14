@@ -1,0 +1,4 @@
+#!/bin/sh
+
+perl -I/usr/lib/fetchconfig /usr/lib/fetchconfig/fetchconfig.pl "$@"
+

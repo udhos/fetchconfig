@@ -1,0 +1,116 @@
+#
+# $Id: CHANGES,v 1.53 2013/10/16 03:29:10 evertonm Exp $
+#
+
+0.23
+====
++ support for -line=string switch for passing device table lines
+  directly into the command-line.
++ option on_fetch_cat=1 issues current configuration to stdout.
++ Acme.pm: support for Oracle Acme Packet.
++ Mediant.pm: support for Audiocodes Mediant.
+
+0.22
+====
++ JunOS.pm: support for Juniper JunOS.
+
+0.21
+====
++ TellabsMSR.pm: support for Tellabs MSR Routers.
+
+0.20
+====
++ CiscoPIX.pm: support for Cisco PIX.
+
+0.19
+====
++ suport for Mikrotik RB800.
+
+0.18
+====
++ support for 3Com MSR devices.
+
+0.17
+====
++ bug #25475: Stuart Schneis added compatibility for Dell 6224P, 5324, 5424
+
+0.16
+====
++ rip@devco.net added CiscoASA.pm sr #106606: Cisco ASA Support 
+
+0.15
+====
++ support equal '=' character in values for options.
+
+0.14
+====
++ option timezone=hide omits timezone name from file name.
++ added DmSwitch.pm for Datacom DmSwitch devices.
+
+0.13
+====
++ resort to strftime -%Z for tz name in systems which
+  lack support for strftime %z for tz offset (Solaris 7).
++ added FETCHCONFIG_DEV_ID and FETCHCONFIG_DEV_HOST
+  environmental variables to external on_fetch_run program.
+
+0.12
+====
++ option on_fetch_run to call an external program whenever
+  a config backup is fetched.
++ append timezone offset to backup filename.
++ Sergey Alexanov added Terayon.pm for Old Terayon 3200/3500 CMTS.
+
+0.11
+====
++ add retrieval timing info into log.
+
+0.10
+====
++ bug #21501: Problem if device-specific-options are not specified
+
+0.9
+===
++ Slightly better device table parser in order to support
+  options with blank spaces. Example: show_cmd=show run
+
+0.8
+===
++ Julien Louis added Dell.pm for Dell PowerConnect switches.
+
+0.7
+===
++ added Riverstone.pm for Alcatel Ethernet Routers.
+
+0.6
+===
++ added Parks.pm.
++ log program version. (cmd line option: -v)
+
+0.5
+===
++ added show_cmd option for older routers in CiscoIOS.pm. (Task 6204)
++ added FortiGate.pm.  (Doug Schaapveld / Task 6205)
++ modified CiscoIOS.pm, FortiGate.pm to strip leading "show" commands
+  and other info.  This results in clean configs that can be used
+  as-is to restore a device.  (Doug Schaapveld)
++ added ProCurve.pm for HP Procurve switches.  (Doug Schaapveld)
+
+0.4
+===
++ added CiscoCAT.pm contributed by Marcos Sandez.
+
+0.3
+===
++ ported to Windows.
+
+0.2
+===
++ new filesystem layout.
++ FSF address updated.
+
+0.1
+===
++ notes about the device id.
++ copyright notice at beginning of source files.
++ added this CHANGES file.

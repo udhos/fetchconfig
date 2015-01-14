@@ -1,0 +1,10 @@
+#
+# $Id: CREDITS,v 1.6 2009/02/03 11:07:55 evertonm Exp $
+#
+
+Marcos Sandez <sandez.marcos@gene.com> contributed CiscoCAT.pm
+Doug Schaapveld <djschaap@gmail.com> added FortiGate.pm, old IOS support
+Julien Louis <ptitlouis> added Dell.pm
+Sergey Alexanov <salexanov@gmail.com> added Terayon.pm for Old Terayon 3200/3500 CMTS
+rip@devco.net added CiscoASA.pm
+Stuart Schneis <savannah.nongnu.org@mail.dvl.net> added support for Dell switches 6224P, 5324, 5424

@@ -39,6 +39,7 @@ use fetchconfig::model::TellabsMSR;
 use fetchconfig::model::JunOS;
 use fetchconfig::model::Acme;
 use fetchconfig::model::Mediant;
+use fetchconfig::model::CiscoIOSXR;
 
 my $logger;
 my %model_table;
@@ -226,6 +227,7 @@ sub init {
     $class->register(fetchconfig::model::JunOS->new($log));
     $class->register(fetchconfig::model::Acme->new($log));
     $class->register(fetchconfig::model::Mediant->new($log));
+    $class->register(fetchconfig::model::CiscoIOSXR->new($log));
 }
 
 1;

@@ -2,6 +2,10 @@
 # $Id: CHANGES,v 1.53 2013/10/16 03:29:10 evertonm Exp $
 #
 
+0.24
+====
++ CiscoIOSXR.pm: support for Cisco IOS XR.
+
 0.23
 ====
 + support for -line=string switch for passing device table lines

@@ -138,11 +138,15 @@ sub expect_enable_prompt {
 	return undef;
     }
 
-    my $enable_prompt_regexp = '/' . $prompt . '#$/';
+    my $enable_prompt_regexp = $prompt;
+
+    $enable_prompt_regexp =~ s{/}{\\/}g; # replace / with \/
+
+    $enable_prompt_regexp = '/' . $enable_prompt_regexp . '#$/';
 
     my ($prematch, $match) = $t->waitfor(Match => $enable_prompt_regexp);
     if (!defined($prematch)) {
-	$self->log_error("could not match enable command prompt: $enable_prompt_regexp");
+	$self->log_error("could not match enable command prompt: prompt='$prompt' regexp='$enable_prompt_regexp'");
     }
 
     ($prematch, $match);

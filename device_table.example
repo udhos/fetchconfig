@@ -68,6 +68,11 @@ default:	mediant		timeout=10,keep=5,changes_only=0
 default:	mediant		filename_append_suffix=.txt
 default:	mediant		repository=/var/fetchconfig/save
 
+default:        cisco-iosxr     user=backup,pass=fran
+default:        cisco-iosxr     timeout=10,keep=5,changes_only=0
+default:        cisco-iosxr     repository=/var/fetchconfig/save
+
+
 # DEVICES SECTION
 #
 # model		dev-unique-id	hostname	device-specific-options
@@ -103,3 +108,5 @@ junos		ex4200-1	10.1.0.100
 acme		sbc1		10.2.2.2
 
 mediant		gateway1	11.0.0.2
+
+cisco-iosxr     asr9010-edge    127.0.0.1

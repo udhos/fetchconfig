@@ -40,6 +40,7 @@ use fetchconfig::model::JunOS;
 use fetchconfig::model::Acme;
 use fetchconfig::model::Mediant;
 use fetchconfig::model::CiscoIOSXR;
+use fetchconfig::model::NECUnivergeIX;
 
 my $logger;
 my %model_table;

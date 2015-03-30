@@ -228,6 +228,7 @@ sub init {
     $class->register(fetchconfig::model::Acme->new($log));
     $class->register(fetchconfig::model::Mediant->new($log));
     $class->register(fetchconfig::model::CiscoIOSXR->new($log));
+    $class->register(fetchconfig::model::NECUnivergeIX->new($log));
 }
 
 1;

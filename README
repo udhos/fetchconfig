@@ -12,7 +12,8 @@ INTRODUCTION
 	Riverstone), Dell PowerConnect Switches, Terayon 3200/3500
 	CMTS, Datacom DmSwitch Switches, HP MSR Routers, Mikrotik
 	Routers, Tellabs MSR Routers, Juniper EX Switch JunOS, Oracle
-	Acme Packet, Audiocodes Mediant.
+	Acme Packet, Audiocodes Mediant, Cisco IOS XR, NEC Univerge
+	IX.
 
 LICENSE
 
@@ -174,6 +175,8 @@ DEVICE SUPPORT
 	acme		Oracle Acme Packet
 
 	mediant		Audiocodes Mediant
+
+	nec-univerge-ix	NEC Univerge IX
 
 
 OPTIONS
@@ -417,6 +420,21 @@ OPTIONS
 	filename_append_suffix Optional.
 
 	The mediant module recognizes the following options:
+	(See above cisco-ios/cisco-cat section for descriptions.)
+
+	user		Mandatory.
+	pass		Mandatory.
+	timeout		Mandatory.
+	repository	Mandatory.
+	keep		Mandatory.
+	fetch_timeout	Optional.
+	changes_only	Optional.
+	on_fetch_run	Optional.
+	on_fetch_cat	Optional.
+	timezone	Optional.
+	filename_append_suffix Optional.
+
+	The NEC Univerge IX module recognizes the following options:
 	(See above cisco-ios/cisco-cat section for descriptions.)
 
 	user		Mandatory.

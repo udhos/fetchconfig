@@ -73,6 +73,11 @@ default:        cisco-iosxr     timeout=10,keep=5,changes_only=0
 default:        cisco-iosxr     repository=/var/fetchconfig/save
 
 
+default:	nec-univerge-ix	user=admin,pass=admin
+default:	nec-univerge-ix	timeout=10,keep=5,changes_only=0
+default:	nec-univerge-ix	filename_append_suffix=.txt
+default:	nec-univerge-ix	repository=/var/fetchconfig/save
+
 # DEVICES SECTION
 #
 # model		dev-unique-id	hostname	device-specific-options
@@ -110,3 +115,5 @@ acme		sbc1		10.2.2.2
 mediant		gateway1	11.0.0.2
 
 cisco-iosxr     asr9010-edge    127.0.0.1
+
+nec-univerge-ix ix-01           10.22.1.5

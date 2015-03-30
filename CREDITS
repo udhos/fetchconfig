@@ -8,3 +8,4 @@ Julien Louis <ptitlouis> added Dell.pm
 Sergey Alexanov <salexanov@gmail.com> added Terayon.pm for Old Terayon 3200/3500 CMTS
 rip@devco.net added CiscoASA.pm
 Stuart Schneis <savannah.nongnu.org@mail.dvl.net> added support for Dell switches 6224P, 5324, 5424
+Sohgo Takeuchi added NECUnivergeIX.pm

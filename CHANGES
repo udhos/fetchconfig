@@ -5,6 +5,7 @@
 0.24
 ====
 + CiscoIOSXR.pm: support for Cisco IOS XR.
++ NECUnivergeIX.pm: support for NEC Univerge IX series.
 
 0.23
 ====

@@ -4,6 +4,7 @@
 
 0.24
 ====
++ Coriant8600.pm: support for Coriant 8600.
 + CiscoIOSXR.pm: support for Cisco IOS XR.
 + NECUnivergeIX.pm: support for NEC Univerge IX series.
 

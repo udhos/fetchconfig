@@ -62,7 +62,7 @@ sub chat_login {
 
     my ($prematch, $match) = $t->waitfor(Match => '/(User Name:|User:|Password:) ?$/');
     if (!defined($prematch)) {
-	$self->log_error("could not find login prompt");
+	$self->log_error("could not find login prompt: $login_prompt");
 	return undef;
     }
 
@@ -96,7 +96,7 @@ sub chat_login {
 	    $self->log_error("login password needed but not provided");
 	    return undef;
         }
-	$ok = $t->print("$dev_pass");
+	$ok = $t->print($dev_pass);
 	if (!$ok) {
 	    $self->log_error("could not send login password");
 	    return undef;
@@ -109,7 +109,7 @@ sub chat_login {
 	}
 
 	if ($match =~/>$/) {
-	    $ok = $t->print("enable");
+	    $ok = $t->print('enable');
 	    if (!$ok) {
 	        $self->log_error("could not send enable command");
 	        return undef;
@@ -151,7 +151,6 @@ sub expect_enable_prompt {
 
     my ($prematch, $match) = $t->waitfor(Match => $enable_prompt_regexp);
     if (!defined($prematch)) {
-print STDERR "dbg: prematch is undef, match='$match'\n";
 	$self->log_error("could not match enable command prompt: $enable_prompt_regexp");
     }
 

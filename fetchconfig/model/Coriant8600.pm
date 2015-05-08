@@ -192,19 +192,6 @@ sub chat_fetch {
 	return 1;
     }
 
-	# Commment out garbage at top so config file can be restored
-	# cleanly at a later date
-	my $top_info;
-	while (my $line = $t->getline()) {
-		# assume config begins with first valid comment.
-		if ($line =~ /^\!/) {
-			$top_info .= $line;
-			last;
-		} else {
-			$top_info .= '!!' . $line;
-		}
-	}
-
     my $save_timeout;
     if (defined($fetch_timeout)) {
         $save_timeout = $t->timeout;
@@ -223,7 +210,7 @@ sub chat_fetch {
 
     $self->log_debug("found end of configuration: [$match]");
 
-    @$conf_ref = split /\n/, $top_info . $prematch;
+    @$conf_ref = split /\n/, $prematch;
 
     $self->log_debug("fetched: " . scalar @$conf_ref . " lines");
 

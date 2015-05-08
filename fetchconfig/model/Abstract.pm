@@ -426,22 +426,24 @@ sub expect_enable_prompt_paging_auto {
 
     my $escaped_prompt = &escape_brackets($prompt);
     #$self->log_debug("regexp='$prompt' escaped_brackets='$escaped_prompt'");
-    my $prompt_regexp = '/(' . $escaped_prompt . ')|(\Q' . $paging_prompt . '\E)/';
-    my $paging_prompt_regexp = '/' . $paging_prompt . '/';
+    my $prompt_regexp = '/(' . $escaped_prompt . '#$)|(\Q' . $paging_prompt . '\E$)/';
 
     my ($prematch, $match, $full_prematch);
 
     for (;;) {
+	$self->log_debug("paging: searching: $prompt_regexp");
         ($prematch, $match) = $t->waitfor(Match => $prompt_regexp);
         if (!defined($prematch)) {
             $self->log_error("could not match enable/paging prompt: $prompt_regexp");
             return; # signals error with undef
         }
 
+	$self->log_debug("paging: found: match=[$match]");
+
         $full_prematch .= $prematch;
 
         if ($match ne $paging_prompt) {
-            #$self->log_debug("done paging match: [$match][$paging_prompt_regexp]");
+            $self->log_debug("paging: done: match=[$match] paging_prompt=[$paging_prompt]");
             last;
         }
 

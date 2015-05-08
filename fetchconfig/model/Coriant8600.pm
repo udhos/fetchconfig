@@ -187,6 +187,12 @@ sub expect_enable_prompt {
 sub chat_fetch {
     my ($self, $t, $dev_id, $dev_host, $prompt, $fetch_timeout, $show_cmd, $conf_ref) = @_;
     my ($ok, $prematch, $match);
+
+    $ok = $t->print('terminal more off');
+    if (!$ok) {
+	$self->log_error("could not send pager disabling command");
+	return 1;
+    }
     
     if ($self->chat_show_conf($t, 'show run', $show_cmd)) {
 	return 1;
@@ -213,6 +219,12 @@ sub chat_fetch {
     @$conf_ref = split /\n/, $prematch;
 
     $self->log_debug("fetched: " . scalar @$conf_ref . " lines");
+
+    $ok = $t->print('terminal more on');
+    if (!$ok) {
+	$self->log_error("could not send pager enabling command");
+	return 1;
+    }
 
     return undef;
 }

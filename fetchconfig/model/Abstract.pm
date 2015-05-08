@@ -406,4 +406,54 @@ sub purge_ancient {
     }
 }
 
+sub escape_brackets {
+    my ($str) = @_;
+
+    $str =~ s/\@/\\\@/g;
+    $str =~ s/\[/\\\[/g;
+    $str =~ s/\]/\\\]/g;
+
+    $str;
+}
+
+sub expect_enable_prompt_paging_auto {
+    my ($self, $t, $prompt, $paging_prompt) = @_;
+
+    if (!defined($prompt)) {
+        $self->log_error("internal failure: undefined command prompt");
+        return undef;
+    }
+
+    my $escaped_prompt = &escape_brackets($prompt);
+    #$self->log_debug("regexp='$prompt' escaped_brackets='$escaped_prompt'");
+    my $prompt_regexp = '/(' . $escaped_prompt . ')|(\Q' . $paging_prompt . '\E)/';
+    my $paging_prompt_regexp = '/' . $paging_prompt . '/';
+
+    my ($prematch, $match, $full_prematch);
+
+    for (;;) {
+        ($prematch, $match) = $t->waitfor(Match => $prompt_regexp);
+        if (!defined($prematch)) {
+            $self->log_error("could not match enable/paging prompt: $prompt_regexp");
+            return; # signals error with undef
+        }
+
+        $full_prematch .= $prematch;
+
+        if ($match ne $paging_prompt) {
+            #$self->log_debug("done paging match: [$match][$paging_prompt_regexp]");
+            last;
+        }
+
+        # Do paging
+        my $ok = $t->put(' '); # SPACE
+        if (!$ok) {
+            $self->log_error("could not send paging SPACE command");
+            return; # signals error with undef
+        }
+    }
+
+    ($full_prematch, $match);
+}
+
 1;

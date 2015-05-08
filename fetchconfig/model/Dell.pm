@@ -60,7 +60,9 @@ sub chat_login {
     my ($self, $t, $dev_id, $dev_host, $dev_opt_tab) = @_;
     my $ok;
 
-    my ($prematch, $match) = $t->waitfor(Match => '/(User Name:|User:|Password:) ?$/');
+    my $login_prompt = '/(User Name:|User:|Password:) ?$/';
+
+    my ($prematch, $match) = $t->waitfor(Match => $login_prompt);
     if (!defined($prematch)) {
 	$self->log_error("could not find login prompt: $login_prompt");
 	return undef;

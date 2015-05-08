@@ -41,6 +41,7 @@ use fetchconfig::model::Acme;
 use fetchconfig::model::Mediant;
 use fetchconfig::model::CiscoIOSXR;
 use fetchconfig::model::NECUnivergeIX;
+use fetchconfig::model::Coriant8600;
 
 my $logger;
 my %model_table;
@@ -230,6 +231,7 @@ sub init {
     $class->register(fetchconfig::model::Mediant->new($log));
     $class->register(fetchconfig::model::CiscoIOSXR->new($log));
     $class->register(fetchconfig::model::NECUnivergeIX->new($log));
+    $class->register(fetchconfig::model::Coriant8600->new($log));
 }
 
 1;

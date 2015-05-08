@@ -72,11 +72,15 @@ default:        cisco-iosxr     user=backup,pass=fran
 default:        cisco-iosxr     timeout=10,keep=5,changes_only=0
 default:        cisco-iosxr     repository=/var/fetchconfig/save
 
-
 default:	nec-univerge-ix	user=admin,pass=admin
 default:	nec-univerge-ix	timeout=10,keep=5,changes_only=0
 default:	nec-univerge-ix	filename_append_suffix=.txt
 default:	nec-univerge-ix	repository=/var/fetchconfig/save
+
+default:        coriant-8600    user=backup,pass=fran,enable=jose
+default:        coriant-8600    timeout=10,keep=5,changes_only=0
+default:        coriant-8600    repository=/var/fetchconfig/save
+
 
 # DEVICES SECTION
 #
@@ -117,3 +121,5 @@ mediant		gateway1	11.0.0.2
 cisco-iosxr     asr9010-edge    127.0.0.1
 
 nec-univerge-ix ix-01           10.22.1.5
+
+coriant-8600	8605		10.0.0.1

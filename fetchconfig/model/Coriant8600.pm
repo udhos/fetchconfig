@@ -226,7 +226,7 @@ sub chat_fetch {
     $self->log_debug("fetched: " . scalar @$conf_ref . " lines");
 
     #
-    # turn off paging
+    # turn on paging
     #
     $ok = $t->print('terminal more on');
     if (!$ok) {

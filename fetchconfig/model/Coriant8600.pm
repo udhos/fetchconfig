@@ -196,8 +196,8 @@ sub chat_fetch {
 	$self->log_error("could not send pager disabling command");
 	return 1;
     }
-    my ($prematch, $match) = $self->expect_enable_prompt($t, $prompt);
-    return unless defined($prematch);
+    ($prematch, $match) = $self->expect_enable_prompt($t, $prompt);
+    return 1 unless defined($prematch);
     
     if ($self->chat_show_conf($t, 'show run', $show_cmd)) {
 	return 1;
@@ -233,8 +233,8 @@ sub chat_fetch {
 	$self->log_error("could not send pager enabling command");
 	return 1;
     }
-    my ($prematch, $match) = $self->expect_enable_prompt($t, $prompt);
-    return unless defined($prematch);
+    ($prematch, $match) = $self->expect_enable_prompt($t, $prompt);
+    return 1 unless defined($prematch);
 
     return undef;
 }

@@ -154,6 +154,8 @@ DEVICE SUPPORT
 
 	cisco-pix	Cisco PIX firewalls
 
+	cisco-iosxr	Cisco IOS XR
+
 	fortigate	FortiOS 3.0
 
 	parks		Parks 209R
@@ -167,6 +169,8 @@ DEVICE SUPPORT
 	3com-msr	3Com MSR routers
 
 	mikrotik	MikroTik routers
+
+	coriant-8600	Coriant 8600 Smart Router Series
 
 	tellabs-msr	Tellabs MSR routers
 
@@ -434,7 +438,37 @@ OPTIONS
 	timezone	Optional.
 	filename_append_suffix Optional.
 
-	The NEC Univerge IX module recognizes the following options:
+	The nec-univerge-ix module recognizes the following options:
+	(See above cisco-ios/cisco-cat section for descriptions.)
+
+	user		Mandatory.
+	pass		Mandatory.
+	timeout		Mandatory.
+	repository	Mandatory.
+	keep		Mandatory.
+	fetch_timeout	Optional.
+	changes_only	Optional.
+	on_fetch_run	Optional.
+	on_fetch_cat	Optional.
+	timezone	Optional.
+	filename_append_suffix Optional.
+
+	The cisco-iosxr module recognizes the following options:
+	(See above cisco-ios/cisco-cat section for descriptions.)
+
+	user		Mandatory.
+	pass		Mandatory.
+	timeout		Mandatory.
+	repository	Mandatory.
+	keep		Mandatory.
+	fetch_timeout	Optional.
+	changes_only	Optional.
+	on_fetch_run	Optional.
+	on_fetch_cat	Optional.
+	timezone	Optional.
+	filename_append_suffix Optional.
+
+	The coriant-8600 module recognizes the following options:
 	(See above cisco-ios/cisco-cat section for descriptions.)
 
 	user		Mandatory.

@@ -85,7 +85,7 @@ sub chat_login {
 	    return undef;
 	}
 
-	($prematch, $match) = $t->waitfor(Match => '/Password: $/');
+	($prematch, $match) = $t->waitfor(Match => '/Password:\s*$/');
 	if (!defined($prematch)) {
 	    $self->log_error("could not find password prompt");
 	    return undef;

@@ -23,6 +23,7 @@ package fetchconfig::model::Detector; # fetchconfig/model/Detector.pm
 use strict;
 use warnings;
 use fetchconfig::model::CiscoIOS;
+use fetchconfig::model::CiscoSG300;
 use fetchconfig::model::CiscoCAT;
 use fetchconfig::model::CiscoASA;
 use fetchconfig::model::FortiGate;
@@ -213,6 +214,7 @@ sub init {
     $logger = $log;
 
     $class->register(fetchconfig::model::CiscoIOS->new($log));
+    $class->register(fetchconfig::model::CiscoSG300->new($log));
     $class->register(fetchconfig::model::CiscoCAT->new($log));
     $class->register(fetchconfig::model::CiscoASA->new($log));
     $class->register(fetchconfig::model::FortiGate->new($log));

@@ -6,6 +6,26 @@
 #
 #		model		options
 #
+
+# Optional: end-of-run backup summary e-mail (independent of any
+# model). "user"/"password" are optional -- SMTP AUTH LOGIN is only
+# attempted when both are given. "smtp" accepts host or host:port
+# (default port 25, plain SMTP, no encryption). May be repeated;
+# later values overwrite earlier ones for the same key.
+#
+# The recipient given here ("to=") always gets the status of every
+# device backed up this run. A device can be assigned to a different
+# recipient with the device-specific "to=" option (see the DEVICES
+# SECTION below); that recipient then gets a separate e-mail limited
+# to just their own device(s).
+#
+#email:		from=config.backup@acme.com,to=admin@acme.com,smtp=mail.acme.com
+#email:		from=config.backup@acme.com,to=admin@acme.com,smtp=mail.acme.com,user=svc-fetchconfig,password=xxx
+# footer= sets the mail footer's copyright text (" - Version <n>" is
+# always appended). Quote the value if it contains a comma; the quotes
+# are stripped.
+#email:		footer="(c) 2006-2026 Everton da Silva Marques, Rainer Tammer and others"
+
 default:	cisco-ios	user=backup,pass=fran,enable=jose
 default:	cisco-ios	timeout=10,keep=5,changes_only=0
 default:	cisco-ios	repository=/var/fetchconfig/save
@@ -81,6 +101,81 @@ default:        coriant-8600    user=backup,pass=fran,enable=jose
 default:        coriant-8600    timeout=10,keep=5,changes_only=0
 default:        coriant-8600    repository=/var/fetchconfig/save
 
+default:	procurve	user=admin,pass=procurve,enable=procurve
+default:	procurve	timeout=10,keep=5,changes_only=0
+default:	procurve	fetch_timeout=60,banner_timeout=30
+default:	procurve	repository=/var/fetchconfig/save
+default:	procurve	debug=off
+
+default:	procurve-ssh	user=admin,pass=procurve,enable=procurve
+default:	procurve-ssh	timeout=10,keep=5,changes_only=0
+default:	procurve-ssh	fetch_timeout=60
+default:	procurve-ssh	repository=/var/fetchconfig/save
+default:	procurve-ssh	debug=off
+
+default:	hirschmann	user=admin,pass=fran
+default:	hirschmann	timeout=10,keep=5,changes_only=0
+default:	hirschmann	repository=/var/fetchconfig/save
+
+default:	zyxel		user=admin,pass=fran
+default:	zyxel		timeout=10,keep=5,changes_only=0
+default:	zyxel		repository=/var/fetchconfig/save
+
+# planet-ssh: PLANET managed switches over SSH. "enable" only matters
+# if the account lands on the ">" prompt; it defaults to pass.
+# Input is typed character by character (type_delay ms, default 100):
+# the switch does not reliably accept a burst of input after a prompt.
+default:	planet-ssh	user=admin,pass=fran
+default:	planet-ssh	timeout=10,keep=5,changes_only=0
+default:	planet-ssh	type_delay=100
+default:	planet-ssh	repository=/var/fetchconfig/save
+default:	planet-ssh	debug=off
+
+# aruba-cx-ssh: Aruba CX (AOS-CX) switches over SSH. The account must be
+# an administrator ("#" prompt); AOS-CX has no "enable".
+default:	aruba-cx-ssh	user=admin,pass=fran
+default:	aruba-cx-ssh	timeout=10,keep=5,changes_only=0
+default:	aruba-cx-ssh	repository=/var/fetchconfig/save
+default:	aruba-cx-ssh	debug=off
+
+# nexus-ssh: Cisco Nexus (NX-OS) over SSH. The account must land on the
+# "#" prompt; NX-OS has no "enable".
+default:	nexus-ssh	user=admin,pass=fran
+default:	nexus-ssh	timeout=10,keep=5,changes_only=0
+default:	nexus-ssh	repository=/var/fetchconfig/save
+default:	nexus-ssh	debug=off
+
+# procurve-snmp: ProCurve ProVision (incl. 4000M/8000M) over SNMP+TFTP.
+# community is the SNMP read-WRITE community (no user/pass). remote_file
+# defaults to "browse" (readable report); later models also support
+# "running-config". timeout defaults to 30s.
+default:	procurve-snmp	community=private
+default:	procurve-snmp	timeout=30,keep=5,changes_only=0
+default:	procurve-snmp	remote_file=browse
+default:	procurve-snmp	repository=/var/fetchconfig/save
+default:	procurve-snmp	debug=off
+
+# tplink-web-sg105e talks HTTP to the web UI of TP-Link Easy Smart
+# switches (TL-SG105E, TL-SG105PE, ... - they have no CLI); the backup
+# is saved uuencoded, restore with "uudecode".
+default:	tplink-web-sg105e	user=admin,pass=fran
+default:	tplink-web-sg105e	timeout=10,keep=5,changes_only=0
+default:	tplink-web-sg105e	fetch_timeout=120
+default:	tplink-web-sg105e	repository=/var/fetchconfig/save
+default:	tplink-web-sg105e	debug=off
+
+# procurve-web-1700 talks HTTP to the web UI of HP ProCurve 1700 series
+# switches (web-managed only, no CLI). Only the manager password is
+# needed; the backup is saved uuencoded, restore with "uudecode".
+default:	procurve-web-1700	pass=fran
+default:	procurve-web-1700	timeout=10,keep=5,changes_only=0
+default:	procurve-web-1700	fetch_timeout=120
+default:	procurve-web-1700	repository=/var/fetchconfig/save
+default:	procurve-web-1700	debug=off
+
+
+# Many devices? Fetch them concurrently: fetchconfig.pl -devices=... -P 20
+# (see README, PARALLEL FETCHING). The device table itself needs no change.
 
 # DEVICES SECTION
 #
@@ -96,6 +191,22 @@ cisco-cat	eng-sw		172.16.0.11	keep=10,changes_only=1
 parks           lab209r		10.30.0.6
 
 riverstone      lab3100         10.1.30.2
+
+hirschmann	rail-sw01	172.29.200.162
+
+zyxel		zyxel-sw01	172.29.200.145
+
+planet-ssh	planet-sw01	172.29.200.110
+
+aruba-cx-ssh	cx-sw01		172.29.200.150
+
+nexus-ssh	nx-sw01		172.29.200.160
+
+procurve-snmp	hp4000-sw01	153.3.231.23
+
+tplink-web-sg105e	tpl-sw01	172.29.200.120
+
+procurve-web-1700	hp1700-sw01	172.29.200.130
 
 terayon-os	cmts-1		10.10.1.1
 terayon-os	cmts-2		10.10.1.2
@@ -123,3 +234,23 @@ cisco-iosxr     asr9010-edge    127.0.0.1
 nec-univerge-ix ix-01           10.22.1.5
 
 coriant-8600	8605		10.0.0.1
+
+# "debug=off" from the default: block above suppresses the
+# <dev_id>.debug session log; override it per-device (e.g. while
+# troubleshooting a login/prompt problem) with debug=on.
+procurve	sw-lab1		10.5.0.10
+
+procurve-ssh	sw-lab2		10.5.0.11	debug=on
+
+# "to=" overrides, for this device only, who receives the backup
+# summary e-mail (see the "email:" line in the DEFAULT OPTIONS
+# SECTION above). lab209r's backup summary goes to lab-owner@acme.com
+# instead of the globally configured recipient (who still gets the
+# status of every device, including this one).
+parks           lab209r-2	10.30.0.7	to=lab-owner@acme.com
+
+# "comment=" is a free-text note, purely for whoever reads this file
+# (not used anywhere else). Quoting is only needed here because the
+# comment itself contains a comma; without quotes, that comma would
+# be read as the start of a new option.
+riverstone	lab3101		10.1.30.3	comment="Building 3, Floor 2"

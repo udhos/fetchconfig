@@ -146,23 +146,9 @@ sub chat_login {
     $prompt;
 }
 
-sub expect_enable_prompt {
-    my ($self, $t, $prompt) = @_;
-
-    if (!defined($prompt)) {
-	$self->log_error("internal failure: undefined command prompt");
-	return undef;
-    }
-
-    my $enable_prompt_regexp = '/' . $prompt . '$/';
-
-    my ($prematch, $match) = $t->waitfor(Match => $enable_prompt_regexp);
-    if (!defined($prematch)) {
-	$self->log_error("could not match enable command prompt: $enable_prompt_regexp");
-    }
-
-    ($prematch, $match);
-}
+# expect_enable_prompt: inherited from model::Abstract since 9.59. The prompt is
+# "/CONFiguration>"; the shared quoting escapes the "/" that the old call escaped by hand.
+sub prompt_tail { '$' }
 
 sub chat_fetch {
     my ($self, $t, $dev_id, $dev_host, $prompt, $fetch_timeout, $show_cmd, $conf_ref) = @_;
@@ -178,7 +164,7 @@ sub chat_fetch {
         $t->timeout($fetch_timeout);
     }
 
-    my ($prematch, $match) = $self->expect_enable_prompt($t, '\\' . $prompt);
+    my ($prematch, $match) = $self->expect_enable_prompt($t, $prompt);
     if (!defined($prematch)) {
 	$self->log_error("could not find end of configuration");
 	return 1;

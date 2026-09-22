@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fetchconfig &mdash; Documentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbfbf9;
+    --surface:#f1f4f4;
+    --surface-2:#e9edee;
+    --border:#dde3e3;
+    --text:#141a1f;
+    --text-muted:#5b6770;
+    --text-faint:#8a949b;
+    --accent:#0e7c8c;
+    --accent-bright:#22aabb;
+    --accent-soft:#e3f3f5;
+    --danger:#c4432b;
+    --danger-soft:#fbeae6;
+    --success:#1c8a5b;
+    --success-soft:#e8f5ee;
+    --changed:#2451c4;
+    --changed-soft:#e8edfb;
+    --code-bg:#10171c;
+    --code-text:#dce8ec;
+    --code-accent:#7fe0cc;
+    --code-muted:#7f929b;
+    --radius:6px;
+    --font-sans:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace;
+    --sidebar-w:280px;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    font-family:var(--font-sans);
+    color:var(--text);
+    background:var(--bg);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  a{color:var(--accent);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{
+    outline:2px solid var(--accent-bright);
+    outline-offset:2px;
+  }
+
+  code, kbd{
+    font-family:var(--font-mono);
+    font-size:0.88em;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:0.1em 0.4em;
+    color:var(--text);
+    white-space:nowrap;
+  }
+
+  pre{
+    font-family:var(--font-mono);
+    background:var(--code-bg);
+    color:var(--code-text);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    overflow-x:auto;
+    font-size:0.86rem;
+    line-height:1.65;
+    margin:16px 0;
+    border:1px solid #05090c;
+  }
+  pre code{
+    background:none;
+    border:none;
+    padding:0;
+    white-space:pre;
+    color:inherit;
+    font-size:1em;
+  }
+  pre .c{color:var(--code-muted);} /* comment */
+  pre .s{color:var(--code-accent);} /* string / value */
+  pre .k{color:#e8b95f;} /* keyword / flag */
+
+  h1,h2,h3,h4{
+    font-family:var(--font-sans);
+    font-weight:600;
+    line-height:1.25;
+    color:var(--text);
+    letter-spacing:-0.01em;
+  }
+
+  /* ---------- Layout ---------- */
+  .layout{
+    display:flex;
+    align-items:flex-start;
+    width:100%;
+  }
+
+  .sidebar{
+    position:sticky;
+    top:0;
+    height:100vh;
+    width:var(--sidebar-w);
+    flex:0 0 var(--sidebar-w);
+    overflow-y:auto;
+    padding:28px 22px 40px;
+    border-right:1px solid var(--border);
+    background:var(--surface);
+  }
+
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:4px;
+  }
+  .brand-mark{
+    width:30px;height:30px;border-radius:7px;
+    background:linear-gradient(155deg,var(--accent-bright),var(--accent));
+    display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;
+  }
+  .brand-mark svg{width:17px;height:17px;}
+  .brand-name{font-weight:700;font-size:1.05rem;letter-spacing:-0.01em;}
+
+  .brand-meta{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-muted);
+    margin:6px 0 22px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .pill{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:99px;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text-muted);
+  }
+
+  .nav-group{margin-bottom:4px;}
+  .nav-group-label{
+    font-size:0.68rem;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--text-faint);
+    margin:20px 0 6px;
+    font-weight:600;
+  }
+  .nav-group:first-of-type .nav-group-label{margin-top:0;}
+
+  .sidebar nav a{
+    display:block;
+    color:var(--text-muted);
+    font-size:0.885rem;
+    padding:6px 10px;
+    border-radius:5px;
+    text-decoration:none;
+    border-left:2px solid transparent;
+    transition:background 0.12s ease, color 0.12s ease;
+  }
+  .sidebar nav a:hover{background:var(--surface-2);color:var(--text);}
+  .sidebar nav a.active{
+    color:var(--accent);
+    background:var(--accent-soft);
+    border-left-color:var(--accent-bright);
+    font-weight:500;
+  }
+
+  .main-col{
+    flex:1 1 auto;
+    min-width:0;
+    padding:0 0 120px;
+  }
+
+  .content{
+    max-width:1500px;
+    margin:0;
+    padding:0 48px;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding:64px 48px 48px;
+    max-width:1500px;
+    margin:0;
+    border-bottom:1px solid var(--border);
+  }
+  .hero-eyebrow{
+    font-family:var(--font-mono);
+    font-size:0.78rem;
+    color:var(--accent);
+    margin-bottom:14px;
+  }
+  .hero h1{
+    font-size:2.6rem;
+    margin:0 0 14px;
+    letter-spacing:-0.02em;
+  }
+  .hero p.lede{
+    font-size:1.13rem;
+    color:var(--text-muted);
+    max-width:900px;
+    margin:0 0 28px;
+    line-height:1.6;
+  }
+  .hero-stats{
+    display:flex;
+    gap:36px;
+    flex-wrap:wrap;
+    margin-top:8px;
+  }
+  .hero-stat .num{
+    font-family:var(--font-mono);
+    font-size:1.6rem;
+    font-weight:600;
+    color:var(--text);
+    display:block;
+  }
+  .hero-stat .label{
+    font-size:0.8rem;
+    color:var(--text-muted);
+  }
+
+  /* ---------- Sections ---------- */
+  section{
+    padding:56px 0 8px;
+    border-bottom:1px solid var(--border);
+  }
+  section:last-of-type{border-bottom:none;}
+
+  .section-kicker{
+    font-family:var(--font-mono);
+    font-size:0.75rem;
+    color:var(--text-faint);
+    margin-bottom:8px;
+  }
+  h2{
+    font-size:1.65rem;
+    margin:0 0 18px;
+    scroll-margin-top:24px;
+  }
+  h3{
+    font-size:1.18rem;
+    margin:34px 0 12px;
+    scroll-margin-top:24px;
+  }
+  h4{
+    font-size:0.98rem;
+    margin:22px 0 8px;
+    color:var(--text);
+    scroll-margin-top:24px;
+  }
+  p{margin:0 0 14px;color:var(--text);}
+  section p, section li{color:var(--text);}
+  ul,ol{padding-left:1.3em;margin:0 0 16px;}
+  li{margin-bottom:6px;}
+  .prose-muted{color:var(--text-muted);}
+
+  .file-label{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-faint);
+    margin:18px 0 -8px;
+    display:block;
+  }
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:18px 0;
+    border:1px solid var(--border);
+    background:var(--surface);
+    font-size:0.93rem;
+  }
+  .callout-title{
+    font-weight:600;
+    font-size:0.82rem;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    margin-bottom:6px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+  }
+  .callout.warn{background:var(--danger-soft);border-color:#f0c9bd;}
+  .callout.warn .callout-title{color:var(--danger);}
+  .callout.note{background:var(--accent-soft);border-color:#bfe4e9;}
+  .callout.note .callout-title{color:var(--accent);}
+  .callout p:last-child{margin-bottom:0;}
+
+  /* ---------- Tables ---------- */
+  .table-wrap{overflow-x:auto;margin:18px 0 26px;border:1px solid var(--border);border-radius:var(--radius);}
+  table{
+    border-collapse:collapse;
+    width:100%;
+    font-size:0.87rem;
+  }
+  caption{
+    text-align:left;
+    font-size:0.78rem;
+    color:var(--text-muted);
+    padding:8px 14px;
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+    caption-side:top;
+  }
+  th,td{
+    text-align:left;
+    padding:9px 14px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+  }
+  thead th{
+    background:var(--surface);
+    font-weight:600;
+    font-size:0.76rem;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--text-muted);
+    white-space:nowrap;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--surface);}
+  td code, th code{white-space:nowrap;}
+  .req-yes{color:var(--danger);font-weight:600;font-size:0.82rem;}
+  .req-opt{color:var(--text-faint);font-size:0.82rem;}
+  .req-dash{color:var(--border);}
+  .matrix th, .matrix td{text-align:center;}
+  .matrix td:first-child, .matrix th:first-child{text-align:left;}
+  .matrix{font-size:0.8rem;}
+  .matrix code{white-space:nowrap;}
+
+  /* ---------- Flag reference ---------- */
+  .flag-card{
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:14px 0;
+    background:var(--bg);
+  }
+  .flag-card + .flag-card{margin-top:10px;}
+  .flag-head{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:8px;
+  }
+  .flag-tag{
+    font-family:var(--font-mono);
+    font-weight:600;
+    background:var(--code-bg);
+    color:var(--code-accent);
+    border-radius:4px;
+    padding:3px 9px;
+    font-size:0.86rem;
+  }
+  .flag-req{
+    font-size:0.72rem;
+    font-family:var(--font-mono);
+    color:var(--text-faint);
+  }
+  .flag-card p{margin-bottom:8px;font-size:0.92rem;color:var(--text-muted);}
+  .flag-card p:last-child{margin-bottom:0;}
+  .exit-list{list-style:none;padding:0;margin:8px 0 0;font-family:var(--font-mono);font-size:0.82rem;}
+  .exit-list li{display:flex;gap:10px;margin-bottom:3px;}
+  .exit-list .code{color:var(--text);font-weight:600;min-width:1.6em;}
+
+  /* ---------- Color swatches (email notif) ---------- */
+  .swatches{display:flex;gap:14px;flex-wrap:wrap;margin:18px 0 22px;}
+  .swatch{
+    display:flex;align-items:center;gap:9px;
+    border:1px solid var(--border);border-radius:99px;
+    padding:5px 12px 5px 6px;font-size:0.82rem;background:var(--surface);
+  }
+  .swatch .dot{width:16px;height:16px;border-radius:50%;flex:0 0 auto;border:1px solid rgba(0,0,0,0.12);}
+
+  /* ---------- Toggle tabs (Installation) ---------- */
+  .tabs{margin:18px 0;}
+  input.tab-input{position:absolute;opacity:0;pointer-events:none;}
+  .tab-labels{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+  .tab-labels label{
+    font-size:0.88rem;font-weight:500;color:var(--text-muted);
+    padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;
+    margin-bottom:-1px;
+  }
+  .tab-panel{display:none;}
+  #tab-unix:checked ~ .tab-labels label[for="tab-unix"],
+  #tab-win:checked ~ .tab-labels label[for="tab-win"]{
+    color:var(--accent);border-bottom-color:var(--accent-bright);
+  }
+  #tab-unix:checked ~ .tab-panels #panel-unix,
+  #tab-win:checked ~ .tab-panels #panel-win{display:block;}
+
+  /* ---------- Device support grid ---------- */
+  .device-grid td:first-child code{font-weight:600;}
+
+  /* ---------- Footer ---------- */
+  .page-footer{
+    max-width:1500px;margin:0;padding:40px 48px 60px;
+    color:var(--text-faint);font-size:0.82rem;
+  }
+  .page-footer a{color:var(--text-muted);}
+
+  /* ---------- Mobile nav ---------- */
+  .nav-toggle{display:none;}
+  .mobile-bar{display:none;}
+
+  @media (max-width: 900px){
+    .sidebar{
+      position:fixed;
+      inset:0 auto 0 0;
+      z-index:40;
+      transform:translateX(-100%);
+      transition:transform 0.2s ease;
+      box-shadow:2px 0 24px rgba(0,0,0,0.15);
+    }
+    .nav-toggle:checked ~ .layout .sidebar{transform:translateX(0);}
+    .mobile-bar{
+      display:flex;align-items:center;justify-content:space-between;
+      position:sticky;top:0;z-index:30;
+      background:var(--bg);border-bottom:1px solid var(--border);
+      padding:14px 20px;
+    }
+    .mobile-bar .brand{margin:0;}
+    .mobile-bar label{
+      font-family:var(--font-mono);font-size:0.8rem;
+      border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;
+    }
+    .content{padding:0 22px;}
+    .hero{padding:36px 22px 32px;}
+    .hero h1{font-size:2rem;}
+    .page-footer{padding:32px 22px 48px;}
+  }
+  @media (min-width:901px){
+    .mobile-bar{display:none !important;}
+  }
+
+  @media print{
+    .sidebar,.mobile-bar{display:none !important;}
+    .layout{display:block;}
+    a{color:inherit;text-decoration:none;}
+    pre{white-space:pre-wrap;}
+  }
+</style>
+</head>
+<body>
+
+<input type="checkbox" id="nav-toggle" class="nav-toggle">
+
+<div class="mobile-bar">
+  <div class="brand">
+    <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+    <span class="brand-name">fetchconfig</span>
+  </div>
+  <label for="nav-toggle">Menu</label>
+</div>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="brand-name">fetchconfig</span>
+    </div>
+    <div class="brand-meta">
+      <span class="pill">v9.59</span>
+      <span class="pill">GPL&#8209;2.0+</span>
+    </div>
+
+    <nav>
+      <div class="nav-group">
+        <div class="nav-group-label">Overview</div>
+        <a href="#introduction">Introduction</a>
+        <a href="#license">License</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Getting started</div>
+        <a href="#installation">Installation</a>
+        <a href="#modules">Perl module requirements</a>
+        <a href="#usage">Usage</a>
+        <a href="#parallel">Parallel fetching</a>
+        <a href="#device-table">Device table</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Features</div>
+        <a href="#email-notifications">E-mail notifications</a>
+        <a href="#security">Security notes</a>
+        <a href="#status-file">Status file</a>
+        <a href="#embedding">Device table on the CLI</a>
+        <a href="#retrieving">Retrieving backups</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Reference</div>
+        <a href="#device-support">Device support</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+        <a href="#options">Options reference</a>
+        <a href="#tplink">Web UI backups</a>
+        <a href="#procurve-snmp">ProCurve SNMP backups</a>
+      </div>
+    </nav>
+  </aside>
+
+  <div class="main-col">
+
+    <div class="hero">
+      <div class="hero-eyebrow">Documentation</div>
+      <h1>fetchconfig</h1>
+      <p class="lede">A Perl script for retrieving and backing up the configuration of network devices at scale &mdash; over telnet, SSH or a device&rsquo;s web UI, across dozens of vendors, with change tracking, e-mail summaries, and a repository you can script against.</p>
+      <div class="hero-stats">
+        <div class="hero-stat"><span class="num">33</span><span class="label">device platforms</span></div>
+        <div class="hero-stat"><span class="num">9.59</span><span class="label">version</span></div>
+        <div class="hero-stat"><span class="num">Telnet / SSH / HTTP / SNMP</span><span class="label">transports</span></div>
+        <div class="hero-stat"><span class="num">Linux / AIX / Windows</span><span class="label">tested platforms</span></div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <section id="introduction">
+        <div class="section-kicker">01</div>
+        <h2>Introduction</h2>
+        <p>fetchconfig is a Perl script for retrieving the configuration of multiple devices. It has been tested under Linux, AIX and Windows, and currently supports a variety of devices, including Cisco IOS, Cisco Catalyst, Cisco ASA, Cisco PIX, FortiGate Firewalls, ProCurve, Alcatel Ethernet Routers (aka Riverstone), Dell PowerConnect Switches, Terayon 3200/3500 CMTS, Datacom DmSwitch Switches, HP MSR Routers, Mikrotik Routers, Tellabs MSR Routers, Juniper EX Switch JunOS, Oracle Acme Packet, Audiocodes Mediant, Cisco IOS XR, NEC Univerge IX, Hirschmann Railswitch, Zyxel switches, PLANET managed switches, Aruba CX switches, Cisco Nexus switches, TP-Link Easy Smart switches, HP ProCurve 1700 series switches, and HP ProCurve ProVision (incl. 4000M/8000M) over SNMP+TFTP.</p>
+        <div class="callout warn">
+          <div class="callout-title">Important change in v9.55 (filename_append_suffix)</div>
+          <p>Starting with v9.55, <code>filename_append_suffix</code> must start with a &ldquo;.&rdquo; (e.g. <code>.txt</code>). A device whose suffix lacks the leading dot, or contains <code>/</code> or whitespace, now <strong>fails its backup</strong> with an error and writes nothing. Fix any dotless suffix in your device table before the first v9.55 run. Also: do not add, remove or change a suffix on a device that already has backups; use <code>fetchconfig.pl -S</code> to find devices whose existing backups already mix suffixes.</p>
+        </div>
+        <div class="callout warn">
+          <div class="callout-title">Important change in v9.53 (affects every device)</div>
+          <p>Saved configuration files now end with a trailing newline on the last line, matching the device&rsquo;s own output (and a config downloaded from a device web UI). This touches <strong>every</strong> model. Because the file content changes by that one final byte, the <strong>first</strong> backup run after upgrading reports every device as &ldquo;changed&rdquo; and, with <code>changes_only</code>, saves a fresh copy &mdash; a one-time effect of the fix, not real drift. The second run onward compares clean.</p>
+        </div>
+      </section>
+
+      <section id="license">
+        <div class="section-kicker">02</div>
+        <h2>License</h2>
+        <div class="callout note">
+          <p>fetchconfig &mdash; Retrieving configuration for multiple devices<br>Copyright (C) 2006 Everton da Silva Marques</p>
+          <p>fetchconfig is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2, or (at your option) any later version.</p>
+          <p>fetchconfig is distributed in the hope that it will be useful, but <strong>WITHOUT ANY WARRANTY</strong>; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.</p>
+          <p>You should have received a copy of the GNU General Public License along with fetchconfig; see the file <code>COPYING</code>. If not, write to the Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.</p>
+        </div>
+      </section>
+
+      <section id="installation">
+        <div class="section-kicker">03</div>
+        <h2>Installation</h2>
+
+        <div class="tabs">
+          <input type="radio" name="install-os" id="tab-unix" class="tab-input" checked>
+          <input type="radio" name="install-os" id="tab-win" class="tab-input">
+          <div class="tab-labels">
+            <label for="tab-unix">UNIX / Linux</label>
+            <label for="tab-win">Windows</label>
+          </div>
+
+          <div class="tab-panels">
+            <div class="tab-panel" id="panel-unix">
+              <ol>
+                <li>fetchconfig.pl expects a Perl interpreter at <code>/usr/bin/perl</code>.</li>
+                <li>Install the Perl modules you need &mdash; see <a href="#modules">Perl module requirements</a>. Most are in the Perl core (5.28+); the non-core ones are <code>Net::Telnet</code> and <code>Net::SMTP</code> (every run), <code>Net::OpenSSH</code> (SSH devices), <code>LWP::UserAgent</code>/<code>HTTP::Request::Common</code> (web-UI models), and <code>Net::SNMP</code>/<code>Net::TFTP</code> (<code>procurve-snmp</code>).</li>
+                <li>Unpack the fetchconfig tarball at a suitable location.</li>
+              </ol>
+              <span class="file-label">shell</span>
+              <pre><code><span class="c"># fetchconfig tarball available at /tmp/fetchconfig-0.0.tar.gz</span>
+cd /usr/local
+tar xzf /tmp/fetchconfig-0.0.tar.gz
+ln -s fetchconfig-0.0 fetchconfig
+<span class="c"># fetchconfig is now available under /usr/local/fetchconfig</span></code></pre>
+            </div>
+
+            <div class="tab-panel" id="panel-win">
+              <ol>
+                <li>fetchconfig.pl expects to find a Perl interpreter in the <code>PATH</code>.</li>
+                <li>Install the Perl modules you need &mdash; see <a href="#modules">Perl module requirements</a>. Most are in the Perl core (5.28+); the non-core ones are <code>Net::Telnet</code> and <code>Net::SMTP</code> (every run), <code>Net::OpenSSH</code> (SSH devices), <code>LWP::UserAgent</code>/<code>HTTP::Request::Common</code> (web-UI models), and <code>Net::SNMP</code>/<code>Net::TFTP</code> (<code>procurve-snmp</code>).</li>
+                <li>Unpack the fetchconfig tarball at a suitable location. From the command line, <a href="http://www.gzip.org">gzip</a> and <a href="http://gnuwin32.sourceforge.net/packages/tar.htm">tar</a> can be used &mdash; or a GUI archiver such as WinZip.</li>
+              </ol>
+              <span class="file-label">cmd</span>
+              <pre><code><span class="c">:: fetchconfig tarball available at c:\temp\fetchconfig-0.0.tar.gz</span>
+c:
+cd \
+gzip -cd c:\temp\fetchconfig-0.0.tar.gz | tar xvf -
+move fetchconfig-0.0 fetchconfig
+<span class="c">:: fetchconfig is now available under c:\fetchconfig</span></code></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="modules">
+        <h2>Perl module requirements</h2>
+        <p>fetchconfig runs on Perl 5.28 or later. Most of the modules it uses are in the Perl core on those versions and need no separate installation (<code>Text::ParseWords</code>, <code>POSIX</code>, <code>IO::Handle</code>, <code>Time::HiRes</code>, <code>MIME::Base64</code>, <code>FindBin</code>, <code>File::Temp</code>, <code>File::Path</code>, <code>File::Compare</code>). The modules below are <strong>not</strong> in the core and must be installed separately &mdash; but only if you use the devices that need them.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Module(s)</th><th>Needed for</th></tr></thead>
+            <tbody>
+              <tr><td><code>Net::Telnet</code></td><td>Every run. Telnet devices, and also driving the pseudo-terminal for all SSH devices &mdash; in practice fetchconfig cannot back up any device without it.</td></tr>
+              <tr><td><code>Net::SMTP</code></td><td>Every run. Ships with most Perl installations (the <em>libnet</em> distribution) but is not in the core. fetchconfig loads its reporting code on every run &mdash; it writes the per-device <a href="#status-file">status file</a> even when no e-mail is configured &mdash; so this must be present regardless. No SMTP connection is made unless an <code>email:</code> line is configured.</td></tr>
+              <tr><td><code>Net::OpenSSH</code></td><td>All SSH-based models: <code>cisco-ios-ssh</code>, <code>cisco-asa-ssh</code>, <code>comware-ssh</code>, <code>procurve-ssh</code>, <code>planet-ssh</code>, <code>aruba-cx-ssh</code> and any other <code>*-ssh</code> model.</td></tr>
+              <tr><td><code>LWP::UserAgent</code>, <code>HTTP::Request::Common</code></td><td>The web-UI models <code>tplink-web-sg105e</code> and <code>procurve-web-1700</code> (no CLI). Both come with the <em>libwww-perl</em> distribution.</td></tr>
+              <tr><td><code>Net::SNMP</code>, <code>Net::TFTP</code></td><td>The <code>procurve-snmp</code> model (HP ProCurve ProVision, including the 4000M/8000M chassis), which backs up over SNMP + TFTP.</td></tr>
+              <tr><td><code>IO::Socket::SSL</code> (needs <code>Net::SSLeay</code>)</td><td>Only if TLS is enabled for the summary e-mail (<code>email: tls=starttls</code> or <code>tls=ssl</code>). Plain SMTP does not need it. <code>Mozilla::CA</code> is optional, for a CA bundle where the system has none.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <span class="file-label">shell</span>
+        <pre><code><span class="c"># install the non-core modules you need, e.g.</span>
+cpan install Net::Telnet Net::OpenSSH
+cpan install LWP::UserAgent Net::SNMP Net::TFTP</code></pre>
+      </section>
+
+      <section id="usage">
+        <div class="section-kicker">04</div>
+        <h2>Usage</h2>
+        <ol>
+          <li>Edit <code>device_table.example</code> according to your needs, and save it as <code>device_table</code>.</li>
+        </ol>
+        <pre><code><span class="c"># fetchconfig available under /usr/local/fetchconfig</span>
+cd /usr/local/fetchconfig
+cp device_table.example device_table
+vi device_table</code></pre>
+        <ol start="2">
+          <li>Run fetchconfig.pl:</li>
+        </ol>
+        <pre><code>cd /usr/local/fetchconfig
+./fetchconfig.pl <span class="k">-devices=</span>device_table</code></pre>
+        <p class="prose-muted">fetchconfig.pl scans the <code>device_table</code> file, tries to retrieve the configuration for every device, and stores the configuration files under the <code>repository</code>.</p>
+      </section>
+
+      <section id="parallel">
+        <h2>Parallel fetching</h2>
+        <p>Fetching is sequential unless asked otherwise: one device at a time, in device-table order, every log line shown as it happens. With thousands of devices the run time is dominated by the network sessions (roughly 5&ndash;15&nbsp;s each, plus a full timeout for every unreachable device), and a sequential run no longer fits in a night.</p>
+        <span class="file-label">shell</span>
+        <pre><code>./fetchconfig.pl -devices=device_table -P 20</code></pre>
+        <p><code>-P N</code> fetches with <code>N</code> concurrent worker processes. The parent loads the device table, then hands out one device at a time to whichever worker asks next, so a slow device never holds up the others. Every worker is a copy of the fully loaded parent, so the models run unchanged. With <code>N</code> = 10&ndash;20 a run of several hours typically completes in well under one; the gain is bounded by what the devices and the network tolerate, not by the backup host.</p>
+        <div class="callout note">
+          <div class="callout-title">Output is atomic per device</div>
+          <p>While a worker fetches, everything it writes to stdout and stderr is buffered; when the device finishes, the parent copies that buffer to the real streams in one uninterrupted block. One device&rsquo;s output is therefore <strong>never mixed with another&rsquo;s</strong> &mdash; each block looks exactly as in a sequential run. Two consequences: blocks appear in <em>completion</em> order, not table order; and a device&rsquo;s lines appear when it finishes, not live. At <code>-P 1</code> nothing is buffered and behaviour is unchanged.</p>
+        </div>
+        <p>Everything else is unaffected: each device writes only its own directory, <code>.status</code> and <code>.debug</code>; the summary e-mail, per-device <code>to=</code> bundling and the <code>.status</code> files are produced by the parent from the workers&rsquo; results, exactly as in a sequential run. A worker that dies is detected by the parent; the device it was fetching is recorded as failed and the remaining devices are still fetched by the other workers.</p>
+        <p><strong>Sizing <code>N</code>.</strong> Start at 10 and raise it while watching for devices that refuse or delay logins: the limits are the switches&rsquo; concurrent-session caps, the TACACS+/RADIUS rate, and the links to remote sites &mdash; not the backup host. 10&ndash;25 is typical. <code>-P</code> applies to fetching only and cannot be combined with the lookup/maintenance modes, which stay single-process.</p>
+      </section>
+
+      <section id="device-table">
+        <div class="section-kicker">05</div>
+        <h2>Device table</h2>
+        <p>The device table assigned with <code>-devices=</code> is a text file that supports two types of lines.</p>
+
+        <h3>1. Default-options lines</h3>
+        <p class="prose-muted">Assign default options to a device model. The following example adds default options to the <code>cisco-ios</code> model:</p>
+        <span class="file-label">device_table</span>
+        <pre><code><span class="c">#default	model		model-default-options
+#</span>
+<span class="k">default:</span>        cisco-ios       user=backup,pass=fran,enable=jose</code></pre>
+
+        <h3>2. Device lines</h3>
+        <p class="prose-muted">Define attributes of every device, and optionally assign device-specific options. The following example defines a device named <code>vpn-gw</code>:</p>
+        <span class="file-label">device_table</span>
+        <pre><code><span class="c">#model		dev-unique-id	device-host	[device-options]
+#</span>
+cisco-ios       vpn-gw          192.168.0.1     keep=10,changes_only=1</code></pre>
+
+        <div class="callout note">
+          <div class="callout-title">dev-unique-id constraints</div>
+          <p>Must be (a) an unique identifier across all devices, and (b) a valid filesystem's directory name.</p>
+        </div>
+      </section>
+
+      <section id="email-notifications">
+        <div class="section-kicker">06</div>
+        <h2>E-mail notifications</h2>
+        <p>fetchconfig.pl can e-mail a summary of a run's backup results as an HTML table (Device&#8209;ID, Date, Time, State, Size, Changes). This is entirely optional: unless an <code>email:</code> line is present, no SMTP connection is ever attempted.</p>
+
+        <div class="swatches">
+          <span class="swatch"><span class="dot" style="background:#22aabb"></span>Table header</span>
+          <span class="swatch"><span class="dot" style="background:#ff0000"></span>State: failed</span>
+          <span class="swatch"><span class="dot" style="background:#0000ff"></span>Changes: changed</span>
+        </div>
+
+        <h3>1. Configure the sender, recipient, and SMTP server</h3>
+        <p class="prose-muted">Add an <code>email:</code> line to the default options section (it is independent of any device model):</p>
+        <pre><code><span class="c">#email:	options
+#</span>
+<span class="k">email:</span>	from=config.backup@acme.com,to=admin@acme.com,smtp=mail.acme.com</code></pre>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Key</th><th>Requirement</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>from</code></td><td class="req-yes">Mandatory</td><td>The envelope/header sender address.</td></tr>
+              <tr><td><code>to</code></td><td class="req-yes">Mandatory</td><td>Recipient who receives the status of every device backed up in the run. Multiple addresses are separated by <code>;</code> (not a comma, since commas already separate options).</td></tr>
+              <tr><td><code>smtp</code></td><td class="req-yes">Mandatory</td><td>SMTP server, as <code>host</code> or <code>host:port</code> (default port 25). Plain SMTP only &mdash; no encryption.</td></tr>
+              <tr><td><code>user</code></td><td class="req-opt">Optional</td><td>SMTP AUTH LOGIN username.</td></tr>
+              <tr><td><code>password</code></td><td class="req-opt">Optional</td><td>SMTP AUTH LOGIN password. Only used (and AUTH attempted) when <code>user</code> is also given.</td></tr>
+              <tr><td><code>footer</code></td><td class="req-opt">Optional</td><td>Copyright/attribution text shown in the summary e-mail’s footer. The <code>&nbsp;- Version &lt;n&gt;</code> that follows it is fixed and always appended. If the value contains a comma, wrap it in double quotes (the quotes are stripped). Default: <code>(c) 2006-2026 Everton da Silva Marques, Rainer Tammer and others</code>.</td></tr>
+              <tr><td><code>port</code></td><td class="req-opt">Optional</td><td>TCP port of the SMTP server; works with every <code>tls</code> setting. Precedence: an explicit <code>port=</code> beats a port given as part of the host (<code>smtp=mail.acme.com:587</code>), which beats the default. The default follows the TLS mode &mdash; 25 for <code>off</code>/<code>starttls</code>, 465 for <code>ssl</code> &mdash; so <code>tls=ssl</code> works without also setting the port. Must be 1&ndash;65535.</td></tr>
+              <tr><td><code>tls</code></td><td class="req-opt">Optional</td><td>Transport security for the SMTP connection: <code>off</code> (default, plain SMTP), <code>starttls</code> (connect in clear, upgrade with STARTTLS; typically port 25/587) or <code>ssl</code> (TLS from the start; typically port 465). Both TLS modes need <code>IO::Socket::SSL</code> (and <code>Net::SSLeay</code>); plain SMTP needs neither. If TLS is requested but unavailable, or the handshake fails, the mail is <strong>not</strong> sent &mdash; fetchconfig never falls back to plaintext. <code>AUTH LOGIN</code> sends the password base64-encoded (not encrypted), so use <code>tls</code> whenever the server is not on a trusted network.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="prose-muted"><code>email:</code> may be repeated; later values overwrite earlier ones for the same key (same rule as <code>default:</code>). A value may be wrapped in double quotes to include a comma (e.g. <code>footer=&quot;(c) 2026 ACME, Inc.&quot;</code>); the quotes are stripped.</p>
+
+        <h3>2. Override the recipient per device</h3>
+        <pre><code><span class="c">#model		dev-unique-id	hostname	device-options
+#</span>
+parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></pre>
+        <p class="prose-muted">A device whose recipient was overridden this way is left out of no one's mail: it is bundled with every other device sharing that same override recipient into one separate e-mail, containing just their own device(s). The globally configured recipient still receives the status of every device processed in the run, including overridden ones.</p>
+
+        <h3>3. The &ldquo;Changes&rdquo; column</h3>
+        <p class="prose-muted">Only reflects a changed-vs-previous comparison for devices where the run already performs one (<code>changes_only=1</code>, or <code>on_fetch_run</code>/<code>on_fetch_cat</code> set); for other devices it is reported as <code>n/a</code> &mdash; no extra repository scan is performed just for this report.</p>
+      </section>
+
+      <section id="embedding">
+        <div class="section-kicker">07</div>
+        <h2>Device table on the command line</h2>
+        <p>Valid lines for the device table file can also be passed directly through the <code>-line=</code><em>string</em> switch.</p>
+        <pre><code>/path/to/fetchconfig.pl <span class="k">-line=</span><span class="s">"default: tellabs-msr user=backup,pass=s&amp;cr&amp;t,timeout=10,keep=5,changes_only=0,fetch_timeout=1200,filename_append_suffix=.txt,repository=/path/to/repo"</span> <span class="k">-line=</span><span class="s">"tellabs-msr lab-router 10.0.0.1"</span></code></pre>
+      </section>
+
+      <section id="retrieving">
+        <div class="section-kicker">08</div>
+        <h2>Retrieving a previously backed-up config</h2>
+        <p>In addition to fetching configuration from devices, fetchconfig.pl can retrieve a configuration file already saved in the repository, without contacting the device again &mdash; useful for scripting: dumping the latest config to stdout, comparing today's config against yesterday's, or pulling an older backup by its position in the history.</p>
+
+        <h3>1. Retrieve the latest backup</h3>
+        <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-g</span> fw01.acme.net</code></pre>
+
+        <h3>2. Retrieve an older backup</h3>
+        <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-g</span> fw01.acme.net <span class="k">-n</span> 2</code></pre>
+
+        <h3>3. List every backup on file</h3>
+        <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-l</span> fw01.acme.net</code></pre>
+        <p class="prose-muted">Sample output (tab-separated: number, size in bytes, path). The numbers in the first column are exactly what <code>-n</code>/<code>-m</code> expect.</p>
+        <pre><code>1	28221	/usr/local/fetchconfig/config/202608/20260824/fw01.acme.net/fw01.acme.net.run.20260824.001105CEST
+2	28221	/usr/local/fetchconfig/config/202608/20260823/fw01.acme.net/fw01.acme.net.run.20260823.001105CEST</code></pre>
+
+        <h3>4. Check for 0-byte backups</h3>
+        <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-z</span> fw01.acme.net</code></pre>
+        <p class="prose-muted">Catches a fetch that connected but failed to save anything. If any are found, they're listed like <code>-l</code> above and fetchconfig.pl exits 1; if none are found, nothing is printed and the exit status is 0.</p>
+
+        <h3>5. Check every device at once</h3>
+        <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-Z</span></code></pre>
+        <p class="prose-muted">Same as <code>-z</code>, but across every loaded device in one pass (tab-separated: dev_id, number, size, path). A device whose repository can't be read is logged and skipped without aborting the rest of the check.</p>
+
+        <h3>6. Find orphaned backups</h3>
+        <p class="prose-muted">Configs on disk with no matching device in the table &mdash; e.g. left behind by a decommissioned or renamed device.</p>
+        <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-o</span></code></pre>
+        <p class="prose-muted">To delete what <code>-o</code> found, add <code>-D</code>. Since this is destructive, preview it first with <code>-T</code> &mdash; the delete commands are only logged, never run:</p>
+        <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-o -D -T</span>    <span class="c"># preview</span>
+./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-o -D</span>       <span class="c"># delete for real</span></code></pre>
+
+        <h3>7. Save to a file instead of stdout</h3>
+        <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-g</span> fw01.acme.net <span class="k">-n</span> 2 <span class="k">-f</span> config.file</code></pre>
+
+        <h3>8. Compare two backups</h3>
+        <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-g</span> fw01.acme.net <span class="k">-n</span> 1 <span class="k">-m</span> 2</code></pre>
+        <p class="prose-muted">Output matches the standard <code>diff older newer</code> convention: lines starting with <code>&lt;</code> come from <code>-m</code> (older), lines starting with <code>&gt;</code> come from <code>-n</code> (newer).</p>
+
+        <div class="callout note">
+          <div class="callout-title">stdout stays clean</div>
+          <p>Log/diagnostic messages always go to stderr, so stdout only ever carries the retrieved config content &mdash; safe to pipe and redirect, e.g. <code>./fetchconfig.pl -devices=device_table -g fw01.acme.net &gt; latest.cfg</code>.</p>
+        </div>
+
+        <h3>Flag reference</h3>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-P N</span><span class="flag-req">fetching only</span></div>
+          <p>Fetch with <code>N</code> concurrent worker processes (default 1 = sequential, device-table order, live output). With <code>N&gt;1</code> each device&rsquo;s output is buffered while it runs and shown as <strong>one uninterrupted block</strong> when it finishes, in completion order &mdash; never interleaved with another device. Not combinable with <code>-g</code>/<code>-l</code>/<code>-z</code>/<code>-Z</code>/<code>-o</code>/<code>-e</code>/<code>-s</code>/<code>-S</code>. See <a href="#parallel">Parallel fetching</a>.</p>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-g dev_id</span><span class="flag-req">mutually exclusive with -l / -z / -Z / -o / -e / -s / -S</span></div>
+          <p>Retrieval mode for <code>dev_id</code> instead of fetching from every device in the table(s). <code>dev_id</code> must match a device line's dev-unique-id.</p>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-l dev_id</span><span class="flag-req">mutually exclusive with -g / -z / -Z / -o / -e / -s / -S</span></div>
+          <p>Listing mode: prints one line per backup on file, newest first &mdash; <code>&lt;number&gt;\t&lt;size&gt;\t&lt;path&gt;</code>.</p>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-z dev_id</span><span class="flag-req">mutually exclusive with -g / -l / -Z / -o / -e / -s / -S</span></div>
+          <p>Zero-byte check for one device, same tab-separated format as <code>-l</code>. Nothing prints if no backups are 0 bytes.</p>
+          <ul class="exit-list">
+            <li><span class="code">1</span> at least one 0-byte backup found</li>
+            <li><span class="code">0</span> all backups non-empty</li>
+          </ul>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-Z</span><span class="flag-req">mutually exclusive with -g / -l / -z / -o / -e / -s / -S</span></div>
+          <p>Same as <code>-z</code>, no dev_id &mdash; checks every loaded device: <code>&lt;dev_id&gt;\t&lt;number&gt;\t&lt;size&gt;\t&lt;path&gt;</code>. A device that can't be scanned is skipped and logged, and does not by itself cause a non-zero exit.</p>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-o</span><span class="flag-req">mutually exclusive with -g / -l / -z / -Z / -e / -s / -S</span></div>
+          <p>Orphaned-backup check: lists device directories on disk with no matching dev_id in the currently loaded table(s) &mdash; <code>&lt;name&gt;\t&lt;file count&gt;\t&lt;total bytes&gt;\t&lt;path&gt;</code>. Scans every <code>repository=</code> path configured by a currently loaded device (deduplicated); a path used only by a device no longer in the table can't be discovered this way.</p>
+          <ul class="exit-list">
+            <li><span class="code">1</span> at least one orphan found</li>
+            <li><span class="code">0</span> none found</li>
+          </ul>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-D</span><span class="flag-req">requires -o or -e</span></div>
+          <p>With <code>-e</code>: deletes the empty directories found (see <code>-e</code>). With <code>-o</code>: also deletes every orphaned device directory <code>-o</code> finds, and since v9.56 then prunes the day (<code>YYYYMMDD</code>) and month (<code>YYYYMM</code>) directories this leaves empty &mdash; one plain <code>rmdir</code> each, only if empty, each reported. Each backup file is deleted individually by its exact name &mdash; never a wildcard, never <code>rm -rf</code> &mdash; logged as <code>rm &lt;file&gt;</code>, followed by <code>rmdir &lt;path&gt;</code> for the now-empty directory. Deletion uses Perl's own <code>unlink()</code>/<code>rmdir()</code>; no shell command is actually spawned. <code>rmdir()</code> only succeeds on a genuinely empty directory, so anything left behind unexpectedly makes that removal fail loudly rather than being swept away. A repository root itself is never deleted.</p>
+          <ul class="exit-list">
+            <li><span class="code">1</span> any deletion failed</li>
+            <li><span class="code">0</span> nothing needed deleting, or everything found was deleted</li>
+          </ul>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-T</span><span class="flag-req">requires -D</span></div>
+          <p>Preview mode for both <code>-o -D</code> and <code>-e -D</code>: logs the delete commands <code>-D</code> would run, without deleting anything. Exit status is that of the plain check &mdash; <code>-o</code>: 1 if anything orphaned was found; <code>-e</code>: 1 if any empty directory was found; 0 otherwise. Use it before a bare <code>-o -D</code> or <code>-e -D</code>.</p>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-e</span><span class="flag-req">mutually exclusive with -g/-l/-z/-Z/-o/-s/-S</span></div>
+          <p>Empty-directory check: scans every configured <code>repository=</code> path for empty directories in the three-level layout <code>&lt;repository&gt;/YYYYMM/YYYYMMDD/&lt;dev_id&gt;/</code> and lists them, one tab-separated row per directory: <code>level</code> (<code>device</code>, <code>day</code> or <code>month</code>) and <code>path</code>. The scan is bottom-up, so a day whose only content is an empty device directory, and a month whose only content is such a day, are listed too. Only names of the expected shape are candidates (<code>YYYYMM</code>; <code>YYYYMMDD</code> whose first six digits match the month; a dev_id-shaped name starting with a letter or digit) &mdash; anything else, and the repository root, is never touched. Such leftovers typically come from deleting old backups by hand. Honours <code>-f</code>.</p>
+          <p>With <code>-D</code> the directories are <strong>deleted, bottom-up</strong>: device dirs, then the day dirs empty by then, then the month dirs empty by then. Each removal is <strong>one plain <code>rmdir</code> on the exact path</strong> &mdash; no wildcards, no recursion; <code>rmdir</code> refuses a non-empty directory, so files can never be taken along. Every command is reported as <code>deleting: rmdir &lt;path&gt;</code>; rows gain a <code>deleted</code>/<code>failed</code> column. <code>-e -D -T</code> reports <code>would delete: rmdir &lt;path&gt;</code> and removes nothing.</p>
+          <ul class="exit-list">
+            <li><span class="code">0</span> <code>-e</code>: no empty directories &middot; <code>-e -D</code>: every rmdir succeeded</li>
+            <li><span class="code">1</span> <code>-e</code>: empty directories found &middot; <code>-e -D</code>: at least one rmdir failed</li>
+          </ul>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-s dev_id</span><span class="flag-req">mutually exclusive with -g/-l/-z/-Z/-o/-e/-S</span></div>
+          <p>Suffix-consistency check for one device: verifies that all of its backup files carry the same filename suffix. Reports the device if its backups mix suffixes &mdash; including &ldquo;some with a suffix and some without&rdquo;, which is what happens when <code>filename_append_suffix</code> was added or changed after backups already existed. Prints one tab-separated line per distinct suffix: <code>dev_id</code>, suffix (or <code>(none)</code>), count, example file. Prints nothing if consistent. An unknown <code>dev_id</code> exits 1. Honours <code>-f</code>.</p>
+          <p>A second step then compares the (single) suffix the backups use against the <code>filename_append_suffix</code> configured for the device and logs a warning if they differ &mdash; e.g. backups written before a suffix was configured. This step is skipped for a device whose backups are already inconsistent.</p>
+          <ul class="exit-list">
+            <li><span class="code">0</span> backup suffixes are consistent, configured suffix matches backup file suffixes</li>
+            <li><span class="code">1</span> inconsistent backup suffixes (not checked against the configured suffix), or unknown device</li>
+            <li><span class="code">2</span> backup suffixes are consistent, but the configured suffix does not match them</li>
+          </ul>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-S</span><span class="flag-req">mutually exclusive with -g/-l/-z/-Z/-o/-e/-s</span></div>
+          <p>Like <code>-s</code>, but takes no <code>dev_id</code> and checks every device loaded via <code>-devices=</code>/<code>-line=</code>. <code>-S</code> is a pure consistency check &mdash; it does <em>not</em> compare against the configured <code>filename_append_suffix</code> (that second step is <code>-s dev_id</code> only). Exit 1 if any device&rsquo;s backups mix suffixes, 0 otherwise. Note <code>-s</code> takes a <code>dev_id</code>: write <code>-s dev_id -f file</code> or <code>-S -f file</code>; <code>-s -f file</code> is rejected.</p>
+        </div>
+
+        <div class="callout note">
+          <div class="callout-title">How -s / -S separate the timezone from the suffix</div>
+          <p>A backup is named <code>&lt;dev_id&gt;.run.YYYYMMDD.HHMMSS&lt;tz&gt;&lt;suffix&gt;</code>, and <code>&lt;tz&gt;</code> is whatever <code>strftime</code> produced on the backup host &mdash; it differs by platform and <strong>changes with daylight saving time</strong> (AIX: <code>CET</code> in winter, <code>CEST</code> in summer; older AIX <code>NFT</code>/<code>DFT</code>). The check parses the tz token first &mdash; numeric <code>+0200</code>/<code>-0500</code> (Linux, modern Windows), a bare name <code>CEST</code> (AIX), <code>-CEST</code> (Solaris), or a multi-word name such as <code>W. Europe Standard Time</code> (older Windows) &mdash; and only then looks at what follows, so a DST change is <strong>not</strong> reported as a suffix change. It <strong>only works if the suffix is separated from the tz by</strong> <code>.</code>, <code>-</code> or <code>_</code>: <code>.</code> is the rule since v9.55; <code>-</code> and <code>_</code> are accepted so backups written before that rule are still recognized. One inherent ambiguity: <code>-</code> followed by uppercase letters is the Solaris tz form, so an old suffix like <code>-BAK</code> on a <code>timezone=hide</code> backup (no tz token) is read as a tz; <code>_BAK</code>, <code>-bak</code>, or any suffix after a real tz token are unambiguous.</p>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-n N</span><span class="flag-req">optional</span></div>
+          <p>Selects which backup to retrieve, counting from the most recent: <code>N=1</code> latest (default), <code>N=2</code> the one before that, and so on.</p>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-m M</span><span class="flag-req">requires -g</span></div>
+          <p>Compare mode: prints a diff between backup <code>M</code> (older) and backup <code>N</code> (newer) instead of printing backup <code>N</code>. <code>M</code> must be numerically higher than <code>N</code>.</p>
+          <ul class="exit-list">
+            <li><span class="code">0</span> the two backups are identical</li>
+            <li><span class="code">1</span> the two backups differ</li>
+            <li><span class="code">&gt;1</span> an error occurred</li>
+          </ul>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-f file</span><span class="flag-req">optional</span></div>
+          <p>Writes the <strong>result data</strong> to <code>file</code> instead of stdout: the retrieved config (<code>-g</code>), the diff (<code>-m</code>), or the listing rows (<code>-l</code>, <code>-z</code>, <code>-Z</code>, <code>-o</code>, <code>-s</code>, <code>-S</code>). The file is created/overwritten as needed.</p>
+          <p>The file receives <em>only</em> that data &mdash; never the screen output. All <code>info:</code>/<code>debug:</code>/<code>error:</code> lines, including the &ldquo;checked N backup(s), &hellip;&rdquo; summary and the &ldquo;wrote &hellip; to file&rdquo; confirmation, are log messages and always go to stderr.</p>
+          <p>For the listing/check modes (<code>-l</code>, <code>-z</code>, <code>-Z</code>, <code>-o</code>, <code>-s</code>, <code>-S</code>) the result data <strong>ends with one summary line prefixed by <code>#</code></strong>, carrying the same text the run logs &mdash; e.g. <code># dev=sw01: checked 2 backup(s), no zero-byte backups found</code> &mdash; so the output is never empty and is self-describing: a reader can tell &ldquo;checked, nothing found&rdquo; from &ldquo;nothing was written&rdquo; without the exit status or stderr. The rows before it contain only the items <em>found</em>. The trailer is part of the result stream, so stdout and <code>-f</code> carry identical content. It is <em>not</em> added to <code>-g</code> or <code>-m</code>, which stay byte-exact.</p>
+          <div class="callout warn">
+            <div class="callout-title">Format change for parsers (v9.55)</div>
+            <p>Anything that parses these listings &mdash; fetchconfig-web in particular &mdash; must skip lines starting with <code>#</code>. Before v9.55 a check that found nothing produced a 0-byte file.</p>
+          </div>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">-?, -h, --help</span><span class="flag-req">help</span></div>
+          <p>Prints the usage/help text to stdout and exits with status 0. (Before v9.55, <code>-?</code> was treated as an unknown argument: it printed an error, the usage to stderr, and ended with &ldquo;Died at &hellip;&rdquo;.)</p>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">Unknown device or missing backup</div>
+          <p>If <code>dev_id</code> is unknown, or the device has no <code>repository</code> configured, fetchconfig.pl reports an error and exits non-zero; nothing is written to stdout or <code>-f</code>. Same if <code>-n</code> (or <code>-m</code>) refers to a backup that doesn't exist &mdash; use <code>-l</code> first if unsure how many backups exist. <code>-m</code> shells out to the standard <code>diff</code> utility, which must be available in <code>PATH</code>.</p>
+        </div>
+      </section>
+
+      <section id="device-support">
+        <div class="section-kicker">09</div>
+        <h2>Device support</h2>
+        <p class="prose-muted">Known to be supported &mdash; not a comprehensive list. Other devices and versions are likely to work but haven't been verified.</p>
+        <div class="table-wrap">
+          <table class="device-grid">
+            <thead><tr><th>Model name</th><th>Devices / OS supported</th></tr></thead>
+            <tbody>
+              <tr><td><code>cisco-cat</code></td><td>CatOS switches</td></tr>
+              <tr><td><code>cisco-ios</code></td><td>IOS routers &mdash; 2500 series, 2600 series, 2800 series, CS&#8209;516 (with <code>show_cmd=wrterm</code>)</td></tr>
+              <tr><td><code>cisco-asa</code></td><td>Cisco ASA firewalls</td></tr>
+              <tr><td><code>cisco-pix</code></td><td>Cisco PIX firewalls</td></tr>
+              <tr><td><code>cisco-iosxr</code></td><td>Cisco IOS XR</td></tr>
+              <tr><td><code>fortigate</code></td><td>FortiOS 3.0</td></tr>
+              <tr><td><code>parks</code></td><td>Parks 209R</td></tr>
+              <tr><td><code>riverstone</code></td><td>Alcatel Ethernet Router 3100 (Riverstone RS3100)</td></tr>
+              <tr><td><code>terayon-os</code></td><td>Terayon 3200/3500 CMTS</td></tr>
+              <tr><td><code>dmswitch</code></td><td>Datacom DmSwitch</td></tr>
+              <tr><td><code>3com-msr</code></td><td>3Com MSR routers</td></tr>
+              <tr><td><code>mikrotik</code></td><td>MikroTik routers</td></tr>
+              <tr><td><code>coriant-8600</code></td><td>Coriant 8600 Smart Router Series</td></tr>
+              <tr><td><code>tellabs-msr</code></td><td>Tellabs MSR routers</td></tr>
+              <tr><td><code>junos</code></td><td>Juniper EX Switch JunOS</td></tr>
+              <tr><td><code>acme</code></td><td>Oracle Acme Packet</td></tr>
+              <tr><td><code>mediant</code></td><td>Audiocodes Mediant</td></tr>
+              <tr><td><code>nec-univerge-ix</code></td><td>NEC Univerge IX</td></tr>
+              <tr><td><code>hirschmann</code></td><td>Hirschmann Railswitch (L2E software, telnet)</td></tr>
+              <tr><td><code>zyxel</code></td><td>Zyxel switches (Cisco-IOS-like CLI, telnet)</td></tr>
+              <tr><td><code>cisco-ios-ssh</code></td><td>Cisco IOS over SSH (the SSH counterpart of <code>cisco-ios</code>)</td></tr>
+              <tr><td><code>cisco-asa-ssh</code></td><td>Cisco ASA over SSH (the SSH counterpart of <code>cisco-asa</code>)</td></tr>
+              <tr><td><code>comware-ssh</code></td><td>HP/H3C Comware switches over SSH (bracketed <code>&lt;host&gt;</code>/<code>[host]</code> prompt, no <code>enable</code> step)</td></tr>
+              <tr><td><code>cisco-sg300</code></td><td>Cisco SG300 small-business switches (Cisco-IOS-like CLI)</td></tr>
+              <tr><td><code>dell</code></td><td>Dell PowerConnect switches</td></tr>
+              <tr><td><code>procurve</code></td><td>HP ProCurve switches (telnet); see also <code>procurve-ssh</code></td></tr>
+              <tr><td><code>procurve-ssh</code></td><td>HP ProCurve switches over SSH (the SSH counterpart of <code>procurve</code>; also handles a hostname containing spaces)</td></tr>
+              <tr><td><code>planet-ssh</code></td><td>PLANET managed switches (Cisco-IOS-like CLI, SSH; observed on IGS&#8209;4215&#8209;16P2T2S and IGS&#8209;5225&#8209;8P4S, also reported working on the M&#8209;Series &mdash; with or without the switch&rsquo;s own Username/Password dialog after the SSH login, with or without a &ldquo;Building configuration&hellip;&rdquo; banner, and whether one or two <code>exit</code>s end the session)</td></tr>
+              <tr><td><code>aruba-cx-ssh</code></td><td>Aruba CX switches (AOS-CX, SSH; observed on PL.10.17). Administrator account required &mdash; AOS-CX has no <code>enable</code>, an operator&rsquo;s <code>&gt;</code> prompt is reported as an error. Also backs up HPE Aruba Networking wireless access points running AOS-8 (confirmed on an AP model 515, AOS-8 8.13.2.2).</td></tr>
+              <tr><td><code>nexus-ssh</code></td><td>Cisco Nexus switches (NX-OS, SSH; observed on 10.4(7)). Administrator account required &mdash; NX-OS has no <code>enable</code>, a <code>&gt;</code> prompt is reported as an error. The <code>!Time:</code> header line changes on every run and is ignored by <code>changes_only</code>.</td></tr>
+              <tr><td><code>procurve-snmp</code></td><td>HP ProCurve ProVision, incl. the older 4000M/8000M chassis, over SNMP+TFTP (no CLI needed). See <a href="#procurve-snmp">ProCurve SNMP backups</a>.</td></tr>
+              <tr><td><code>tplink-web-sg105e</code></td><td>TP-Link Easy Smart switches (TL&#8209;SG105E, TL&#8209;SG105PE and siblings, HTTP web UI &mdash; these switches have no CLI). See <a href="#tplink">Web UI backups</a>.</td></tr>
+              <tr><td><code>procurve-web-1700</code></td><td>HP ProCurve 1700 series (1700&#8209;8, 1700&#8209;24; HTTP web UI &mdash; web-managed only, no CLI). See <a href="#tplink">Web UI backups</a>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="troubleshooting">
+        <div class="section-kicker">10</div>
+        <h2>Troubleshooting</h2>
+        <div class="callout warn">
+          <div class="callout-title">Legacy SSH key exchange</div>
+          <p>Some older SSH implementations (e.g. older HP/Aruba ProCurve firmware) only offer legacy key exchange algorithms that modern OpenSSH clients disable by default. fetchconfig.pl itself already re-enables what it needs for its own SSH connections (see the <code>KexAlgorithms</code>/<code>HostKeyAlgorithms</code>/<code>Ciphers</code> <code>master_opts</code> in <code>ProCurveSSH.pm</code> and <code>ComwareSSH.pm</code>), so this only matters if you want to connect to the same device manually with the system's own <code>ssh</code> command &mdash; the same kind of algorithm may need to be re-enabled in the SSH client's own configuration:</p>
+          <span class="file-label">/etc/ssh_config</span>
+          <pre><code>Host *
+    KexAlgorithms +diffie-hellman-group1-sha1</code></pre>
+        </div>
+      </section>
+
+      <section id="options">
+        <div class="section-kicker">11</div>
+        <h2>Options reference</h2>
+        <p>The modules <code>CiscoIOS</code>, <code>CiscoCAT</code>, <code>CiscoASA</code>, and <code>CiscoPIX</code> recognize the following options; nearly every other model reuses the same set (see the per-model matrix below for exactly which apply).</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Option</th><th>Requirement</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>pass</code></td><td class="req-yes">Mandatory</td><td>The login password.</td></tr>
+              <tr><td><code>user</code></td><td class="req-opt">Optional</td><td>Login username. Can be omitted for devices not requiring one.</td></tr>
+              <tr><td><code>enable</code></td><td class="req-yes">Mandatory</td><td>The enable password.</td></tr>
+              <tr><td><code>timeout</code></td><td class="req-yes">Mandatory</td><td>How long to wait for TELNET responses from devices.</td></tr>
+              <tr><td><code>fetch_timeout</code></td><td class="req-opt">Optional</td><td>Overrides <code>timeout</code> specifically while fetching configuration lines &mdash; useful for devices that take several seconds to build the configuration.</td></tr>
+              <tr><td><code>repository</code></td><td class="req-yes">Mandatory</td><td>Base directory for saving configuration files.</td></tr>
+              <tr><td><code>keep</code></td><td class="req-yes">Mandatory</td><td>Maximum number of config files to retain per device; older files are discarded once the limit is reached.</td></tr>
+              <tr><td><code>changes_only</code></td><td class="req-opt">Optional</td><td>Boolean. If <code>changes_only=1</code>, only new configurations are saved. Otherwise the script may retain multiple identical files across runs.</td></tr>
+              <tr><td><code>on_fetch_run</code></td><td class="req-opt">Optional</td><td>Path to an external program called whenever a config is fetched. Passed <code>FETCHCONFIG_DEV_ID</code>, <code>FETCHCONFIG_DEV_HOST</code>, <code>FETCHCONFIG_PREV</code> (undefined if none), and <code>FETCHCONFIG_CURR</code>. Available for all modules. If <code>changes_only=1</code>, the file at <code>FETCHCONFIG_CURR</code> is erased right after the program finishes.</td></tr>
+              <tr><td><code>on_fetch_cat</code></td><td class="req-opt">Optional</td><td>Boolean. If <code>on_fetch_cat=1</code>, the fetched configuration is also written to stdout. Available for all modules.</td></tr>
+              <tr><td><code>timezone</code></td><td class="req-opt">Optional</td><td>If <code>timezone=hide</code>, suppresses timezone information from the config filename.</td></tr>
+              <tr><td><code>filename_append_suffix</code></td><td class="req-opt">Optional</td><td>Appended to the generated backup filename, which then reads <code>&lt;dev_id&gt;.run.YYYYMMDD.HHMMSS&lt;tz&gt;&lt;suffix&gt;</code>, e.g. <code>filename_append_suffix=.txt</code>. Available for all modules. <strong>fetchconfig 9.x and later only accept a suffix that starts with a &ldquo;.&rdquo;</strong> (a file extension); a dotless suffix, or one containing <code>/</code> or whitespace, fails that device&rsquo;s backup with an error and writes nothing. <strong>Do not add, remove or change the suffix once a device has backups</strong> &mdash; files are found by their <code>&lt;dev_id&gt;.run.</code> prefix, so old and new names would coexist (<code>keep=N</code> expires them together, &ldquo;latest&rdquo; ordering can be affected). Decide before the first backup; use <code>-s dev_id</code> or <code>-S</code> to find devices whose existing backups already mix suffixes.</td></tr>
+              <tr><td><code>to</code></td><td class="req-opt">Optional</td><td>Overrides, for this device only, who receives the backup summary e-mail. See <a href="#email-notifications">E-mail notifications</a>. Available for all modules.</td></tr>
+              <tr><td><code>comment</code></td><td class="req-opt">Optional</td><td>Free-text note about the device, for whoever reads the device table &mdash; not used anywhere else. Available for all modules. Example: <code>comment=lab switch</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout note">
+          <div class="callout-title">Quoting option values</div>
+          <p>Any option value may be wrapped in double quotes, e.g. <code>comment="Building 3, Floor 2"</code>. This is only needed if the value contains a literal comma, since a comma otherwise separates one option from the next &mdash; quoting is never required just because a value contains spaces. Inside a quoted value, <code>\"</code> and <code>\\</code> represent a literal quote and backslash. Quoting is optional, not enforced: an unquoted value with a comma is still just split at that comma, exactly as before.</p>
+        </div>
+
+        <h3>Per-model option matrix</h3>
+        <p class="prose-muted">Beyond the options above, each model recognizes its own subset of <code>user</code> / <code>pass</code> / <code>enable</code> / <code>timeout</code> / <code>repository</code> / <code>keep</code> / <code>fetch_timeout</code> / <code>changes_only</code>. <code>on_fetch_run</code>, <code>on_fetch_cat</code>, <code>timezone</code>, <code>filename_append_suffix</code>, <code>to</code>, and <code>comment</code> are available for every model and are omitted here for space.</p>
+
+        <div class="table-wrap">
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th>Model</th><th>user</th><th>pass</th><th>enable</th><th>timeout</th><th>repository</th><th>keep</th><th>fetch_timeout</th><th>changes_only</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>cisco-ios</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>cisco-cat</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>cisco-asa</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>cisco-pix</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>cisco-ios-ssh</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>cisco-asa-ssh</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>cisco-sg300</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>comware-ssh</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>dell</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>procurve</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>procurve-ssh</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>cisco-ios / -cat / -asa / -pix</code></td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>fortigate</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>parks</code><sup class="prose-muted">1</sup></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>riverstone</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>terayon-os</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>dmswitch</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>3com-msr</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>mikrotik</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>tellabs-msr</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>junos</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>acme</code></td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>mediant</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>nec-univerge-ix</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>cisco-iosxr</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>coriant-8600</code></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>hirschmann</code><sup class="prose-muted">2</sup></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>zyxel</code><sup class="prose-muted">3</sup></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>planet-ssh</code><sup class="prose-muted">4</sup></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>aruba-cx-ssh</code><sup class="prose-muted">5</sup></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>nexus-ssh</code><sup class="prose-muted">9</sup></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>procurve-snmp</code><sup class="prose-muted">6</sup></td><td class="req-dash">&mdash;</td><td class="req-dash">&mdash;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>tplink-web-sg105e</code><sup class="prose-muted">7</sup></td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+              <tr><td><code>procurve-web-1700</code><sup class="prose-muted">8</sup></td><td class="req-dash">&mdash;</td><td class="req-yes">&#10003;</td><td class="req-dash">&mdash;</td><td class="req-opt">opt.</td><td class="req-yes">&#10003;</td><td class="req-yes">&#10003;</td><td class="req-opt">opt.</td><td class="req-opt">opt.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="prose-muted" style="font-size:0.85rem"><code>timeout</code> is shown as optional for every model because it has a built-in default: if it is set neither on the device line nor on the model&rsquo;s <code>default:</code> line, fetchconfig uses <strong>30 seconds</strong> and logs <code>Using 30s fetch timeout because the timeout was not set for this model</code> at debug level. Before v9.55 an unset timeout fell through to the underlying library&rsquo;s own default (10 s for telnet/SSH, 180 s for the web-UI models), so set it explicitly for anything but a lab test.</p>
+        <p class="prose-muted" style="font-size:0.85rem">1. <code>parks</code> also recognizes <code>banner_timeout</code> (optional) &mdash; overrides the timeout used to wait for the initial <code>login:</code> prompt, since the Parks 209R can take many seconds to issue it.<br>2. <code>hirschmann</code>'s <code>enable</code> is optional because that firmware's <code>enable</code> command doesn't ask for a password; it's read defensively in case another firmware version does. <code>hirschmann</code> also recognizes <code>show_cmd</code> (optional), same as <code>cisco-ios</code> below.<br>3. <code>zyxel</code>'s <code>enable</code> is optional: one real login sample went straight to the privileged prompt with no separate "enable" step (account already had full privilege), while another needed "enable" plus its own password &mdash; both are handled, so this is read defensively rather than assumed either way. <code>zyxel</code> also recognizes <code>show_cmd</code> (optional, same as <code>cisco-ios</code>) and <code>debug</code> (optional, boolean &mdash; records the raw telnet session to <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code> when set to <code>on</code>, same convention as <code>procurve</code>/<code>procurve-ssh</code>).<br>4. <code>planet-ssh</code>: <code>user</code>/<code>pass</code> serve the SSH authentication and, on firmware that shows one, the switch&rsquo;s own <code>Username:</code>/<code>Password:</code> dialog that follows it. <code>enable</code> is optional and only used if the account lands on the <code>&gt;</code> prompt; it defaults to the login password. The <code>! System Up Time:</code> header line of the running-config is kept in the backup but ignored by <code>changes_only</code>. Also recognizes <code>banner_timeout</code>, <code>show_cmd</code>, <code>debug</code> (to <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code>: first the ssh client&rsquo;s verbose account of the SSH authentication, then the raw switch session &mdash; the SSH login itself is not switch output, so it can only appear as those ssh log lines) and <code>type_delay</code> (milliseconds between typed characters, default 100 &mdash; the switch does not reliably accept a burst of input right after a prompt, so every line is typed character by character; 0 disables the pauses).<br>5. <code>aruba-cx-ssh</code>: <code>user</code> must be an administrator (AOS-CX has no <code>enable</code>; an operator&rsquo;s <code>&gt;</code> prompt is an error). Also works for HPE Aruba Networking AOS-8 wireless access points (confirmed on an AP model 515, AOS-8 8.13.2.2). Pager disabled with <code>no page</code>; the <code>Current configuration:</code> header is dropped. Also recognizes <code>banner_timeout</code>, <code>show_cmd</code>, <code>prompt_settle_ms</code> (idle-wait before matching the prompt, default 150&nbsp;ms &mdash; the prompt token allows spaces and non-ASCII, and the wait keeps a banner line ending in &ldquo;#&rdquo; from being taken for the prompt) and <code>debug</code> (same debug file layout as <code>planet-ssh</code>).<br>6. <code>procurve-snmp</code> has no <code>user</code>/<code>pass</code>: the credential is the SNMP read-write <code>community</code>. <code>timeout</code> defaults to 30s and covers both SNMP and TFTP; also recognizes <code>oid</code>, <code>remote_file</code>, <code>snmp_version</code> and <code>debug</code>.<br>7. <code>tplink-web-sg105e</code> talks HTTP, not telnet: <code>user</code>/<code>pass</code> are the web UI login, <code>timeout</code> applies to each HTTP request, and <code>fetch_timeout</code> to the config download request only. Also recognizes <code>debug</code> (optional, boolean &mdash; records every HTTP request and response of the run, password masked and binary bodies summarized by size, to <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code>).<br>8. <code>procurve-web-1700</code> likewise talks HTTP; it has only a manager password, so <code>user</code> is ignored. Same <code>timeout</code>/<code>fetch_timeout</code>/<code>debug</code> handling as <code>tplink-web-sg105e</code>.<br>9. <code>nexus-ssh</code>: <code>user</code> must land on the <code>#</code> prompt (NX-OS has no <code>enable</code>; a <code>&gt;</code> prompt is an error). Pager disabled with <code>terminal length 0</code>. The <code>!Time:</code> header line of the running-config changes on every run and is ignored by <code>changes_only</code>; <code>!Running configuration last done at:</code> counts. Also recognizes <code>banner_timeout</code>, <code>show_cmd</code>, <code>prompt_settle_ms</code> (idle-wait before matching the prompt, default 150&nbsp;ms) and <code>debug</code> (<code>on</code>/<code>off</code>, default off; records to <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code>, mode 0600, the ssh authentication record followed by the raw switch session).</p>
+
+        <h3>show_cmd (most CLI models)</h3>
+        <p class="prose-muted">If specified, replaces the model's usual show-config command &mdash; useful for older devices. On <code>cisco-ios</code>, <code>show_cmd=wrterm</code> is kept as a backward-compatible alias for <code>write term</code> in place of <code>show run</code>.</p>
+
+        <h3>debug (ProCurve, ProCurve-SSH, ProCurve-SNMP, Zyxel, PLANET, Aruba-CX-SSH, Nexus-SSH, Cisco-IOS-SSH, Cisco-ASA-SSH, Comware-SSH, TP-Link, ProCurve-Web-1700)</h3>
+        <p class="prose-muted">Boolean. If <code>debug=on</code> (default off), records the raw telnet/SSH session (or, for the web UI models, every HTTP request and response) to <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code> for troubleshooting.</p>
+      </section>
+
+      <section id="security">
+        <h2>Security notes</h2>
+        <div class="callout warn">
+          <div class="callout-title">Debug files contain credentials</div>
+          <p>With <code>debug=on</code>, <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code> records the session verbatim &mdash; for the telnet/SSH models that includes the login and enable passwords exactly as typed, and for <code>procurve-snmp</code> the SNMP read-write community. Since v9.54 these files are created with mode <code>0600</code> regardless of the process umask. Still, enable <code>debug=on</code> only while troubleshooting and delete the file afterwards. Backups and the <code>.status</code> file use the process umask (typically <code>0644</code>); backups contain configuration secrets, so restrict the repository directory on a shared host.</p>
+        </div>
+        <p><strong>SSH host keys are not verified.</strong> The SSH models use <code>StrictHostKeyChecking=no</code> and <code>UserKnownHostsFile=/dev/null</code>: any host key is accepted and none remembered. This is deliberate &mdash; fetchconfig runs unattended, and a switch&rsquo;s host key changes on every hardware swap, which would otherwise halt backups until someone edited <code>known_hosts</code>. The trade-off is that an on-path attacker could impersonate a device and capture the login password. Run fetchconfig on a trusted management network.</p>
+        <p><strong>Device IDs are validated.</strong> A <code>dev_id</code> may contain letters, digits, underscore, dot and dash (hostnames like <code>sw01.example.com</code> are fine) but may not consist only of dots, since <code>.</code> or <code>..</code> would resolve to the repository itself or its parent.</p>
+        <p><strong>SMTP.</strong> <code>AUTH LOGIN</code> sends the password base64-encoded, not encrypted &mdash; see the <code>tls</code> option under <a href="#email-notifications">E-mail notifications</a>. Header fields (From, To, Subject) have line breaks stripped before sending, so a device-table value cannot inject extra mail headers.</p>
+        <p><strong>Backup file naming.</strong> Backups are named <code>&lt;dev_id&gt;.run.YYYYMMDD.HHMMSS[tz]</code>, i.e. one-second resolution. Two backups of one device completed within the same second would share a name and the second would overwrite the first. This is an accepted limitation: a real fetch never completes in under a second and scheduled runs are minutes apart. Since v9.55 every operation that orders backups (&ldquo;latest&rdquo; for <code>changes_only</code>, <code>keep=N</code> expiry, <code>-g</code>/<code>-n</code>/<code>-m</code>, <code>-l</code>, <code>-z</code>/<code>-Z</code>, <code>-s</code>/<code>-S</code>) sorts by the parsed timestamp <code>YYYYMMDD.HHMMSS</code>, not by a plain string sort of the whole name, so neither the timezone token (which changes with DST and by platform) nor a suffix can disturb the order.</p>
+        <p><strong>Non-ASCII hostnames.</strong> <code>aruba-cx-ssh</code> and <code>planet-ssh</code> handle a prompt containing spaces or non-ASCII characters. <code>procurve</code>, <code>procurve-ssh</code>, <code>hirschmann</code>, <code>comware-ssh</code> and <code>nec-univerge-ix</code> still build their prompt regexp with <code>quotemeta()</code> and would not match such a prompt; this is left unchanged pending tests against real devices &mdash; keep hostnames on those devices to ASCII.</p>
+      </section>
+
+      <section id="status-file">
+        <div class="section-kicker">12</div>
+        <h2>Status file</h2>
+        <p>After every backup attempt fetchconfig writes a small status file next to the backups, at <code>&lt;repository&gt;/&lt;dev_id&gt;.status</code>. It is written for every device and every model, and does <em>not</em> depend on the <code>email:</code> line &mdash; it is a plain repository artifact, meant for external tools (for example a web front-end that reads <code>backup_duration_sec</code> to size a progress spinner). It is overwritten on every run and written atomically, so a reader never sees a half-written file.</p>
+        <span class="file-label">&lt;dev_id&gt;.status</span>
+        <pre><code>[swi-lab-01]
+backup_start_date=2026-09-11
+backup_start_time=22:14:03
+backup_end_date=2026-09-11
+backup_end_time=22:14:09
+backup_duration_sec=6
+backup_state=success
+backup_changed=changed</code></pre>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Key</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td><code>backup_start_date</code> / <code>backup_start_time</code></td><td>When the fetch started (local time). Derived as end minus <code>backup_duration_sec</code>.</td></tr>
+              <tr><td><code>backup_end_date</code> / <code>backup_end_time</code></td><td>When the fetch finished (local time).</td></tr>
+              <tr><td><code>backup_duration_sec</code></td><td>Whole seconds the fetch took &mdash; the same value logged for the run and shown in the summary e-mail.</td></tr>
+              <tr><td><code>backup_state</code></td><td><code>success</code>, <code>failed</code>, or <code>skipped</code>.</td></tr>
+              <tr><td><code>backup_changed</code></td><td><code>unchanged</code> or <code>changed</code> for a <code>changes_only=1</code> device; <code>forced</code> for a <code>changes_only=0</code> device (saved regardless of any comparison); <code>unknown</code> when the state is failed or skipped.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="procurve-snmp">
+        <div class="section-kicker">13</div>
+        <h2>ProCurve SNMP backups (ProVision, 4000M/8000M)</h2>
+        <p>The older HP ProCurve ProVision chassis (4000M, 8000M) can only be managed remotely through a VT100 menu, which is not usable for scripted backup. They will, however, export a text copy of their configuration over TFTP when told to over SNMP, and that is what <code>procurve-snmp</code> does. It is a transport unlike the other models &mdash; no shell and no web UI, but SNMP plus TFTP &mdash; and so has no <code>user</code>/<code>pass</code>: the credential is the SNMP read-write <code>community</code>.</p>
+        <p>An SNMP set arms the switch&rsquo;s TFTP export, the config is fetched from the switch by TFTP, and a second SNMP set disables the export again. That disable always runs, even when the transfer failed, so the switch is never left with its TFTP server open.</p>
+        <div class="callout note">
+          <div class="callout-title">browse vs. running-config</div>
+          <p>The default <code>remote_file=browse</code> produces a human-readable report &mdash; fine for backup and change tracking, but a display export, not a file that can be TFTP&rsquo;d back to restore the switch. Later ProVision models also accept <code>remote_file=running-config</code>, a replayable config.</p>
+        </div>
+        <div class="callout warn">
+          <div class="callout-title">TFTP is inbound</div>
+          <p>The switch pushes the file to the backup host over TFTP (UDP/69 inbound, then a data port). A host firewall on the backup machine can block this; it then shows up as a TFTP get failure or timeout, not a hang.</p>
+        </div>
+      </section>
+
+      <section id="tplink">
+        <div class="section-kicker">14</div>
+        <h2>Web UI backups (TP-Link Easy Smart, ProCurve 1700)</h2>
+        <p>Some switches have no CLI at all &mdash; TP-Link Easy Smart switches (TL&#8209;SG105E, TL&#8209;SG105PE and siblings) and the HP ProCurve 1700 series. The <code>tplink-web-sg105e</code> and <code>procurve-web-1700</code> models retrieve the config the same way a browser does on the switch&rsquo;s config backup page: they log in over plain HTTP (the switches offer no HTTPS), download the config file, and log out again. The two models share their HTTP plumbing (<code>AbstractHTTP.pm</code>); the login, download and logout requests are per device, taken from packet captures of real browser sessions.</p>
+        <p><strong>TP-Link:</strong> both session mechanisms seen on real devices are handled &mdash; the TL&#8209;SG105E binds the login session to the client&rsquo;s IP address, the TL&#8209;SG105PE v2 uses a session cookie. Either way the switch only allows a limited number of concurrent logins; if it reports the login table as full, the backup of that device is reported as failed rather than forcing another user out.</p>
+        <p><strong>ProCurve 1700:</strong> the switch has only a manager password (<code>user</code> is ignored) and binds the session to the client&rsquo;s IP address.</p>
+        <div class="callout warn">
+          <div class="callout-title">Secrets in clear</div>
+          <p>The 1700&rsquo;s <code>switch.cfg</code> contains the SNMP communities and, apparently, the manager password in clear &mdash; protect the repository accordingly.</p>
+        </div>
+        <p>The downloaded config is an opaque binary file, not text. It is stored uuencoded (<code>begin 644 &lt;name&gt;.cfg</code> &hellip; <code>end</code>) so that it fits the text-based repository, the <code>changes_only</code> comparison and the <code>-g</code> retrieval like any other backup. To turn a backup back into the file the switch&rsquo;s restore page expects:</p>
+        <span class="file-label">shell</span>
+        <pre><code>uudecode -o config.cfg &lt;backup-file&gt;
+# or straight from the repository:
+fetchconfig.pl -devices=... -g &lt;dev_id&gt; | uudecode -o config.cfg</code></pre>
+        <div class="callout note">
+          <div class="callout-title">Diffs are not meaningful here</div>
+          <p>A line-by-line comparison between two backups (<code>-m</code>) works, but on uuencoded binary it only shows <em>that</em> something changed, not <em>what</em>. Byte-exact change detection (<code>changes_only=1</code>) is unaffected: identical binaries encode to identical text.</p>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="page-footer">
+      Generated from the fetchconfig README &middot; Rainer Tammer fork &middot; GPL&#8209;2.0-or-later
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Scroll-spy: highlight the sidebar link matching the section in view.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a'));
+    var sections = links.map(function(a){ return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+    if (!('IntersectionObserver' in window) || !sections.length) return;
+
+    var current = null;
+    function setActive(id){
+      if (id === current) return;
+      current = id;
+      links.forEach(function(a){
+        a.classList.toggle('active', a.getAttribute('href') === '#' + id);
+      });
+    }
+
+    var observer = new IntersectionObserver(function(entries){
+      var visible = entries.filter(function(e){ return e.isIntersecting; });
+      if (visible.length){
+        visible.sort(function(a,b){ return a.boundingClientRect.top - b.boundingClientRect.top; });
+        setActive(visible[0].target.id);
+      }
+    }, { rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+
+    sections.forEach(function(s){ observer.observe(s); });
+    setActive(sections[0].id);
+
+    // Close mobile nav after a link is tapped.
+    var toggle = document.getElementById('nav-toggle');
+    links.forEach(function(a){
+      a.addEventListener('click', function(){ if (toggle) toggle.checked = false; });
+    });
+  })();
+</script>
+
+</body>
+</html>

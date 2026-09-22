@@ -182,23 +182,9 @@ sub chat_login {
     $prompt;
 }
 
-sub expect_enable_prompt {
-    my ($self, $t, $prompt) = @_;
-
-    if (!defined($prompt)) {
-	$self->log_error("internal failure: undefined command prompt");
-	return undef;
-    }
-
-    my $enable_prompt_regexp = '/\[' . $prompt . '[^\[\]]*\]$/';
-
-    my ($prematch, $match) = $t->waitfor(Match => $enable_prompt_regexp);
-    if (!defined($prematch)) {
-	$self->log_error("could not match enable command prompt: $enable_prompt_regexp");
-    }
-
-    ($prematch, $match);
-}
+# expect_enable_prompt: inherited from model::Abstract since 9.58; this model's device fact is below.
+sub prompt_head { '\[' }
+sub prompt_tail { '[^\[\]]*\]$' }
 
 sub pager_off {
     my ($self, $t, $dev_id, $dev_host, $prompt) = @_;

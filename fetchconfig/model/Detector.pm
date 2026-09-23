@@ -56,6 +56,7 @@ use fetchconfig::model::ProCurveWeb1700;
 use fetchconfig::model::PLANET;
 use fetchconfig::model::ArubaCXSSH;
 use fetchconfig::model::NexusSSH;
+use fetchconfig::model::MediantSBC;
 use fetchconfig::model::ProCurveSNMP;
 
 my $logger;
@@ -456,6 +457,7 @@ sub init {
     $class->register(fetchconfig::model::PLANET->new($log));
     $class->register(fetchconfig::model::ArubaCXSSH->new($log));
     $class->register(fetchconfig::model::NexusSSH->new($log));
+    $class->register(fetchconfig::model::MediantSBC->new($log));
     $class->register(fetchconfig::model::ProCurveSNMP->new($log));
 }
 

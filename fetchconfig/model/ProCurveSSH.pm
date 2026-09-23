@@ -160,97 +160,20 @@ sub fetch
 # prompt pattern (no delimiters), e.g. '([\w.-]+(?: [\w.-]+)* ?)[>#] ' or
 # '([\w.-]+(?: [\w.-]+)* ?)# '. $label is used only in log/error messages to
 # identify the call site.
-sub wait_for_command_prompt
-{
-  my ($self, $t, $prompt_regex, $label) = @_;
-  # The switch emits cursor escapes (ESC[1H) right before the prompt.
-  # If the prompt regex is allowed to start INSIDE that escape, the
-  # ESC and "[" stay in the prematch (ending up as junk at the end of
-  # the saved config) and "1H" is swallowed into the hostname. So the
-  # escape(s) are matched first, as part of the prompt unit; callers
-  # then run the match through stripansi before reading the hostname.
-  my $combined_match    = '/Press any key to continue|Main Menu|Do you want to save current configuration|(?:\\x1b\\[[\\d;?]*[A-Za-z])*' . $prompt_regex . '/';
-  my $banner_only_match = '/Press any key to continue|Main Menu|Do you want to save current configuration/';
-  my ($prematch, $match) = $t->waitfor(Match => $combined_match);
-  if (!defined($prematch))
-  {
-    $self->log_error("could not find command prompt ($label)");
-    return undef;
-  }
-  my $retries = 8;
-  while (1)
-  {
-    if ($match =~ /Press any key to continue/ || $match =~ /Main Menu/ || $match =~ /Do you want to save current configuration/)
-    {
-      if ($retries-- <= 0)
-      {
-        $self->log_error("too many banner/menu screens waiting for command prompt ($label)");
-        return undef;
-      }
-      my $ok;
-      if ($match =~ /Press any key to continue/)
-      {
-        # IMPORTANT: do not send a bare Return here. HP/Aruba documents
-        # that pressing Return at this banner selects the Menu
-        # interface, while any other key drops straight into the CLI.
-        # put() sends the byte raw, with no trailing CR/LF.
-        $ok = $t->put(" ");
-      }
-      elsif ($match =~ /Do you want to save current configuration/)
-      {
-        # Answer "y" as a single raw keystroke (no CR/LF), same
-        # convention as the banner/menu keystrokes above.
-        $ok = $t->put("y");
-        $self->log_debug("saved running config") if $ok;
-      }
-      else # Main Menu
-      {
-        # Select item 5, "Command Line (CLI)", to drop back to the CLI.
-        # Menu items execute on the digit alone; no Enter is needed.
-        $ok = $t->put("5");
-      }
-      if (!$ok)
-      {
-        $self->log_error("could not dismiss banner/menu waiting for command prompt ($label)");
-        return undef;
-      }
-      ($prematch, $match) = $t->waitfor(Match => $combined_match);
-      if (!defined($prematch))
-      {
-        $self->log_error("could not find command prompt after banner/menu ($label)");
-        return undef;
-      }
-      else
-      {
-        # Note that below line may not appear properly due to the
-        # escape sequences from the switch
-        $self->log_debug("found prompt: [" . fetchconfig::model::Abstract::stripansi($match) . "]");
-      }
-      next;
-    }
-    # $match satisfies $prompt_regex - but on some firmware a
-    # prompt-looking string can appear in the byte stream BEFORE its
-    # own banner/"Press any key" sequence has actually finished (see
-    # Change: 20260902): a putty log showed "...Press any key to
-    # continueV4-SW1# show run", where "V4-SW1# " had already shown up
-    # earlier in the SAME session, before the real banner text. A
-    # short settle check catches this: if a banner/menu/save-prompt
-    # trails in within a brief window right after what looked like the
-    # final prompt, it wasn't really the final prompt yet. This is
-    # deliberately a short, fixed timeout (not the full session
-    # timeout) - it only needs to catch data that's already in flight
-    # from the same burst, not genuinely wait around.
-    my ($settle_prematch, $settle_match) = $t->waitfor(Match => $banner_only_match, Timeout => 1);
-    last unless defined($settle_prematch); # quiet: genuinely done
-    if ($retries-- <= 0)
-    {
-      $self->log_error("too many banner/menu screens waiting for command prompt ($label)");
-      return undef;
-    }
-    $self->log_debug("found trailing banner/menu after apparent prompt: [$settle_match]");
-    $match = $settle_match;
-  }
-  ($prematch, $match);
+# wait_for_command_prompt: shared implementation in model::Abstract since 9.60;
+# this model's interruption screens are declared below.
+
+# The screens this switch family interposes before its prompt, and the raw
+# keystroke that dismisses each (see Abstract::wait_for_command_prompt):
+#  - "Press any key to continue": any key but Return - Return would select
+#    the Menu interface (HP/Aruba documentation).
+#  - the Menu interface: item 5 is "Command Line (CLI)"; digits execute
+#    without Enter.
+#  - "Do you want to save current configuration": answer y.
+sub interrupt_screens {
+  ( ['Press any key to continue',                 ' ', undef],
+    ['Main Menu',                                  '5', undef],
+    ['Do you want to save current configuration',  'y', 'saved running config'] );
 }
 sub chat_login {
   my ($self, $t, $dev_id, $dev_host, $dev_opt_tab) = @_;

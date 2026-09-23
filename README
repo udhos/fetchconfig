@@ -1,5 +1,8 @@
 #
 # fetchconfig.pl - README
+
+(Developers: How-To-add-a-model.md / .html is the programming manual for
+writing a new device model.)
 #
 
 INTRODUCTION
@@ -14,8 +17,9 @@ INTRODUCTION
 	Routers, Tellabs MSR Routers, Juniper EX Switch JunOS, Oracle
 	Acme Packet, Audiocodes Mediant, Cisco IOS XR, NEC Univerge
 	IX, Hirschmann Railswitch, Zyxel switches, PLANET managed
-	switches, Aruba CX switches, Cisco Nexus switches, TP-Link Easy
-	Smart switches, HP ProCurve 1700 series switches, and HP ProCurve
+	switches, Aruba CX switches, Cisco Nexus switches, AudioCodes
+	Mediant SBCs, TP-Link Easy Smart switches, HP ProCurve 1700 series
+	switches, and HP ProCurve
 	ProVision (incl. 4000M/8000M) over SNMP+TFTP.
 
 IMPORTANT CHANGE IN 9.55 (filename_append_suffix)
@@ -875,6 +879,11 @@ DEVICE SUPPORT
 	nexus-ssh	Cisco Nexus switches (NX-OS; SSH; observed on
 			10.4(7)). Administrator account required - NX-OS
 			has no "enable".
+	mediant-sbc	AudioCodes Mediant SBC / gateway with the current
+			Cisco-style CLI ("Welcome to AudioCodes CLI";
+			observed on a Mediant 500Li). SSH by default,
+			telnet or automatic fallback by option. Not the
+			older menu-style CLI - that is "mediant".
 	procurve-snmp	HP ProCurve ProVision switches, including the
 			older 4000M/8000M chassis, backed up over
 			SNMP+TFTP (no CLI needed). See PROCURVE SNMP
@@ -1596,6 +1605,71 @@ OPTIONS
 			(default off), records to <repository>/<dev_id>.debug
 			(mode 0600) first the ssh client's account of the
 			SSH authentication and then the raw switch session.
+
+	The mediant-sbc module recognizes the following options:
+	(See above cisco-ios/cisco-cat section for descriptions.)
+
+	user		Mandatory. Login name (SSH or telnet).
+	pass		Mandatory. Login password.
+	enable		Mandatory. The "enable" password: the CLI lands on
+			the unprivileged "hostname> " prompt and the config
+			is read from the privileged "hostname# " prompt.
+			A wrong enable password is reported as such.
+	transport	Optional. "ssh" (default), "telnet" or "auto".
+			"auto" tries SSH first and falls back to telnet
+			ONLY if no SSH service answers (connection refused,
+			unreachable, timed out). It never falls back on an
+			authentication, key-exchange or host-key failure:
+			that would retry the password over a second channel
+			(lockouts, alarms) and move a credential from an
+			encrypted to a cleartext channel. A fallback is
+			logged at info level so a downgrade is always
+			visible.
+	repository	Mandatory.
+	keep		Mandatory.
+	timeout		Optional, default 30 seconds (see the cisco-ios/
+                        cisco-cat section).
+	banner_timeout	Optional.
+	prompt_settle_ms Optional (SSH). Milliseconds to wait for output
+			to go idle before matching the prompt (default 150).
+	fetch_timeout	Optional. The full configuration is long; raise
+			this on slow links.
+	changes_only	Optional.
+	on_fetch_run	Optional.
+	on_fetch_cat	Optional.
+	timezone	Optional.
+	filename_append_suffix Optional.
+	show_cmd	Optional. Replaces "show running-config" (settings
+			that differ from the firmware defaults - the form the
+			device's own CLI-script export produces and a restore
+			via "copy cli-script from ..." is designed for).
+			"show running-config full" lists every parameter
+			including defaults: better for auditing default
+			changes across firmware upgrades, riskier to replay
+			on a newer firmware. For both, add a second device
+			entry with its own dev_id, e.g.
+			  mediant-sbc SBC10      sbc10.example.com
+			  mediant-sbc SBC10-full sbc10.example.com show_cmd="show running-config full"
+			The CLI pauses with
+			" --MORE--" after each screen. The pager settings are
+			under "configure system" -> "cli-settings":
+			default-window-height is persistent (part of the
+			running configuration) and the per-session override
+			window-height exists only inside that configuration
+			mode. A backup tool must not modify the configuration
+			nor enter configuration mode, so the pager is driven:
+			a space is sent
+			at every marker and the marker and its erase
+			sequence are removed from the saved configuration.
+	pager_cmd	Optional. A command to send before the show command
+			to disable paging for the session, for a firmware
+			that offers one. Its rejection ("Invalid command",
+			"%", ...) aborts the fetch. Not needed on the
+			observed Mediant 500Li.
+	debug		Optional. Boolean. debug=on records to
+			<repository>/<dev_id>.debug (mode 0600); over SSH the
+			ssh client's debug trace comes first, then the raw
+			session.
 
 	The procurve-snmp module recognizes the following options:
 	(See above cisco-ios/cisco-cat section for descriptions of

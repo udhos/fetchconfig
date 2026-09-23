@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fetchconfig — How to Add a Device Model</title>
+<style>
+:root { --fg:#1f2328; --bg:#ffffff; --muted:#59636e; --line:#d1d9e0; --code:#f6f8fa; --link:#0969da; --accent:#1f6feb; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg:#e6edf3; --bg:#0d1117; --muted:#9198a1; --line:#3d444d; --code:#161b22; --link:#4493f8; --accent:#4493f8; }
+}
+html { -webkit-text-size-adjust: 100%; }
+body { margin:0; background:var(--bg); color:var(--fg);
+  font: 16px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+main { max-width: 900px; margin: 0 auto; padding: 32px 24px 64px; }
+nav.toc { border:1px solid var(--line); border-radius:6px; padding:12px 18px; margin:24px 0 32px; background:var(--code); }
+nav.toc strong { display:block; margin-bottom:6px; }
+nav.toc ul { margin:0; padding-left:18px; }
+nav.toc li { margin:2px 0; }
+h1, h2, h3, h4 { line-height:1.25; margin:1.6em 0 .6em; font-weight:600; }
+h1 { font-size:2em; border-bottom:1px solid var(--line); padding-bottom:.3em; margin-top:0; }
+h2 { font-size:1.5em; border-bottom:1px solid var(--line); padding-bottom:.3em; }
+h3 { font-size:1.2em; }
+h4 { font-size:1em; }
+h2 a.anchor, h3 a.anchor { visibility:hidden; text-decoration:none; color:var(--muted); margin-left:.3em; }
+h2:hover a.anchor, h3:hover a.anchor { visibility:visible; }
+p { margin: 0 0 1em; }
+a { color: var(--link); }
+code { font: 0.9em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  background: var(--code); padding: .15em .35em; border-radius: 4px; }
+pre { background: var(--code); border:1px solid var(--line); border-radius: 6px; padding: 14px 16px; overflow-x: auto; margin: 0 0 1.2em; }
+pre code { background: none; padding: 0; font-size: 0.85em; }
+table { border-collapse: collapse; width: 100%; margin: 0 0 1.2em; display:block; overflow-x:auto; }
+th, td { border: 1px solid var(--line); padding: 6px 12px; vertical-align: top; }
+th { background: var(--code); }
+tr:nth-child(even) td { background: rgba(127,127,127,.06); }
+blockquote { border-left: 4px solid var(--line); margin: 0 0 1em; padding: 0 1em; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+ul, ol { margin: 0 0 1em; padding-left: 2em; }
+li { margin: .2em 0; }
+input[type=checkbox] { margin-right: .4em; }
+footer { color: var(--muted); font-size: .85em; border-top: 1px solid var(--line); margin-top: 3em; padding-top: 1em; }
+</style>
+</head>
+<body>
+<main>
+<nav class="toc"><strong>Contents</strong><ul><li><a href="#1-scope-and-audience">1. Scope and Audience</a></li><li><a href="#2-concepts">2. Concepts</a></li><li><a href="#3-the-model-contract">3. The Model Contract</a></li><li><a href="#4-procedure">4. Procedure</a></li><li><a href="#5-skeletons">5. Skeletons</a></li><ul><li><a href="#51-telnet-model">5.1 Telnet model</a></li><li><a href="#52-ssh-model">5.2 SSH model</a></li><li><a href="#53-where-to-look-for-worked-examples">5.3 Where to look for worked examples</a></li></ul><li><a href="#6-verification">6. Verification</a></li><ul><li><a href="#61-without-the-device-replay-mock">6.1 Without the device: replay mock</a></li><li><a href="#62-with-the-device">6.2 With the device</a></li></ul><li><a href="#7-integration-checklist">7. Integration Checklist</a></li><li><a href="#8-shared-api-reference">8. Shared API Reference</a></li><ul><li><a href="#81-options">8.1 Options</a></li><li><a href="#82-logging">8.2 Logging</a></li><li><a href="#83-transport">8.3 Transport</a></li><li><a href="#84-prompt-matching-and-chat">8.4 Prompt matching and chat</a></li><li><a href="#85-configuration-storage-and-comparison">8.5 Configuration storage and comparison</a></li><li><a href="#86-http-models-abstracthttp">8.6 HTTP models (<code>AbstractHTTP</code>)</a></li></ul><li><a href="#9-conventions-that-matter">9. Conventions That Matter</a></li><ul><li><a href="#91-return-values">9.1 Return values</a></li><li><a href="#92-never-modify-the-device">9.2 Never modify the device</a></li><li><a href="#93-credentials">9.3 Credentials</a></li><li><a href="#94-volatile-lines-and-changes-only">9.4 Volatile lines and <code>changes_only</code></a></li><li><a href="#95-bytes-not-characters">9.5 Bytes, not characters</a></li><li><a href="#96-timeouts">9.6 Timeouts</a></li><li><a href="#97-debug-file">9.7 Debug file</a></li></ul></ul></nav>
+<h1 id="fetchconfig-how-to-add-a-device-model">fetchconfig — How to Add a Device Model</h1>
+<p><em>Programming manual for writing a new configuration extractor. Applies to fetchconfig 9.60.</em></p>
+<hr>
+<h2 id="1-scope-and-audience">1. Scope and Audience</h2>
+<p>This manual is for a software engineer who has to make fetchconfig back up a device family it does not yet support. It assumes working Perl, familiarity with <code>Net::Telnet</code>-style expect programming, and access to at least one device of the new family (or a byte-accurate capture of a session with it).</p>
+<p>It covers: what a model is and what the core expects from it (§2–§3), the step-by-step procedure (§4), two annotated skeletons you can copy (§5), how to verify a model without hardware and then with it (§6), the integration checklist (§7), and a complete reference of the shared functions available to a model (§8). Conventions that experience has shown to matter are collected in §9.</p>
+<h2 id="2-concepts">2. Concepts</h2>
+<p><strong>Model.</strong> One Perl class per device family, in <code>fetchconfig/model/&lt;Name&gt;.pm</code>, inheriting <code>fetchconfig::model::Abstract</code> (or <code>fetchconfig::model::AbstractHTTP</code> for web-UI devices). A model knows how to talk to one CLI dialect; it knows nothing about repositories, comparison, expiry, e-mail, or parallelism — the core does all of that, identically for every model.</p>
+<p><strong>Label.</strong> The short string that names the model in the device table (<code>cisco-ios</code>, <code>procurve-ssh</code>, <code>mediant-sbc</code>). Lower-case, hyphenated; use a <code>-ssh</code> suffix only if a telnet model of the same family exists, otherwise select the transport with an option (see <code>mediant-sbc</code>).</p>
+<p><strong>Device table.</strong> The operator&#x27;s configuration. Three line kinds:</p>
+<pre><code>default: &lt;label&gt;  key=value,key=value,...     model-wide defaults (repeatable; later wins)
+email:   from=...,to=...,smtp=...
+&lt;label&gt;  &lt;dev_id&gt;  &lt;host[:port]&gt;  [key=value,...]  a device; per-device options override defaults</code></pre>
+<p>Values containing commas or spaces are double-quoted. Your model reads options with <code>dev_option()</code>; you decide which are mandatory and reject a device that lacks them.</p>
+<p><strong>Fetch pipeline (owned by the core, <code>Detector::fetch_device</code>).</strong> For each device: call <code>$model-&gt;fetch(...)</code> → if it returned a saved file, compare with the previous backup (<code>config_equal</code>, which your model may override) → discard if unchanged and <code>changes_only</code> → expire beyond <code>keep=N</code> → record the result for the status file and the summary mail. A model that fails returns an empty list; the core logs the failure, records it, and moves to the next device. <strong>A model never terminates the run.</strong></p>
+<p><strong>Repository.</strong> <code>&lt;repository&gt;/YYYYMM/YYYYMMDD/&lt;dev_id&gt;/&lt;dev_id&gt;.run.&lt;timestamp&gt;&lt;tz&gt;&lt;suffix&gt;</code>. Your model never builds this path; <code>dump_config()</code> does.</p>
+<h2 id="3-the-model-contract">3. The Model Contract</h2>
+<p>A model must provide:</p>
+<table><thead><tr><th style="text-align:left">Method</th><th style="text-align:left">Provided by</th><th style="text-align:left">Notes</th></tr></thead><tbody><tr><td style="text-align:left"><code>label()</code></td><td style="text-align:left">you</td><td style="text-align:left">Returns the label string.</td></tr><tr><td style="text-align:left"><code>new($log)</code></td><td style="text-align:left"><code>Abstract</code></td><td style="text-align:left">Inherit it. It sets up <code>default_options</code>, which the <code>default:</code> lines fill. Do <strong>not</strong> override unless you add state — and then call the parent.</td></tr><tr><td style="text-align:left"><code>fetch($file, $line_num, $line, $dev_id, $dev_host, $dev_opt_tab)</code></td><td style="text-align:left">you</td><td style="text-align:left">Connect, log in, retrieve, log out, save. Returns <code>($config_dir, $config_file)</code> from <code>dump_config()</code>, or an <strong>empty list</strong> on failure (already logged).</td></tr></tbody></table>
+<p>A model may override:</p>
+<table><thead><tr><th style="text-align:left">Hook</th><th style="text-align:left">Default</th><th style="text-align:left">Purpose</th></tr></thead><tbody><tr><td style="text-align:left"><code>prompt_tail()</code></td><td style="text-align:left"><code>&#x27;#$&#x27;</code></td><td style="text-align:left">Regex after the quoted hostname in the enable prompt. <code>&#x27;# ?$&#x27;</code>, <code>&#x27; &gt; $&#x27;</code>, <code>&#x27;&gt; \(enable\) $&#x27;</code>, <code>&#x27;# &#x27;</code> (unanchored)…</td></tr><tr><td style="text-align:left"><code>prompt_head()</code></td><td style="text-align:left"><code>&#x27;&#x27;</code></td><td style="text-align:left">Regex before the hostname: <code>&#x27;\(&#x27;</code> for <code>(host) #</code>, <code>&#x27;\[&#x27;</code> for <code>[host-view]</code>, the VT100 escape prefix for switches that emit cursor codes before the prompt.</td></tr><tr><td style="text-align:left"><code>config_equal(...)</code></td><td style="text-align:left">byte compare</td><td style="text-align:left">Ignore volatile lines; see §9.4.</td></tr><tr><td style="text-align:left"><code>ssh_extra_opts()</code></td><td style="text-align:left"><code>()</code></td><td style="text-align:left">Legacy crypto an old switch needs (<code>-o =&gt; &quot;KexAlgorithms=+…&quot;</code>).</td></tr><tr><td style="text-align:left"><code>interrupt_screens()</code></td><td style="text-align:left"><code>()</code></td><td style="text-align:left">Screens that interpose before the prompt (banner, menu, save question) and the keystroke that dismisses each.</td></tr></tbody></table>
+<p>Everything else — options, repository I/O, comparison, expiry, logging, SSH transport, escape stripping, prompt matching, pager driving — is in <code>Abstract</code> and documented in §8. <strong>Use it. Do not copy code from another model into yours;</strong> every copy that ever existed diverged and each divergence became a bug report.</p>
+<h2 id="4-procedure">4. Procedure</h2>
+<ol><li><strong>Capture a real session</strong> before writing a line of Perl. Over telnet, a raw capture (PuTTY <em>Logging → All session output</em>, not &quot;Printable output&quot; — that drops the control bytes you need). Over SSH, run an existing SSH model with <code>debug=on</code> against the device; the <code>.debug</code> file is a raw dump. You need: the login prompts, the exact prompt strings (trailing space or not!), the enable dialogue, the pager marker and — critically — the bytes the device sends <em>after</em> you dismiss the pager, the show command&#x27;s first and last lines, the logout.</li><li><strong>Create <code>fetchconfig/model/&lt;Name&gt;.pm</code></strong> from the matching skeleton in §5. Fill in: label, prompt hooks, login/enable/fetch/logout steps.</li><li><strong>Register it</strong> in <code>fetchconfig/model/Detector.pm</code>: one <code>use fetchconfig::model::&lt;Name&gt;;</code> and one <code>$class-&gt;register(fetchconfig::model::&lt;Name&gt;-&gt;new($log));</code>. Order in the register list is the order models are listed at startup; append at the end.</li><li><strong>Build a replay mock</strong> from the capture and run the model against it until the saved file is byte-identical to the config in the capture (§6.1).</li><li><strong>Document</strong> (§7): README device list and options block, <code>device_table.example</code>, the HTML documentation&#x27;s model table, CHANGES.</li><li><strong>Bump the version</strong> in <code>fetchconfig/Constants.pm</code> (a new model is a minor release).</li><li><strong>Live-verify</strong> on the device with <code>debug=on</code>, twice: the second run must log &quot;discarding config unchanged since last run&quot; (§6.2).</li></ol>
+<h2 id="5-skeletons">5. Skeletons</h2>
+<p>Both skeletons are complete, compile against 9.60, and follow the conventions of §9. Replace the parts marked <code>&lt;&lt;…&gt;&gt;</code>.</p>
+<h3 id="51-telnet-model">5.1 Telnet model</h3>
+<pre><code class="lang-perl">package fetchconfig::model::Acme;   # fetchconfig/model/Acme.pm
+
+use strict;
+use warnings;
+use Net::Telnet;
+use fetchconfig::model::Abstract;
+
+@fetchconfig::model::Acme::ISA = qw(fetchconfig::model::Abstract);
+
+sub label { &#x27;acme-os&#x27; }
+
+# Prompt &quot;hostname# &quot; with a trailing space; &quot;hostname&gt; &quot; is unprivileged.
+sub prompt_tail { &#x27;# $&#x27; }
+
+# &quot;sub new&quot; inherited from Abstract.
+
+sub fetch {
+    my ($self, $file, $line_num, $line, $dev_id, $dev_host, $dev_opt_tab) = @_;
+
+    my $saved_prefix = $self-&gt;{log}-&gt;prefix;
+    $self-&gt;{log}-&gt;prefix(&quot;$saved_prefix: dev=$dev_id host=$dev_host&quot;);
+    my @conf = $self-&gt;do_fetch($file, $line_num, $line, $dev_id, $dev_host, $dev_opt_tab);
+    $self-&gt;{log}-&gt;prefix($saved_prefix);
+    return @conf;
+}
+
+sub chat_login {
+    my ($self, $t, $dev_user, $dev_pass, $dev_opt_tab) = @_;
+
+    # chat_banner honours banner_timeout for the first prompt only.
+    my ($prematch, $match) = $self-&gt;chat_banner($t, $dev_opt_tab, &#x27;/&lt;&lt;Username: &gt;&gt;$/&#x27;);
+    if (!defined($prematch)) {
+        $self-&gt;log_error(&quot;could not find login prompt&quot;);
+        return undef;
+    }
+    $self-&gt;log_debug(&quot;found login prompt: [$match]&quot;);
+    return undef unless $t-&gt;print($dev_user);
+
+    ($prematch, $match) = $t-&gt;waitfor(Match =&gt; &#x27;/&lt;&lt;Password: &gt;&gt;$/&#x27;);
+    if (!defined($prematch)) {
+        $self-&gt;log_error(&quot;could not find password prompt&quot;);
+        return undef;
+    }
+    return undef unless $t-&gt;print($dev_pass);
+
+    # Learn the hostname from the first prompt. Quote it later with
+    # regexp_quote_keep_bytes (the shared expect_enable_prompt does).
+    ($prematch, $match) = $t-&gt;waitfor(Match =&gt; &#x27;/([\w.-]+)# $/&#x27;);
+    if (!defined($prematch)) {
+        $self-&gt;log_error(&quot;could not find command prompt&quot;);
+        return undef;
+    }
+    my $prompt = fetchconfig::model::Abstract::stripansi($match);
+    $prompt =~ s/# $//;
+    $self-&gt;log_debug(&quot;logged in prompt=[$prompt]&quot;);
+    $prompt;                                   # prompt string, or undef on failure
+}
+
+sub chat_fetch {
+    my ($self, $t, $dev_id, $dev_host, $prompt, $fetch_timeout, $show_cmd, $conf_ref) = @_;
+
+    # Pager off if the device has a SESSION-ONLY command for it. Never a
+    # command that changes the device&#x27;s configuration (see §9.2).
+    # Otherwise drive the pager as MediantSBC.pm does.
+    $t-&gt;print(&#x27;&lt;&lt;terminal length 0&gt;&gt;&#x27;) or return 1;
+    my ($prematch, $match) = $self-&gt;expect_enable_prompt($t, $prompt, undef, &#x27;pager-off&#x27;);
+    return 1 unless defined($prematch);
+
+    return 1 if $self-&gt;chat_show_conf($t, &#x27;&lt;&lt;show running-config&gt;&gt;&#x27;, $show_cmd);
+
+    my $save_timeout;
+    if (defined($fetch_timeout)) { $save_timeout = $t-&gt;timeout; $t-&gt;timeout($fetch_timeout); }
+    ($prematch, $match) = $self-&gt;expect_enable_prompt($t, $prompt, undef, &#x27;fetching-config&#x27;);
+    $t-&gt;timeout($save_timeout) if defined($fetch_timeout);
+    return 1 unless defined($prematch);
+    $self-&gt;log_debug(&quot;found end of configuration: [&quot; . fetchconfig::model::Abstract::stripansi($match) . &quot;]&quot;);
+
+    # Lines: strip CR (and escapes), split, drop the echo of the show
+    # command and anything before the first real configuration line.
+    $prematch = fetchconfig::model::Abstract::stripansi($prematch);
+    @$conf_ref = split /\n/, $prematch;
+    while (@$conf_ref &amp;&amp; $conf_ref-&gt;[0] !~ /^&lt;&lt;version |^!&gt;&gt;/) { shift @$conf_ref; }
+    if (!@$conf_ref) {
+        $self-&gt;log_error(&quot;could not find start of configuration&quot;);
+        return 1;
+    }
+    while (@$conf_ref &amp;&amp; $conf_ref-&gt;[-1] =~ /^\s*$/) { pop @$conf_ref; }
+
+    $self-&gt;log_debug(&quot;fetched: &quot; . scalar @$conf_ref . &quot; lines&quot;);
+    undef;                                     # undef = success, 1 = failure
+}
+
+sub chat_logout {
+    my ($self, $t) = @_;
+    $t-&gt;print(&#x27;&lt;&lt;exit&gt;&gt;&#x27;);
+    $self-&gt;log_debug(&quot;logged out&quot;);
+}
+
+sub do_fetch {
+    my ($self, $file, $line_num, $line, $dev_id, $dev_host, $dev_opt_tab) = @_;
+
+    $self-&gt;log_debug(&quot;trying&quot;);
+
+    my $dev_repository = $self-&gt;dev_option($dev_opt_tab, &quot;repository&quot;);
+    my $dev_user       = $self-&gt;dev_option($dev_opt_tab, &quot;user&quot;);
+    my $dev_pass       = $self-&gt;dev_option($dev_opt_tab, &quot;pass&quot;);
+    foreach my $need ([repository =&gt; $dev_repository], [user =&gt; $dev_user], [pass =&gt; $dev_pass]) {
+        if (!defined($need-&gt;[1])) {
+            $self-&gt;log_error(&quot;$need-&gt;[0] needed but not provided&quot;);
+            return;
+        }
+    }
+    my $dev_timeout   = $self-&gt;dev_option($dev_opt_tab, &quot;timeout&quot;);   # 30 s default, logged
+    my $fetch_timeout = $self-&gt;dev_option($dev_opt_tab, &quot;fetch_timeout&quot;);
+    my $show_cmd      = $self-&gt;dev_option($dev_opt_tab, &quot;show_cmd&quot;);
+
+    my @telnet_args = (Errmode =&gt; &#x27;return&#x27;, Timeout =&gt; $dev_timeout);
+    if ($self-&gt;dev_option_flag($dev_opt_tab, &quot;debug&quot;, 0)) {
+        push @telnet_args, (dump_log =&gt; &quot;$dev_repository/$dev_id.debug&quot;);
+    }
+    my $t = Net::Telnet-&gt;new(@telnet_args);
+    $self-&gt;secure_debug_file(&quot;$dev_repository/$dev_id.debug&quot;)
+        if $self-&gt;dev_option_flag($dev_opt_tab, &quot;debug&quot;, 0);   # 0600: it holds passwords
+
+    my ($host, $port) = ($dev_host, 23);
+    ($host, $port) = ($1, $2) if $dev_host =~ /^(.+):(\d+)$/;
+    if (!$t-&gt;open(Host =&gt; $host, Port =&gt; $port)) {
+        $self-&gt;log_error(&quot;could not connect: &quot; . $t-&gt;errmsg);
+        return;
+    }
+    $self-&gt;log_debug(&quot;connected&quot;);
+
+    my $prompt = $self-&gt;chat_login($t, $dev_user, $dev_pass, $dev_opt_tab);
+    return unless defined($prompt);
+
+    my @config;
+    my $failed = $self-&gt;chat_fetch($t, $dev_id, $dev_host, $prompt, $fetch_timeout, $show_cmd, \@config);
+    $self-&gt;chat_logout($t);
+    $t-&gt;close;
+    return if $failed;
+    $self-&gt;log_debug(&quot;disconnected&quot;);
+
+    $self-&gt;dump_config($dev_id, $dev_opt_tab, \@config);   # ($dir, $file) or undef
+}
+
+1;</code></pre>
+<h3 id="52-ssh-model">5.2 SSH model</h3>
+<p>Identical to 5.1 except for the connection. Replace <code>do_fetch</code>&#x27;s connection block with the shared transport; there is no login chat — SSH authenticated the user, and the session lands on the prompt:</p>
+<pre><code class="lang-perl">sub do_fetch {
+    my ($self, $file, $line_num, $line, $dev_id, $dev_host, $dev_opt_tab) = @_;
+    $self-&gt;log_debug(&quot;trying&quot;);
+    # ... option reads and mandatory checks as in 5.1 ...
+
+    my $debug_fh = $self-&gt;open_ssh_debug_file($dev_opt_tab, $dev_repository, $dev_id, $dev_host);
+    my ($t, $ssh, $pid, $warn_guard) = $self-&gt;ssh_open($dev_host, $dev_user, $dev_pass, $dev_timeout, $debug_fh);
+    return unless defined($t);            # error already logged
+    # $ssh and $warn_guard MUST stay in scope for the whole session.
+
+    # First prompt: settle, then match. prompt_settle_ms (default 150) lets
+    # a slow banner finish before the broad token below is applied.
+    $self-&gt;drain_until_idle($t, $self-&gt;dev_option($dev_opt_tab, &quot;prompt_settle_ms&quot;) // 150);
+    my ($prematch, $match) = $self-&gt;chat_banner($t, $dev_opt_tab, &#x27;/([^\r\n]*[^\r\n\s&gt;#])# ?$/&#x27;);
+    return unless defined($prematch);
+    my $prompt = fetchconfig::model::Abstract::stripansi($match); $prompt =~ s/# ?$//;
+    $self-&gt;log_debug(&quot;logged in prompt=[$prompt]&quot;);
+
+    my @config;
+    my $failed = $self-&gt;chat_fetch($t, $dev_id, $dev_host, $prompt, $fetch_timeout, $show_cmd, \@config);
+    $self-&gt;chat_logout($t);
+    $t-&gt;close;
+    waitpid($pid, 0) if defined($pid);      # reap the ssh shell
+    return if $failed;
+    $self-&gt;log_debug(&quot;disconnected&quot;);
+    $self-&gt;dump_config($dev_id, $dev_opt_tab, \@config);
+}
+
+# An old switch that needs SHA1 kex / ssh-rsa / CBC re-enabled:
+sub ssh_extra_opts {
+    (-o =&gt; &quot;KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1&quot;,
+     -o =&gt; &quot;HostKeyAlgorithms=+ssh-rsa&quot;,
+     -o =&gt; &quot;Ciphers=+aes128-cbc,3des-cbc&quot;);
+}</code></pre>
+<p><code>ssh_open</code> loads <code>Net::OpenSSH</code> on first use, so a telnet-only installation is not forced to install it.</p>
+<h3 id="53-where-to-look-for-worked-examples">5.3 Where to look for worked examples</h3>
+<table><thead><tr><th style="text-align:left">Need</th><th style="text-align:left">Read</th></tr></thead><tbody><tr><td style="text-align:left">Plainest telnet model</td><td style="text-align:left"><code>CiscoIOS.pm</code></td></tr><tr><td style="text-align:left">Plainest SSH model</td><td style="text-align:left"><code>CiscoIOSSSH.pm</code></td></tr><tr><td style="text-align:left">Unprivileged → <code>enable</code> → privileged, with rejection text</td><td style="text-align:left"><code>MediantSBC.pm::chat_enable</code></td></tr><tr><td style="text-align:left">Driving a <code>--MORE--</code> pager and stripping its erase bytes</td><td style="text-align:left"><code>MediantSBC.pm::chat_fetch</code></td></tr><tr><td style="text-align:left">Transport selectable by option, with a safe SSH→telnet fallback</td><td style="text-align:left"><code>MediantSBC.pm::do_fetch</code></td></tr><tr><td style="text-align:left">Full-screen TUI with menus/banners before the prompt</td><td style="text-align:left"><code>ProCurve.pm</code> (<code>interrupt_screens</code>)</td></tr><tr><td style="text-align:left">Non-ASCII hostnames, prompt settle</td><td style="text-align:left"><code>ArubaCXSSH.pm</code></td></tr><tr><td style="text-align:left">Volatile line ignored in comparison</td><td style="text-align:left"><code>CiscoASA.pm</code>, <code>NexusSSH.pm</code>, <code>PLANET.pm</code></td></tr><tr><td style="text-align:left">Web UI (HTTP) model, binary config stored uuencoded</td><td style="text-align:left"><code>TPLinkWebSG105E.pm</code>, <code>AbstractHTTP.pm</code></td></tr><tr><td style="text-align:left">SNMP + TFTP, no CLI at all</td><td style="text-align:left"><code>ProCurveSNMP.pm</code></td></tr></tbody></table>
+<h2 id="6-verification">6. Verification</h2>
+<h3 id="61-without-the-device-replay-mock">6.1 Without the device: replay mock</h3>
+<p>Write a small server that replays the captured bytes and reacts to the model&#x27;s commands. The pattern that has worked (see the SBC10, 2610 and Comware mocks in the CHANGES history):</p>
+<ul><li>Split the capture into the server&#x27;s chunks, keyed by the client command that preceded each.</li><li>Serve login prompts and the config body <strong>byte-exact</strong>, including line endings (<code>\r\n</code> vs <code>\r\r\n</code>), NULs, escape sequences, pager markers and their erase bytes.</li><li>Have the mock <strong>react</strong>: advance only on the correct keystroke, so a wrong key shows up as a hang, not a pass.</li><li>Run fetchconfig against it with a device table (<code>-devices=</code>), not <code>-line=</code> — a shell may mangle <code>!</code> and quotes in <code>-line=</code> values.</li><li>Compare the saved file with the configuration in the capture <strong>byte for byte</strong>. &quot;Looks right&quot; is not a result; identical or a diff is.</li></ul>
+<p>Test the failure paths too: wrong login password, wrong enable password, a rejected pager command, a connection refused. Each must produce one clear <code>error:</code> line and an empty return, never a hang or a die.</p>
+<p>Sandbox note: the <code>Net::Telnet</code> module is pure Perl; if it is missing, <code>perl -I&lt;dir-with-Net/Telnet.pm&gt;</code> against a copy of the module is enough to run the mock tests.</p>
+<h3 id="62-with-the-device">6.2 With the device</h3>
+<p>Run twice with <code>debug=on</code>:</p>
+<ol><li>First run: expect <code>connected</code>, the learned prompt in brackets, <code>found end of configuration</code>, <code>fetched: N lines</code>, a saved file. Inspect the file: first line is real configuration, last line is real configuration, no prompt text, no pager fragments, no <code>\r</code> or escape bytes (<code>grep -c -P &#x27;[\x08\x1b\r]&#x27; file</code> → 0), indentation intact.</li><li>Second run with <code>changes_only=1</code>: expect <strong>&quot;discarding config unchanged since last run&quot;</strong>. If it reports a change instead, <code>fetchconfig.pl -g &lt;dev&gt; -n 1 -m 2</code> shows the diff: either the device embeds a volatile line (§9.4) or your extraction is not deterministic.</li></ol>
+<p>Keep the <code>.debug</code> file of a successful run with the model&#x27;s source: it is the only precise record of what the device sends, and the seed of the next mock.</p>
+<h2 id="7-integration-checklist">7. Integration Checklist</h2>
+<ul><li><input type="checkbox" disabled> <code>fetchconfig/model/&lt;Name&gt;.pm</code> — header comment states the device family, firmware observed, transport, the session dialogue, and every option (mandatory/optional).</li><li><input type="checkbox" disabled> <code>fetchconfig/model/Detector.pm</code> — <code>use</code> line and <code>register</code> line.</li><li><input type="checkbox" disabled> <code>README</code> — device list entry (transport, what was observed), options block (&quot;The <code>&lt;label&gt;</code> module recognizes the following options:&quot;), intro sentence if it lists device families.</li><li><input type="checkbox" disabled> <code>device_table.example</code> — a <code>default:</code> block with every option and a sample device line.</li><li><input type="checkbox" disabled> <code>fetchconfig-documentation.html</code> — a row in the model table; the <code>debug</code> heading if the model writes a debug file.</li><li><input type="checkbox" disabled> <code>CHANGES</code> — what, why, how verified (mock, live), and any one-time effect on existing backups.</li><li><input type="checkbox" disabled> <code>fetchconfig/Constants.pm</code> — version bump.</li><li><input type="checkbox" disabled> <code>perl -I. -c</code> on every changed file; the whole tree compiles.</li><li><input type="checkbox" disabled> The mock replay and both live runs of §6 pass.</li></ul>
+<h2 id="8-shared-api-reference">8. Shared API Reference</h2>
+<p>All of these live in <code>fetchconfig::model::Abstract</code> unless noted. &quot;Method&quot; means <code>$self-&gt;name(...)</code>; &quot;function&quot; means a plain call <code>fetchconfig::model::Abstract::name(...)</code>. Return conventions vary — they are stated per entry; new code should follow §9.1.</p>
+<h3 id="81-options">8.1 Options</h3>
+<p><strong><code>dev_option($dev_opt_tab, $opt_name)</code></strong> — method. The option&#x27;s value: device line, else the model&#x27;s <code>default:</code> value, else <code>undef</code>. Exception: <code>timeout</code> returns <strong>30</strong> when unset and logs <code>Using 30s fetch timeout because the timeout was not set for this model</code>. Values are returned as written (quotes already removed).</p>
+<p><strong><code>dev_option_flag($dev_opt_tab, $opt_name, $default)</code></strong> — method. Boolean option: <code>1</code> if the value is <code>on</code> (case-insensitive), <code>0</code> otherwise; <code>$default</code> (truthy → 1) when unset. Use for <code>debug</code>, <code>changes_only</code>-style switches.</p>
+<p><strong><code>opt_trim($opt)</code></strong> — function. Trims surrounding whitespace.</p>
+<p><strong><code>dequote_value($val)</code></strong> — function. Removes one pair of surrounding double quotes.</p>
+<p><strong><code>mask_secrets($line)</code></strong> — function. Returns the device-table line with <code>pass=</code>, <code>enable=</code>, <code>community=</code>, <code>password=</code> values replaced by <code>***</code>. Use it before logging any table line.</p>
+<h3 id="82-logging">8.2 Logging</h3>
+<p><strong><code>log_debug($msg)</code>, <code>log_info($msg)</code>, <code>log_error($msg)</code></strong> — methods. Emit <code>&lt;label&gt;: &lt;msg&gt;</code> at the given level through the run&#x27;s logger, with the per-device prefix that <code>fetch()</code> installed. Conventions: <code>debug</code> for every chat step (<code>trying</code>, <code>connected</code>, <code>found command prompt: [...]</code>, <code>cmd: [...]</code>, <code>found end of configuration: [...]</code>, <code>fetched: N lines</code>, <code>logged out</code>, <code>disconnected</code>); <code>info</code> for operator-relevant decisions (a transport fallback); <code>error</code> once per failure, with the device&#x27;s own text where available (<code>enable rejected by the device: [Access denied]</code>). There is no warning level; use <code>info</code> with a <code>warning:</code> prefix.</p>
+<p>The logger itself (<code>$self-&gt;{log}</code>) has <code>prefix([$new])</code>, <code>info</code>, <code>debug</code>, <code>error</code>.</p>
+<h3 id="83-transport">8.3 Transport</h3>
+<p><strong><code>ssh_open($dev_host, $dev_user, $dev_pass, $dev_timeout, $debug_fh)</code></strong> — method. Opens the SSH connection (<code>Net::OpenSSH</code>, password authentication, <code>StrictHostKeyChecking=no</code>, <code>UserKnownHostsFile=/dev/null</code>, <code>LogLevel=DEBUG</code> into <code>$debug_fh</code> when given, else <code>ERROR</code>), allocates a pty (<code>open2pty</code>) and wraps it in <code>Net::Telnet</code> (<code>Errmode &#x27;return&#x27;</code>, <code>Timeout $dev_timeout</code>, <code>Telnetmode 0</code>, <code>Cmd_remove_mode 1</code>, <code>Output_record_separator &quot;\r&quot;</code>, <code>dump_log =&gt; $debug_fh</code> when given). Installs the <code>setsid</code> warning filter. Returns <code>($t, $ssh, $pid, $guard)</code> or an <strong>empty list</strong> (error logged; the error text is in <code>$self-&gt;{last_ssh_error}</code>). Keep <code>$ssh</code> and <code>$guard</code> in scope for the session; <code>waitpid($pid, 0)</code> when done. Adds <code>$self-&gt;ssh_extra_opts</code> to the master options. Loads <code>Net::OpenSSH</code> lazily.</p>
+<p><strong><code>ssh_extra_opts()</code></strong> — hook, default <code>()</code>. Return a list of <code>-o =&gt; &quot;Option=value&quot;</code> pairs.</p>
+<p><strong><code>open_ssh_debug_file($dev_opt_tab, $dev_repository, $dev_id, $dev_host)</code></strong> — method. If <code>debug=on</code>: opens <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code>, <code>chmod 0600</code>, autoflush, writes the header line, returns the handle. Else (or on open failure, logged) <code>undef</code>.</p>
+<p><strong><code>secure_debug_file($target)</code></strong> — method. <code>chmod 0600</code> on a path or an open handle. Call it on every file that records a session — they contain passwords as typed.</p>
+<h3 id="84-prompt-matching-and-chat">8.4 Prompt matching and chat</h3>
+<p><strong><code>chat_banner($t, $dev_opt_tab, $login_pattern)</code></strong> — method. <code>waitfor(Match =&gt; $login_pattern)</code> with the timeout temporarily set to <code>banner_timeout</code> if that option is set. Returns <code>($prematch, $match)</code>; <code>$prematch</code> undefined on timeout. Use it for the <strong>first</strong> prompt of a session (login banners can be slow); plain <code>$t-&gt;waitfor</code> afterwards.</p>
+<p><strong><code>drain_until_idle($t, $settle_ms)</code></strong> — method. Reads until no byte has arrived for <code>$settle_ms</code> milliseconds, then pushes everything back into <code>Net::Telnet</code>&#x27;s buffer so a following <code>waitfor</code> sees it all. Non-consuming. Use before matching a prompt whose token is broad (spaces, non-ASCII) so a banner line ending in the prompt sign is not mistaken for the prompt. <code>$settle_ms &lt;= 0</code> does nothing.</p>
+<p><strong><code>prompt_head()</code>, <code>prompt_tail()</code></strong> — hooks, defaults <code>&#x27;&#x27;</code> and <code>&#x27;#$&#x27;</code>. Regex fragments placed before/after the byte-safely quoted hostname by <code>expect_enable_prompt</code>.</p>
+<p><strong><code>expect_enable_prompt($t, $prompt, $tail_override, $label)</code></strong> — method. Waits for <code>prompt_head . quote($prompt) . (tail_override // prompt_tail)</code>. Returns <code>($prematch, $match)</code>; <code>$prematch</code> undefined on timeout, with <code>[&lt;label&gt;: ]could not match enable command prompt: /regex/</code> logged. Use for every wait for the enable prompt after the first. Callers must not pre-escape <code>$prompt</code>.</p>
+<p><strong><code>wait_for_command_prompt($t, $prompt_regex, $label)</code></strong> — method. Waits for <code>$prompt_regex</code> (preceded by any VT100 escapes) <strong>or</strong> one of the model&#x27;s <code>interrupt_screens</code>; on a screen, sends its keystroke and waits again; then a 1-second settle check for a screen trailing in behind an apparent prompt; bounded retries. Returns <code>($prematch, $match)</code> or <code>undef</code>. Run <code>$match</code> through <code>stripansi</code> before reading the hostname.</p>
+<p><strong><code>interrupt_screens()</code></strong> — hook, default <code>()</code>. List of <code>[regex_text, keystroke, debug_note_or_undef]</code>, e.g. <code>[&#x27;Press any key to continue&#x27;, &#x27; &#x27;, undef]</code>, <code>[&#x27;Main Menu&#x27;, &#x27;5&#x27;, undef]</code>, <code>[&#x27;Do you want to save current configuration&#x27;, &#x27;y&#x27;, &#x27;saved running config&#x27;]</code>. Keystrokes are sent raw with <code>put()</code> — no newline.</p>
+<p><strong><code>expect_enable_prompt_paging_auto($t, $prompt, $paging_prompt)</code></strong> — method. Waits for the enable prompt or <code>$paging_prompt</code> (a <code>--More--</code>-style marker); on the marker sends a space and continues; strips the marker with <code>escape_brackets</code>-quoted matching. Returns the accumulated <code>($prematch, $match)</code> or <code>undef</code>. Suitable when the device&#x27;s erase sequence is simple; for a device that erases with backspaces adjacent to the next line&#x27;s indentation, follow <code>MediantSBC.pm::chat_fetch</code> (sentinel at each page boundary, targeted strip) instead.</p>
+<p><strong><code>chat_show_conf($t, $show_cmd_default, $show_cmd_custom)</code></strong> — method. Sends <code>$show_cmd_custom // $show_cmd_default</code>, logs <code>cmd: [...]</code>. Returns <code>undef</code> on success, <strong><code>1</code></strong> on failure (logged).</p>
+<p><strong><code>regexp_quote_keep_bytes($str)</code></strong> — function. Escapes regex metacharacters (ASCII only) and leaves every other byte, including UTF-8 sequences, untouched. <strong>Always</strong> quote a learned prompt with this, never <code>quotemeta</code> (which mangles non-ASCII) and never raw interpolation (a <code>.</code> in a hostname then matches anything).</p>
+<p><strong><code>stripansi($str)</code></strong> — function. Removes CSI escape sequences (any parameter count, <code>?</code> private forms), two-byte escapes (<code>ESC E/M/D/7/8/=/&gt;</code>), NUL and CR. Apply to prompts before reading the hostname and to captured configuration text before splitting into lines.</p>
+<p><strong><code>escape_brackets($str)</code></strong> — function. Legacy: escapes <code>@</code>, <code>[</code>, <code>]</code> only. Prefer <code>regexp_quote_keep_bytes</code>.</p>
+<h3 id="85-configuration-storage-and-comparison">8.5 Configuration storage and comparison</h3>
+<p><strong><code>dump_config($dev_id, $dev_opt_tab, $conf_ref)</code></strong> — method. Writes <code>@$conf_ref</code> (one line per element, newline-terminated) to the repository path for today, creating directories. Validates <code>filename_append_suffix</code> (must start with <code>.</code>, no <code>/</code> or whitespace). Honours <code>timezone=hide</code>. Returns <code>($config_dir, $config_file)</code>, or <code>undef</code> on failure (logged). This return value is what <code>fetch()</code> returns.</p>
+<p><strong><code>find_latest($dev_id, $dev_opt_tab)</code></strong> — method. <code>($dir, $file)</code> of the most recent backup by <strong>parsed timestamp</strong> (never string order — the timezone token varies by platform), or <code>undef</code> if none.</p>
+<p><strong><code>config_equal($prev_dir, $prev_file, $curr_dir, $curr_file)</code></strong> — method, overridable. Default: <code>File::Compare</code> byte equality. Returns true if equal.</p>
+<p><strong><code>config_equal_ignoring_lines($prev_dir, $prev_file, $curr_dir, $curr_file, $ignore_re)</code></strong> — method. Compares after removing every line matching <code>$ignore_re</code> from both files. Returns false if either file cannot be read (keeps the newer version). Wrap it in your <code>config_equal</code> override:</p>
+<pre><code class="lang-perl">my $VOLATILE = qr/^!Time: /;             # NX-OS example
+sub config_equal { my ($self, @a) = @_; $self-&gt;config_equal_ignoring_lines(@a, $VOLATILE) }</code></pre>
+<p><strong><code>parse_backup_filename($dev_id, $file)</code></strong> — function. <code>($timestamp, $tz, $suffix)</code> from a backup file name; recognises <code>+0200</code>, <code>CEST</code>/<code>CET</code>, <code>-CEST</code>, multi-word Windows zones, and none.</p>
+<p><strong><code>sort_backups_desc($dev_id, $files_ref, $unparsed_ref)</code></strong> — function. Sorts file names newest first by parsed timestamp; unparsable names go to <code>@$unparsed_ref</code>.</p>
+<p>The core calls <code>purge_ancient</code>, <code>config_discard</code>, <code>prune_dir_tree</code>, <code>scan_dir</code> itself; a model does not.</p>
+<h3 id="86-http-models-abstracthttp">8.6 HTTP models (<code>AbstractHTTP</code>)</h3>
+<p>Inherit <code>fetchconfig::model::AbstractHTTP</code> and implement <code>http_login($ua, $base, $user, $pass, $dev_opt_tab)</code>, <code>http_backup(...)</code> and <code>http_logout(...)</code>; <code>AbstractHTTP::do_fetch</code> runs them with an <code>LWP::UserAgent</code> and cookie jar. Helpers: <code>http_request($ua, $req, $what, $timeout)</code> (one request with logging), <code>response_body($res)</code>, <code>accept_binary_response($res, $default_name)</code>, <code>uuencode_lines($filename, $binary)</code> (store a binary config as text; restore with <code>-g … | uudecode</code>), <code>open_debug</code>/<code>close_debug</code> (0600 trace of every request and response).</p>
+<h2 id="9-conventions-that-matter">9. Conventions That Matter</h2>
+<h3 id="91-return-values">9.1 Return values</h3>
+<p>The shared helpers carry two historical conventions: chat helpers return <code>($prematch, $match)</code> with <code>$prematch</code> undefined on failure; <code>chat_fetch</code>/<code>chat_show_conf</code> return <code>undef</code> on success and <code>1</code> on failure; <code>fetch</code>/<code>dump_config</code> return a value or nothing. <strong>New code: return the useful value, <code>undef</code>/empty on failure, and log the error exactly once at the point of failure.</strong> Never <code>die</code> inside a model — a failure of one device must not end the run.</p>
+<h3 id="92-never-modify-the-device">9.2 Never modify the device</h3>
+<p>A backup tool reads. It must not enter configuration mode, change a setting, or save anything on the device — not even to make its own job easier (the AudioCodes pager could have been disabled with a configuration change; the model drives the pager instead). If a device offers a <strong>session-only</strong> command for a terminal setting at the exec level (<code>terminal length 0</code>), that is acceptable; anything under a <code>configure</code> mode is not.</p>
+<h3 id="93-credentials">9.3 Credentials</h3>
+<p>Never log a password or community string; log the device-table line only through <code>mask_secrets</code>. Any file that records a session (<code>dump_log</code>, HTTP trace, SSH debug) gets <code>secure_debug_file</code> (0600) at creation. Never retry a password over a second, weaker channel after an authentication failure (see <code>MediantSBC.pm</code>&#x27;s <code>transport=auto</code> rule: fall back to telnet only when no SSH service answered).</p>
+<h3 id="94-volatile-lines-and-changes-only">9.4 Volatile lines and <code>changes_only</code></h3>
+<p>If the device rewrites a line on every read — a save timestamp (<code>!!: Written by …</code>), an uptime, <code>!Time:</code>, a re-salted password hash — <code>changes_only</code> will never discard a backup for that model. Override <code>config_equal</code> with <code>config_equal_ignoring_lines</code> and a tight regex for exactly that line. The line is still <strong>stored</strong>; it is only ignored for the comparison. Weigh what you ignore: the maintainer chose <em>not</em> to ignore Hirschmann&#x27;s re-rendered password hashes because that would also hide a real password change.</p>
+<h3 id="95-bytes-not-characters">9.5 Bytes, not characters</h3>
+<p>Devices send bytes: UTF-8 hostnames, <code>\r\r\n</code>, NULs, cursor escapes, backspaces. Match and quote at the byte level (<code>regexp_quote_keep_bytes</code>, <code>stripansi</code>), and verify with a raw capture, never with a terminal window or a printable log — both hide the very bytes that break extraction.</p>
+<h3 id="96-timeouts">9.6 Timeouts</h3>
+<p><code>timeout</code> (default 30 s) governs every <code>waitfor</code>; a long configuration needs <code>fetch_timeout</code> applied only around the show command (see the skeletons). A pager that is driven page by page is bounded by <code>timeout</code> per page, not by the total.</p>
+<h3 id="97-debug-file">9.7 Debug file</h3>
+<p><code>debug=on</code> must produce <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code>, mode 0600, and it should be the complete raw session: for SSH models the shared <code>open_ssh_debug_file</code> + <code>ssh_open</code> give the ssh client&#x27;s <code>-v</code> trace followed by the session dump; for telnet, <code>dump_log</code>. The README documents this per model — keep it true.</p>
+<hr>
+<p><em>Generated documentation: <code>How-To-add-a-model.html</code> is produced from this file by <code>tools/md2html.py</code> (Python 2.7 / 3.x, no dependencies): <code>python tools/md2html.py How-To-add-a-model.md How-To-add-a-model.html</code>.</em></p>
+<footer>Generated from <code>How-To-add-a-model.md</code> by <code>md2html.py</code>.</footer>
+</main>
+</body>
+</html>

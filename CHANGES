@@ -2,6 +2,128 @@
 # fetchconfig.pl - CHANGES
 #
 
+9.60
+============
++ Documentation: How-To-add-a-model.md and How-To-add-a-model.html, a
+  programming manual for writing a new device model (extractor):
+  concepts, the model contract and its hooks (prompt_head/prompt_tail,
+  config_equal, ssh_extra_opts, interrupt_screens), the step-by-step
+  procedure, two complete annotated skeletons (telnet and SSH), the
+  verification method (byte-accurate replay mocks, then two live runs),
+  the integration checklist, a reference of every shared function in
+  Abstract.pm/AbstractHTTP.pm with parameters and return values, and
+  the conventions that matter (return values, never modify the device,
+  credentials, volatile lines, bytes not characters, timeouts, debug
+  file). The HTML is generated from the Markdown by tools/md2html.py,
+  a dependency-free converter that runs unchanged on Python 2.7 and
+  3.x (headings with anchors and a table of contents, fenced code,
+  inline markup, nested lists and task items, tables with alignment,
+  links, rules, blockquotes; output is byte-identical on both
+  interpreter families - verified by forcing the Python-2 escape path).
+  Regenerate with: python tools/md2html.py How-To-add-a-model.md.
+
++ New model MediantSBC.pm (label mediant-sbc) for AudioCodes Mediant
+  SBCs / gateways with the current Cisco-style CLI ("Welcome to
+  AudioCodes CLI"; observed on a Mediant 500Li). The existing
+  Mediant.pm handles the older menu-style "/CONFiguration>" CLI and
+  fails on these devices at the first step (it waits for "login:",
+  the new CLI says "Username:"); both models are kept, they are
+  different products in practice. Session: login ("Username:"/
+  "Password:" over telnet; SSH authenticates the user), unprivileged
+  "hostname> " -> "enable" -> "Password:" -> "hostname# ", "show
+  running-config" (default; see below) with the " --MORE--" pager DRIVEN (a space per marker; the
+  marker and the erase sequence the device sends after the keystroke
+  are stripped from the saved configuration), "exit". Driving the
+  pager rather than disabling it was a deliberate choice, confirmed on
+  the maintainer's SBC10 and the AudioCodes CLI reference:
+  "cli-terminal" is not a command at the "#" level (first live run:
+  Invalid command "cli-terminal"), "conf t" enters "configure
+  troubleshoot", and the pager settings live under "configure system"
+  -> "cli-settings": default-window-height is persistent (applies to
+  all new sessions, survives restarts, part of the running
+  configuration), while the per-session override window-height exists
+  only inside that configuration mode. A backup tool must not modify
+  the configuration and should not enter configuration mode on a
+  production device, so the marker is handled instead. pager_cmd= can name a session-only pager-off
+  command for a firmware that has one; its rejection is detected and
+  aborts the fetch. Prompts carry a trailing space; lines end "\r\n"
+  over SSH and "\r\r\n" over telnet. Options: user, pass, enable (all
+  mandatory), transport=ssh|telnet|auto (default ssh), pager_cmd
+  (optional), plus the common set. transport=auto falls back to telnet ONLY when no SSH
+  service answers (connection refused / unreachable / timed out /
+  unresolvable), never on an authentication, key-exchange or host-key
+  failure - that would retry the password over a second channel and
+  move it to cleartext; a fallback is logged at info level. Built on
+  the shared helpers (ssh_open, open_ssh_debug_file,
+  expect_enable_prompt with per-call tail and label, stripansi,
+  chat_show_conf). A wrong enable password is reported as "enable
+  rejected: still at the unprivileged prompt" instead of a timeout.
+  Verified against a byte-accurate telnet replay of the maintainer's
+  SBC10 capture: 1,004-line configuration from "# Running
+  Configuration M500Li" to the final "exit", zero CR bytes, all five
+  "##" sections; the pager driver verified against the REAL erase
+  sequence from a raw SSH capture of SBC10 ("...line\r\n --MORE--",
+  then after the space: 9 backspaces, 9 spaces, 9 backspaces, and the
+  next configuration line immediately with no CR/LF in between) as
+  well as a CR+spaces+CR style, at 20-line and 7-line pages (50 and
+  143 pages), SSH and telnet line endings - the saved configuration is
+  byte-identical to the unpaged reference in every case. The residue
+  is removed ONLY at the page boundaries the driver observed (a
+  sentinel marks each), never by pattern-matching the whole text; at
+  a boundary, backspaces and CRs go, and spaces go only while a
+  backspace or CR still follows them, so the indentation of the line
+  that follows the erase and a legitimate trailing space on a
+  configuration line (the device sends "sbc-rmt-rprsntation " with
+  one) are kept as sent - both verified with trailing-space lines
+  placed on and across page boundaries; unchanged rerun discarded; wrong enable and wrong
+  login passwords fail cleanly; transport validated; auto fallback
+  exercised for all three classes (refused -> telnet; bad password
+  -> no fallback; kex mismatch -> no fallback). SSH path shares
+  ssh_open with the seven verified SSH models; live verification on
+  SBC10, both transports: SSH and telnet logins, enable, the pager
+  driver (119 pages, 2,621 lines of "full" output), the 0600 debug
+  file, and changes_only - the telnet fetch compared unchanged against
+  the SSH fetch a minute earlier, i.e. byte-identical across the two
+  line-ending styles and 119 erase sequences each; the saved file had
+  no --MORE-- fragments, no erase bytes, and kept the trailing spaces
+  of empty-value lines.
+  Default show command: "show running-config" (settings that differ
+  from the firmware defaults). Decided after the live runs: it is the
+  form the device's own CLI-script export produces and the one a
+  restore ("copy cli-script from ...") is designed for; "show
+  running-config full" (every parameter incl. defaults, 2.6x the size)
+  is the better AUDIT record - it exposes default changes after a
+  firmware upgrade - but riskier to replay on a newer firmware (pins
+  old defaults, may hit renamed/removed/read-only parameters). Both can
+  be kept with a second device entry and show_cmd="show running-config
+  full" (see device_table.example). The first live runs used "full"
+  as default; the saved SBC10 backups from those runs are the full
+  form and will compare as changed once against the new default. Abstract.pm: log_info() added; ssh_open() records
+  the connection error text in $self->{last_ssh_error} for callers
+  that must classify it.
+  Registered in Detector.pm (34 models); default block and sample
+  device in device_table.example; README and HTML documentation.
++ Abstract.pm: shared wait_for_command_prompt() with an
+  interrupt_screens() hook, replacing the two ProCurve copies (86 and
+  92 lines; they had drifted by a comment and one debug line). The
+  loop is generic - wait for the caller's prompt regex, dismiss any
+  known interruption screen with its raw keystroke and keep waiting,
+  then a 1-second settle check for an interruption trailing in behind
+  a prompt-shaped string (Change 20260902), bounded retries - while
+  the screens are model knowledge: ProCurve and ProCurveSSH declare
+  ["Press any key to continue" -> " " (never Return: that selects the
+  Menu interface), "Main Menu" -> "5" (Command Line), "Do you want to
+  save current configuration" -> "y"]. Default: no screens, i.e. a
+  plain prompt wait. Verified OLD vs NEW on a real Net::Telnet against
+  a reactive fake switch that only advances on the correct keystroke:
+  identical match bytes and identical behaviour for the Main Menu, the
+  save question, the trailing-banner settle case, a plain prompt,
+  banner-then-menu, and the retry limit (both return undef with the
+  same error). The telnet model gains the "found prompt: [...]" debug
+  line after each dismissed screen that the SSH copy already had.
+  Needs a live run on procurve (swi11024, the Menu-interface 2610) and
+  procurve-ssh.
+
 9.59
 ============
 + Abstract.pm: shared SSH transport - ssh_open(), open_ssh_debug_file()

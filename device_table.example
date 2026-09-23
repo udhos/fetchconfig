@@ -145,6 +145,17 @@ default:	nexus-ssh	timeout=10,keep=5,changes_only=0
 default:	nexus-ssh	repository=/var/fetchconfig/save
 default:	nexus-ssh	debug=off
 
+# mediant-sbc: AudioCodes Mediant SBC / gateway (current Cisco-style CLI).
+# SSH by default; transport=telnet or transport=auto (SSH, telnet only if
+# no SSH service answers). The enable password is mandatory. The default
+# command "show running-config" gives the restore-ready (non-default)
+# configuration; a second entry with show_cmd="show running-config full"
+# keeps the audit form (all parameters incl. defaults) as well.
+default:	mediant-sbc	user=Admin,pass=fran,enable=fran
+default:	mediant-sbc	timeout=30,fetch_timeout=300,keep=5,changes_only=0
+default:	mediant-sbc	repository=/var/fetchconfig/save
+default:	mediant-sbc	transport=ssh,debug=off
+
 # procurve-snmp: ProCurve ProVision (incl. 4000M/8000M) over SNMP+TFTP.
 # community is the SNMP read-WRITE community (no user/pass). remote_file
 # defaults to "browse" (readable report); later models also support
@@ -201,6 +212,9 @@ planet-ssh	planet-sw01	172.29.200.110
 aruba-cx-ssh	cx-sw01		172.29.200.150
 
 nexus-ssh	nx-sw01		172.29.200.160
+
+mediant-sbc	sbc01		172.29.200.170
+mediant-sbc	sbc01-full	172.29.200.170	show_cmd="show running-config full"
 
 procurve-snmp	hp4000-sw01	153.3.231.23
 

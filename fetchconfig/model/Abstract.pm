@@ -156,6 +156,12 @@ sub log_debug {
     $self->{log}->debug($self->label . ": " . $msg);
 }
 
+sub log_info {
+    my ($self, $msg) = @_;
+
+    $self->{log}->info($self->label . ": " . $msg);
+}
+
 sub log_error {
     my ($self, $msg) = @_;
 
@@ -443,10 +449,14 @@ sub ssh_open {
 						$self->ssh_extra_opts],
 				($debug_fh ? (master_stderr_fh => $debug_fh) : ()));
     if ($ssh->error) {
+	# Kept for callers that decide what to do next (transport=auto in
+	# MediantSBC falls back to telnet only on a CONNECTION failure).
+	$self->{last_ssh_error} = "" . $ssh->error;
 	$self->log_error("could not connect: " . $ssh->error);
 	print $debug_fh "# could not connect: " . $ssh->error . "\n" if $debug_fh;
 	return;
     }
+    $self->{last_ssh_error} = undef;
 
     print $debug_fh "# switch session (Net::Telnet dump_log)\n" if $debug_fh;
 
@@ -501,6 +511,90 @@ sub open_ssh_debug_file {
 
     $self->log_error("could not write debug file: $debug_path: $!");
     return undef;
+}
+
+##################################
+# Interruption-tolerant prompt wait (9.60)
+#
+# Some CLIs interpose full-screen or question screens before the prompt:
+# "Press any key to continue", a text menu, "Do you want to save ...".
+# wait_for_command_prompt() waits for the caller's prompt regex, but if
+# one of the model's known interruption screens appears first it sends
+# that screen's keystroke and keeps waiting, then applies a 1-second
+# settle check: if an interruption trails in right after what looked
+# like the final prompt, it was not the final prompt yet (some ProCurve
+# firmware prints a prompt-shaped string BEFORE its own banner has
+# finished). Retries are bounded.
+#
+# The screens are model knowledge, declared with interrupt_screens():
+# a list of [regex-text, keystroke, debug-note] triples, in the order
+# they should be tested. Keystrokes are sent raw with put() - no CR/LF -
+# because at these screens Return itself often means something (on
+# ProCurve it selects the Menu interface). The default is no screens,
+# in which case this is a plain prompt wait with the settle check.
+#
+# Cursor escapes emitted right before the prompt (ESC[1H, ESC[?25l ...)
+# are matched as part of the prompt unit so they never split across
+# prematch/match; callers run the match through stripansi() before
+# reading the hostname.
+#
+# Consolidated from the two ProCurve copies (86 and 92 lines), which
+# had drifted only by a comment and one debug line.
+##################################
+
+sub interrupt_screens { () }
+
+sub wait_for_command_prompt {
+    my ($self, $t, $prompt_regex, $label) = @_;
+
+    my @screens = $self->interrupt_screens;
+    my $screen_alt = join('|', map { $_->[0] } @screens);
+    my $esc = '(?:\\x1b\\[[\\d;?]*[A-Za-z])*';
+
+    my $combined_match = '/' . ($screen_alt ne '' ? "$screen_alt|" : '') . $esc . $prompt_regex . '/';
+    my $screens_only   = $screen_alt ne '' ? "/$screen_alt/" : undef;
+
+    my ($prematch, $match) = $t->waitfor(Match => $combined_match);
+    if (!defined($prematch)) {
+	$self->log_error("could not find command prompt ($label)");
+	return undef;
+    }
+
+    my $retries = 8;
+    while (1) {
+	my ($screen) = grep { $match =~ /$_->[0]/ } @screens;
+	if ($screen) {
+	    if ($retries-- <= 0) {
+		$self->log_error("too many banner/menu screens waiting for command prompt ($label)");
+		return undef;
+	    }
+	    my $ok = $t->put($screen->[1]);
+	    if (!$ok) {
+		$self->log_error("could not dismiss banner/menu waiting for command prompt ($label)");
+		return undef;
+	    }
+	    $self->log_debug($screen->[2]) if defined($screen->[2]);
+	    ($prematch, $match) = $t->waitfor(Match => $combined_match);
+	    if (!defined($prematch)) {
+		$self->log_error("could not find command prompt after banner/menu ($label)");
+		return undef;
+	    }
+	    $self->log_debug("found prompt: [" . stripansi($match) . "]");
+	    next;
+	}
+	last unless defined($screens_only);
+	# settle: does an interruption trail in right behind the prompt?
+	my ($settle_prematch, $settle_match) = $t->waitfor(Match => $screens_only, Timeout => 1);
+	last unless defined($settle_prematch);   # quiet: genuinely done
+	if ($retries-- <= 0) {
+	    $self->log_error("too many banner/menu screens waiting for command prompt ($label)");
+	    return undef;
+	}
+	$self->log_debug("found trailing banner/menu after apparent prompt: [$settle_match]");
+	$match = $settle_match;
+    }
+
+    ($prematch, $match);
 }
 
 sub regexp_quote_keep_bytes {

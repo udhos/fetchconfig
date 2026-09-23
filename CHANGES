@@ -3,801 +3,178 @@
 #
 
 9.62
-============
-+ Release hygiene for the public repository: added a LICENSE file (a copy
-  of COPYING, the GPL-2.0+ text, so GitHub detects the license); .gitignore
-  now excludes __pycache__/, *.pyc, *.bak and *.orig (the Python bytecode
-  cache from tools/md2html.py was removed from the tree); README states the
-  Perl floor as 5.26 (tested 5.26/5.28/5.40, was "5.28 and later") and
-  points to the DEPENDENCIES file; How-To-add-a-model.md/.html updated to
-  9.62.
+====
 
-+ HTML documentation: the sidebar navigation was out of order relative
-  to the section bodies (it listed Web UI backups before ProCurve SNMP,
-  and Security notes / Status file before the Reference sections). The
-  nav now follows the document's own reading order exactly (kickers
-  01-14): ..., Options reference, Security notes, Status file, ProCurve
-  SNMP backups, Web UI backups. Navigation only; no section text moved.
++ Command-line options are now parsed with Getopt::Long (a core module)
+  instead of a hand-written argument loop. The existing single-dash
+  option syntax is preserved exactly - short and long options, their
+  arguments, and error messages behave as before. As a small addition,
+  "-g=dev" is now accepted alongside the existing "-g dev" form.
+  Option-value validation gives clearer errors for invalid combinations
+  and values.
 
-+ Command-line options are now parsed with Getopt::Long (core in every
-  Perl, so no new dependency) instead of the hand-written @ARGV loop.
-  fetchconfig's single-dash, long-ish option syntax (-devices=, -line=,
-  -P, -g, ...) is preserved exactly: Getopt::Long is configured
-  no_auto_abbrev, no_bundling, no_ignore_case, pass_through, so "-d" is
-  not short for "-devices", "-Ze" is not "-Z -e", -s and -S stay
-  distinct, and an unknown option is reported as before. -v and
-  -h/-?/--help are handled ahead of Getopt::Long to keep their exact
-  behaviour. The change is provably behaviour-preserving: the exit code
-  and error message of 23 representative invocations (missing arguments,
-  non-integer -P/-n, the -s "argument must not be an option" rule, the
-  mutual-exclusion and -P-refusal checks, help/version) were captured
-  from the old parser and diffed against the new one - identical in
-  every case. The only addition is a harmless superset: "-g=dev" now
-  works as well as "-g dev". The per-option value validation and the
-  cross-option rules (-D needs -o/-e; the lookup modes are mutually
-  exclusive; -P is refused with them) are unchanged.
-  (A subprocess test t/20-options-cli.t was added and then REMOVED: it
-  launched fetchconfig.pl per case, and some cases reach a point where
-  the child blocks on a device or pipe with no stdin, hanging the run.
-  The parser's behaviour is already pinned by the capture/diff above, so
-  the flawed test was dropped rather than kept behind an env flag.)
-  Fix: the top-level fatal-exit paths (no device table, mutually
-  exclusive modes, -D/-T/-m/-P validation) used a bare "die", which
-  Perl reports as a spurious "Died at fetchconfig.pl line N." after the
-  usage text. This predates 9.62 (the same line appeared in 9.61) but is
-  now cleaned up: those seven sites use die "\n", which suppresses the
-  location suffix. The usage text and the exit status (255) are
-  unchanged, and the option-behaviour matrix still matches the pre-
-  Getopt::Long baseline exactly. The die "...: $!" calls for pipe/fork
-  errors are deliberately left as-is, since a location is useful there.
-+ Documentation: new file DEPENDENCIES lists every Perl module
-  fetchconfig uses, direct and indirect, with core-vs-CPAN status for
-  Perl 5.26 (SLES 15 SP7), 5.28 (AIX 7.2 TL5) and 5.40, broken down by
-  feature. Key points: no transport module is core in any release
-  (including 5.40); everything else fetchconfig uses is core in all
-  three; the base install needs only Net::Telnet from CPAN, and a
-  model's transport module is loaded only when that model is used.
-  Net::SNMP's SNMPv3 crypto prerequisites (Crypt::DES, Digest::SHA1,
-  Digest::HMAC; Crypt::DES optionally via CryptX) are documented as
-  build-time-only for v1/v2c use. README points to it.
++ Added a DEPENDENCIES file listing every required module, direct and
+  indirect, with its core-vs-CPAN status for Perl 5.26, 5.28 and 5.40,
+  broken down by feature.
+
++ Raised the documented minimum Perl version to 5.26 (tested on 5.26,
+  5.28 and 5.40) and updated the README accordingly.
+
++ Added a LICENSE file (GPL-2.0+, a copy of COPYING) and refreshed
+  .gitignore for repository publication.
+
++ Fixed the ordering of the HTML documentation's navigation so it follows
+  the document.
 
 9.61
-============
-+ F3 (first increment): a test suite under t/, run with prove or the new
-  Makefile. Three files to start, covering the two functions with the
-  worst regression history plus a compile guard:
-    00-compile.t        loads every module and compiles fetchconfig.pl;
-                        a model whose optional transport module
-                        (Net::OpenSSH, Net::Telnet, ...) is not installed
-                        is skipped, not failed, so the suite is green on a
-                        host that only has the transports it uses.
-    10-stripansi.t      22 cases for stripansi(): CSI with 1/2/3+
-                        parameters, ?25h/?25l private modes, ESC E and the
-                        other two-byte escapes, NUL and CR, the verbatim
-                        swi11024 prompt sequence, and negatives (brackets
-                        and subscripts in a config line must survive);
-                        plus idempotence.
-    12-backup-filename.t  parse_backup_filename() for every timezone form
-                        (+0200, CEST, -CEST, multi-word Windows, none) and
-                        suffix, malformed names -> (), a dotted dev_id, and
-                        sort_backups_desc() ordering newest-first by PARSED
-                        timestamp across mixed tz forms (never string
-                        order) with unparsable names reported.
-    11-quote.t          29 cases for regexp_quote_keep_bytes() (the
-                        byte-safe prompt quoter that replaced quotemeta):
-                        the escape set incl. space/=/#/>, "." made literal,
-                        UTF-8 bytes preserved unescaped (the "Buro" bug),
-                        and the property that a quoted prompt matches its
-                        own source string; plus escape_brackets() and
-                        dequote_value().
-    14-options.t        26 cases for mask_secrets() (pass/enable/community
-                        masked, case-insensitive, global; the pinned fact
-                        that "password=" is NOT masked), opt_trim(),
-                        dev_option() resolution (device -> model default ->
-                        undef, timeout's 30s fallback) and dev_option_flag()
-                        (on/off/unset, case- and whitespace-insensitive).
-    Run:  prove -I. t/     or     perl Makefile.PL && make test
-    Only core Perl (Test::More, prove) is needed; nothing from CPAN.
-    Suite total (Tier 1): 139 assertions across 5 files.
-+ F3 (Tier 2): filesystem tests against a throwaway File::Temp
-  repository built and removed inside each test - self-contained under
-  t/, no network. These need a concrete model for dev_option, so they
-  skip cleanly (skip_all) on a host missing that model's transport
-  module.
-    30-repository.t     17 cases: dump_config() writes the backup at
-                        <repo>/YYYYMM/YYYYMMDD/<dev_id>/<dev_id>.run.<ts>
-                        <tz><suffix> with a terminal newline; refuses an
-                        empty config; validates filename_append_suffix
-                        (must start ".", no "/" or whitespace); timezone=
-                        hide blanks the tz. find_latest() returns the
-                        newest backup by PARSED timestamp across mixed tz
-                        forms and returns undef for no backups / a missing
-                        repository.
-    31-config-equal.t   7 cases: config_equal_ignoring_lines() equal when
-                        only the ignored (volatile) line differs, unequal
-                        on a real difference, stripping wherever the line
-                        appears; a missing file compares unequal so the
-                        newer version is kept.
-    32-tools.t          15 cases: the maintenance predicates dir_is_empty
-                        and _only_entry_is (empty / non-empty / subdir-only
-                        / missing), and safe_rmdir (removes an empty dir,
-                        refuses a non-empty one via rmdir, test mode reports
-                        without removing).
-    Suite total: 178 assertions across 8 files (139 always; +39 Tier 2
-    where the model's transport module is present, as on the AIX host).
-+ Makefile.PL: generates a Makefile. "make test" runs the suite; "make"
-  and "make install" are placeholders that print a not-implemented notice
-  (fetchconfig is deployed by hand per the README, not as a CPAN
-  distribution). Written without ExtUtils::MakeMaker, so it has no
-  non-core dependency and behaves the same on AIX and Linux.
+====
 
-+ F5 refactor: the repository maintenance and lookup modes moved out of
-  fetchconfig.pl into a new module, fetchconfig/Tools.pm. These are the
-  modes behind -g, -l, -z, -Z, -o, -e, -s and -S, which read (and with
-  -D prune) the repository but never fetch a device: scan_backups,
-  locate_backup, slurp_file, emit_content, retrieve_config,
-  compare_config, list_backups, check_zero_backups,
-  check_zero_backups_all, check_suffix_consistency,
-  scan_repo_for_backup_dirs, check_empty_dirs, check_orphaned_backups
-  and their helpers (configured_repositories, dir_is_empty, safe_rmdir,
-  prune_empty_parents, _only_entry_is) - about 1,075 lines. fetchconfig.pl
-  drops from 1,703 to 630 lines and now holds only option parsing, the
-  fetch-phase driver (sequential and -P), device-table loading and the
-  usage text. No behaviour change: every sub kept its name, arguments
-  and exit codes; the two script globals the modes read ($log and $me)
-  are passed once via fetchconfig::Tools->init(log => ..., me => ...),
-  and the driver's dispatch calls them as fetchconfig::Tools::name(...).
-  The dependency is one-way (Tools calls Detector/Abstract; nothing in
-  Tools calls back into the driver). Verified by running the tree
-  before and after the split side by side: -l, -Z, -e and -e -D
-  (the deleting mode) produce byte-identical output and identical exit
-  codes and side effects on identical repositories.
-  (F2 - turning Detector/Mailer into instances - was evaluated and
-  deliberately NOT done: both are pure singletons with no second-instance
-  use today, and the -P result path relies on Mailer's package state
-  being isolated per fork, which the change would have to re-derive at
-  real risk of a parallel-fetch regression for no current benefit.)
++ Moved the repository maintenance and lookup modes (-g, -l, -z, -Z, -o,
+  -e, -s, -S) out of fetchconfig.pl into a new module, fetchconfig/Tools.pm.
+  Behaviour is unchanged - every mode keeps its arguments and exit codes -
+  and fetchconfig.pl drops from about 1700 to under 600 lines.
+
++ Added a test suite under t/, run with "prove -I. t/" or "make test":
+  pure-function tests (escape stripping, prompt quoting, backup-filename
+  and timezone parsing, option handling) and filesystem tests against
+  temporary repositories (backup writing, latest-backup selection,
+  change comparison, directory maintenance). 178 assertions across eight
+  files; only core Perl is required.
+
++ Added Makefile.PL. "make test" runs the suite; "make" and "make install"
+  are placeholders (fetchconfig is installed by hand, see the README).
 
 9.60
-============
-+ Documentation: How-To-add-a-model.md and How-To-add-a-model.html, a
-  programming manual for writing a new device model (extractor):
-  concepts, the model contract and its hooks (prompt_head/prompt_tail,
-  config_equal, ssh_extra_opts, interrupt_screens), the step-by-step
-  procedure, two complete annotated skeletons (telnet and SSH), the
-  verification method (byte-accurate replay mocks, then two live runs),
-  the integration checklist, a reference of every shared function in
-  Abstract.pm/AbstractHTTP.pm with parameters and return values, and
-  the conventions that matter (return values, never modify the device,
-  credentials, volatile lines, bytes not characters, timeouts, debug
-  file). The HTML is generated from the Markdown by tools/md2html.py,
-  a dependency-free converter that runs unchanged on Python 2.7 and
-  3.x (headings with anchors and a table of contents, fenced code,
-  inline markup, nested lists and task items, tables with alignment,
-  links, rules, blockquotes; output is byte-identical on both
-  interpreter families - verified by forcing the Python-2 escape path).
-  Regenerate with: python tools/md2html.py How-To-add-a-model.md.
-  (Run the script by name - "python tools/md2html.py ..."; argv is
-  decoded as UTF-8 so a non-ASCII --title works under Python 2.7.)
+====
 
-+ New model MediantSBC.pm (label mediant-sbc) for AudioCodes Mediant
-  SBCs / gateways with the current Cisco-style CLI ("Welcome to
-  AudioCodes CLI"; observed on a Mediant 500Li). The existing
-  Mediant.pm handles the older menu-style "/CONFiguration>" CLI and
-  fails on these devices at the first step (it waits for "login:",
-  the new CLI says "Username:"); both models are kept, they are
-  different products in practice. Session: login ("Username:"/
-  "Password:" over telnet; SSH authenticates the user), unprivileged
-  "hostname> " -> "enable" -> "Password:" -> "hostname# ", "show
-  running-config" (default; see below) with the " --MORE--" pager DRIVEN (a space per marker; the
-  marker and the erase sequence the device sends after the keystroke
-  are stripped from the saved configuration), "exit". Driving the
-  pager rather than disabling it was a deliberate choice, confirmed on
-  the maintainer's SBC10 and the AudioCodes CLI reference:
-  "cli-terminal" is not a command at the "#" level (first live run:
-  Invalid command "cli-terminal"), "conf t" enters "configure
-  troubleshoot", and the pager settings live under "configure system"
-  -> "cli-settings": default-window-height is persistent (applies to
-  all new sessions, survives restarts, part of the running
-  configuration), while the per-session override window-height exists
-  only inside that configuration mode. A backup tool must not modify
-  the configuration and should not enter configuration mode on a
-  production device, so the marker is handled instead. pager_cmd= can name a session-only pager-off
-  command for a firmware that has one; its rejection is detected and
-  aborts the fetch. Prompts carry a trailing space; lines end "\r\n"
-  over SSH and "\r\r\n" over telnet. Options: user, pass, enable (all
-  mandatory), transport=ssh|telnet|auto (default ssh), pager_cmd
-  (optional), plus the common set. transport=auto falls back to telnet ONLY when no SSH
-  service answers (connection refused / unreachable / timed out /
-  unresolvable), never on an authentication, key-exchange or host-key
-  failure - that would retry the password over a second channel and
-  move it to cleartext; a fallback is logged at info level. Built on
-  the shared helpers (ssh_open, open_ssh_debug_file,
-  expect_enable_prompt with per-call tail and label, stripansi,
-  chat_show_conf). A wrong enable password is reported as "enable
-  rejected: still at the unprivileged prompt" instead of a timeout.
-  Verified against a byte-accurate telnet replay of the maintainer's
-  SBC10 capture: 1,004-line configuration from "# Running
-  Configuration M500Li" to the final "exit", zero CR bytes, all five
-  "##" sections; the pager driver verified against the REAL erase
-  sequence from a raw SSH capture of SBC10 ("...line\r\n --MORE--",
-  then after the space: 9 backspaces, 9 spaces, 9 backspaces, and the
-  next configuration line immediately with no CR/LF in between) as
-  well as a CR+spaces+CR style, at 20-line and 7-line pages (50 and
-  143 pages), SSH and telnet line endings - the saved configuration is
-  byte-identical to the unpaged reference in every case. The residue
-  is removed ONLY at the page boundaries the driver observed (a
-  sentinel marks each), never by pattern-matching the whole text; at
-  a boundary, backspaces and CRs go, and spaces go only while a
-  backspace or CR still follows them, so the indentation of the line
-  that follows the erase and a legitimate trailing space on a
-  configuration line (the device sends "sbc-rmt-rprsntation " with
-  one) are kept as sent - both verified with trailing-space lines
-  placed on and across page boundaries; unchanged rerun discarded; wrong enable and wrong
-  login passwords fail cleanly; transport validated; auto fallback
-  exercised for all three classes (refused -> telnet; bad password
-  -> no fallback; kex mismatch -> no fallback). SSH path shares
-  ssh_open with the seven verified SSH models; live verification on
-  SBC10, both transports: SSH and telnet logins, enable, the pager
-  driver (119 pages, 2,621 lines of "full" output), the 0600 debug
-  file, and changes_only - the telnet fetch compared unchanged against
-  the SSH fetch a minute earlier, i.e. byte-identical across the two
-  line-ending styles and 119 erase sequences each; the saved file had
-  no --MORE-- fragments, no erase bytes, and kept the trailing spaces
-  of empty-value lines.
-  Default show command: "show running-config" (settings that differ
-  from the firmware defaults). Decided after the live runs: it is the
-  form the device's own CLI-script export produces and the one a
-  restore ("copy cli-script from ...") is designed for; "show
-  running-config full" (every parameter incl. defaults, 2.6x the size)
-  is the better AUDIT record - it exposes default changes after a
-  firmware upgrade - but riskier to replay on a newer firmware (pins
-  old defaults, may hit renamed/removed/read-only parameters). Both can
-  be kept with a second device entry and show_cmd="show running-config
-  full" (see device_table.example). The first live runs used "full"
-  as default; the saved SBC10 backups from those runs are the full
-  form and will compare as changed once against the new default. Abstract.pm: log_info() added; ssh_open() records
-  the connection error text in $self->{last_ssh_error} for callers
-  that must classify it.
-  Registered in Detector.pm (34 models); default block and sample
-  device in device_table.example; README and HTML documentation.
-+ Abstract.pm: shared wait_for_command_prompt() with an
-  interrupt_screens() hook, replacing the two ProCurve copies (86 and
-  92 lines; they had drifted by a comment and one debug line). The
-  loop is generic - wait for the caller's prompt regex, dismiss any
-  known interruption screen with its raw keystroke and keep waiting,
-  then a 1-second settle check for an interruption trailing in behind
-  a prompt-shaped string (Change 20260902), bounded retries - while
-  the screens are model knowledge: ProCurve and ProCurveSSH declare
-  ["Press any key to continue" -> " " (never Return: that selects the
-  Menu interface), "Main Menu" -> "5" (Command Line), "Do you want to
-  save current configuration" -> "y"]. Default: no screens, i.e. a
-  plain prompt wait. Verified OLD vs NEW on a real Net::Telnet against
-  a reactive fake switch that only advances on the correct keystroke:
-  identical match bytes and identical behaviour for the Main Menu, the
-  save question, the trailing-banner settle case, a plain prompt,
-  banner-then-menu, and the retry limit (both return undef with the
-  same error). The telnet model gains the "found prompt: [...]" debug
-  line after each dismissed screen that the SSH copy already had.
-  Needs a live run on procurve (swi11024, the Menu-interface 2610) and
-  procurve-ssh.
++ Added the mediant-sbc model for AudioCodes Mediant SBCs and gateways
+  with the current Cisco-style CLI, over SSH (default) or telnet. It
+  drives the device's pager, enters enable mode, and reads the
+  configuration; an automatic transport fallback never downgrades a
+  credential from SSH to cleartext on an authentication failure.
+
++ Added shared wait_for_command_prompt() handling for full-screen and
+  menu-driven CLIs, with a per-model hook for the banners and menus a
+  device interposes before its prompt; ProCurve now uses it.
+
++ Added a "How to add a model" manual (Markdown and HTML) and a small,
+  dependency-free generator (tools/md2html.py) that produces the HTML
+  from the Markdown.
 
 9.59
-============
-+ Abstract.pm: shared SSH transport - ssh_open(), open_ssh_debug_file()
-  and the ssh_extra_opts() hook - replacing the 25-44-line connection
-  block that each of the seven SSH models carried (ArubaCXSSH,
-  NexusSSH, PLANET, ProCurveSSH, CiscoIOSSSH, CiscoASASSH, ComwareSSH;
-  502 lines -> 42, Abstract.pm +138). The block does the same job
-  everywhere: Net::OpenSSH connection (password, no host-key
-  verification - see SECURITY NOTES), the setsid warning filter (now
-  a scope guard that restores the previous __WARN__ handler),
-  open2pty, and the Net::Telnet wrapper (Errmode return, Timeout,
-  Telnetmode 0, Cmd_remove_mode 1, output record separator CR).
-  Net::OpenSSH is loaded on first use, so a telnet-only installation
-  still need not have it.
-  What stays per model is device knowledge: the legacy crypto an
-  older switch needs, declared with ssh_extra_opts(): ProCurveSSH and
-  ComwareSSH re-enable diffie-hellman-group14-sha1 and group1-sha1,
-  ssh-rsa host keys and aes128-cbc/3des-cbc; CiscoASASSH the same but
-  with group1-sha1 only. Preserved byte-for-byte.
-  The copies had diverged in one way that was a gap, now closed: the
-  three newest models wrote a complete .debug file (the ssh client's
-  -v trace, then the session dump, mode 0600), ProCurveSSH wrote only
-  the session dump, and CiscoIOSSSH, CiscoASASSH and ComwareSSH
-  honoured debug=on for nothing at the SSH layer - no .debug file at
-  all, although the README documented one. All seven now produce the
-  full file. Cmd_remove_mode is set for ProCurveSSH too; it only
-  affects Net::Telnet cmd(), which no SSH model calls.
-  Verified offline by capturing the exact argument lists passed to
-  Net::OpenSSH->new and Net::Telnet->new, old vs new, for every model
-  with debug off and on: identical for Aruba/Nexus/PLANET in both
-  modes and for all seven with debug off (CiscoIOSSSH differs only in
-  the order of its -o options, which ssh ignores); with debug on the
-  four older models differ exactly by gaining LogLevel=VERBOSE +
-  master_stderr_fh and dump_log - the declared change. The harness
-  also caught a real defect in the first version of ssh_open: the
-  indirect-object form "new Net::Telnet(...)" copied from the models
-  is parsed as a function call in Abstract.pm (which does not "use
-  Net::Telnet"); fixed to Net::Telnet->new before release. Needs live
-  verification on all seven SSH models (see below).
-  README: debug documented for cisco-ios-ssh/cisco-asa-ssh and
-  comware-ssh (new), procurve-ssh entry made precise.
-+ expect_enable_prompt: final migration. Parks and Riverstone (tail
-  "# $") passed a step label as the third argument, which the shared
-  function reads as the tail override; the shared function gained an
-  optional fourth $label parameter (used only in the error message,
-  e.g. "fetching-config: could not match ...") and the three call
-  sites pass (undef, label). Acme's single call already passes its
-  per-command delimiter "[#>]" as the tail override, so only its copy
-  was deleted. Mediant's prompt is "/CONFiguration>"; its caller
-  escaped the leading "/" by hand ("\\" . $prompt) because the copy
-  interpolated the prompt raw - the shared quoting covers "/", so the
-  manual escape is gone and prompt_tail is "$". MikroTik's copy was
-  dead code (never called; the end of the configuration is found by
-  expect_enable_prompt_paging) and was removed. Verified per model
-  with OLD vs NEW through a real Net::Telnet on device-shaped byte
-  streams: byte-identical prematch/match for Parks, Riverstone (both
-  call sites), Acme (both "#" and ">" prompt signs) and Mediant, and
-  identical rejection of a prompt without the trailing space.
-  Deliberately NOT migrated: CiscoSG300, whose copy ignores the learned
-  prompt and matches "\S+#$" - moving it onto the shared function would
-  tighten the match to the learned hostname, a behaviour change that
-  cannot be verified without an SG300 (the loose match may exist
-  because the prompt of a stacked SG300 varies with its role). It is
-  now the only model with a private expect_enable_prompt, documented
-  as such in the file. 26 copies -> 1 shared + 1 deliberate exception.
-+ Decision, hirschmann: the "users passwd <user> :v1:<hash>:" lines of
-  "show running-config all" are re-rendered by the Railswitch on every
-  read (fixed salt prefix, different body), so every backup compares as
-  changed and changes_only never discards one for this model. A
-  config_equal override ignoring those lines was considered and
-  REJECTED by the maintainer: ignoring them would also hide a real
-  password change. Accepted cost: one saved backup per run for
-  Hirschmann devices (bounded by keep=N). Recorded here so it is not
-  "fixed" later by mistake.
-+ FIX: the ssh trace in the .debug file was effectively empty. The
-  SSH master ran at LogLevel=VERBOSE, which the header line and the
-  README described as the "-v" authentication trace - but VERBOSE is
-  not -v: OpenSSH's levels are QUIET FATAL ERROR INFO VERBOSE DEBUG
-  DEBUG1..3, "-v" is DEBUG1 (= DEBUG), and VERBOSE adds only a
-  handful of messages above INFO. On AIX OpenSSH 8.1 it added
-  nothing: a live .debug file held just the known-hosts warning and
-  the switch's login banner (grep -c debug1: -> 0), while "ssh -v" on
-  the same host produced the full trace. ssh_open now uses
-  LogLevel=DEBUG when debug=on, so the file records key exchange, host
-  key, authentication methods tried and "Authentication succeeded" -
-  the information needed when a legacy switch refuses a kex. DEBUG
-  rather than DEBUG2/3 to avoid per-packet noise. ssh never logs the
-  password. Header line and SECURITY NOTES corrected; this has been
-  the behaviour since the debug file was introduced (aruba/planet),
-  not a 9.59 regression.
+====
+
++ Added a shared SSH transport (ssh_open) used by all SSH models, with a
+  per-model hook for the legacy key-exchange and cipher settings older
+  switches require. Removed the duplicated connection code from the
+  individual models.
+
++ Fixed the debug trace for SSH models so that debug=on records the SSH
+  client's own diagnostics followed by the session, in a 0600 file.
 
 9.58
-============
-+ Abstract.pm: shared expect_enable_prompt() with prompt_head() /
-  prompt_tail() hooks. 26 models each carried a private copy of the
-  same 12-line function; a normalised diff showed 19 distinct bodies
-  whose only difference is the regex tail after the hostname ("#$",
-  "# ?$", " > $", "> \(enable\) $", a parenthesised or bracketed
-  hostname, ...) - one line of device knowledge inside a dozen lines
-  of scaffolding. The scaffolding now lives in Abstract; a model
-  contributes its device fact by overriding prompt_tail() (and
-  prompt_head() for prompts that wrap the hostname). Defaults
-  reproduce the classic "hostname#" case. The prompt is quoted
-  byte-safely (regexp_quote_keep_bytes): 21 of the old copies
-  interpolated it raw, so a "." in a hostname matched any character
-  and "(", "[" or "+" would have broken the match. An optional
-  per-call $tail_override serves models whose prompt sign varies per
-  command. A model that still defines its own copy keeps using it, so
-  migration is one model at a time.
-+ First migration: CiscoIOS, CiscoIOSSSH, Coriant8600 and DmSwitch
-  (all default tail "#$") lost their private copies and inherit the
-  shared one; no other change to those models. Verified two ways: an
-  offline equivalence harness comparing the old and new regex over a
-  corpus of prompt lines, and a live comparison driving the OLD copy
-  (from the PRE-prompt restore point) and the NEW implementation
-  through a real Net::Telnet on identical byte streams - byte-identical
-  prematch/match for all four models, including a banner line ending
-  in "#" (stays in the prematch) and a trailing-space prompt (correctly
-  rejected by "#$", same error text). The remaining 22 models are
-  unchanged and will be migrated individually with the same harness.
-+ Second migration (13 models): Dell, Zyxel and PLANET (tail "# ?$"),
-  CiscoASA, CiscoASASSH, CiscoPIX and TellabsMSR ("# $"), CiscoCAT
-  ("> \(enable\) $"), NECUnivergeIX ("[#\$] $"), Terayon (unanchored
-  "#"), CiscoIOSXR (default "#$"), Hirschmann (head "\(", tail
-  "\)\s?#$") and 3ComMSR (head "\[", tail "[^\[\]]*\]$"). Each lost
-  its private copy and declares its device fact as a one-line
-  prompt_tail() (plus prompt_head() where the prompt wraps the
-  hostname). CiscoASA/CiscoASASSH/CiscoIOSXR used to escape "/" in the
-  prompt by hand (IOS-XR prompts such as "RP/0/RSP0/CPU0:asr9k#");
-  the shared quoting covers "/" so that step is gone. TellabsMSR's
-  copy had two extra debug lines ("waiting"/"found enable command
-  prompt") which the shared version does not emit. Verified per
-  model: the constructed regex string is identical to the old one, and
-  OLD vs NEW driven through a real Net::Telnet on identical byte
-  streams give byte-identical prematch/match for the parenthesised,
-  bracketed, CatOS, slash, "$"-sign, unanchored and spaced-hostname
-  cases. Confirmed live by the maintainer on cisco-ios and
-  cisco-ios-ssh after the first migration.
-  Still carrying a private copy (deliberately, each needs its own
-  handling): Parks and Riverstone (pass an error LABEL as the third
-  argument, which the shared function would read as a tail
-  override), Acme (per-call delimiter), Mediant (caller pre-escapes
-  the prompt with "\\"), MikroTik (the learned prompt is the whole
-  match including " > "), CiscoSG300 (ignores the learned prompt and
-  matches "\S+#$"), ProCurve and ProCurveSSH (VT100 escape prefix).
-+ Abstract.pm: single stripansi(), replacing three per-model copies
-  (ProCurve.pm, ProCurveSSH.pm, ComwareSSH.pm; 12 call sites, now
-  fetchconfig::model::Abstract::stripansi). The copies had diverged:
-  the ProCurve two carried the DEC private-mode rule (ESC[?25h/l) and
-  the ESC E rule, ComwareSSH's was frozen at the older two-rule form.
-  The shared version is a strict superset with two corrections: the
-  CSI rule accepts any number of ";"-separated parameters (the old
-  "\d*;?\d*" allowed at most two, so an SGR such as ESC[1;37;40m
-  survived it), and NUL bytes are stripped alongside CR. Verified by
-  recording the old copies' output on a 161 KB corpus - the ProCurve
-  2610 telnet dump (cursor addressing, scroll regions, ?25h/?25l,
-  ESC E), ProCurve SSH prompt captures, the complete 80 KB Comware
-  SSH session (zero escapes, all 3,387 lines "\r\r\n", two NULs at
-  the banner boundaries), plus synthetic edge cases - and comparing
-  the new function against each: every difference is the new
-  function REMOVING bytes the old one left (NULs; 3+-parameter CSI;
-  for the Comware copy, the ?25l/?25h/ESC E it never had). No case
-  adds or changes a byte, and on every real capture the ProCurve
-  output is identical. Saved configurations of all three models are
-  unaffected.
-+ Third migration: ProCurve and ProCurveSSH lost their private
-  expect_enable_prompt (identical copies) and declare
-  prompt_head => "(?:\x1b\[[\d;?]*[A-Za-z])*" (the cursor escapes the
-  switch emits right before the prompt, consumed as part of the prompt
-  unit) and prompt_tail => "# " (unanchored, as before). The
-  constructed regex is identical to the old one for the real prompts
-  ("swi11024_swi320059", "IS Nr 337583"); for a non-ASCII hostname it
-  now differs on purpose: the old copy used quotemeta, which yields the
-  broken "\<c3>\<bc>" form fixed on aruba-cx-ssh, while the shared
-  version keeps the bytes literal. Verified OLD vs NEW on a real
-  Net::Telnet with the 2610 post-command escape sequence, the SSH
-  ESC[1H prompt and the ESC[?25l prompt: byte-identical prematch and
-  match. Remaining private copies: Acme, CiscoSG300, Mediant,
-  MikroTik, Parks, Riverstone (each needs its own handling).
+====
 
-+ Parallel fetching: new option "-P N" fetches with N concurrent
-  worker processes (default 1 = sequential, unchanged behaviour). The
-  fetch is now a separate phase: Detector::parse only registers
-  devices (with their source file/line), and Detector::fetch_device()
-  does the per-device work that used to run inline while the table
-  was read; fetchconfig.pl's run_fetch_phase() drives it. At -P 1 the
-  loop runs in device-table order (device_ids_in_order) and the output
-  is identical to earlier versions (verified: same banner order, same
-  per-device line count as the 9.57 build). With N>1 the parent hands
-  out one device at a time over a pipe to whichever worker asks next;
-  each worker is a fork of the fully loaded parent, so no model needed
-  changes.
-  Output is atomic per device: a worker redirects its STDOUT/STDERR
-  into per-device temporary buffers for the duration of a fetch, and
-  the parent alone copies each finished device's buffers to the real
-  streams as one uninterrupted block, so one device's lines are never
-  interleaved with another's (verified mechanically over an 8-device
-  -P 4 run with staggered durations: zero violations). Blocks appear in
-  completion order.
-  Results: Mailer::record_result cannot share @results across
-  processes, so while a result sink is set (set_result_sink) a worker
-  serializes each row to a per-device file (undef, tabs, newlines and
-  backslashes round-trip exactly); the parent replays it
-  (replay_result_file) through record_result, so the summary mail,
-  per-device to= bundling and the .status files are produced by the
-  parent exactly as at -P 1.
-  Robustness: a worker that dies is detected via waitpid; the device
-  it held is recorded as failed (mail + .status) and the remaining
-  devices are fetched by the surviving workers (verified by SIGKILLing
-  a worker mid-fetch: 7 fetched, 1 failed, run completed). -P is
-  refused together with the lookup/maintenance modes and must be a
-  positive integer. The repository is safe under concurrency: each
-  device owns its directory, .status and .debug; only the shared date
-  directories are created by several workers, which make_path
-  tolerates.
-  README: new PARALLEL FETCHING section (how it works, atomic
-  output/completion order, sizing N); usage text and HTML updated.
-+ FIX, ProCurve.pm / ProCurveSSH.pm: the learned prompt carried a
-  fragment of a cursor escape. The switch emits ESC[1H (cursor home)
-  right before the hostname; the prompt token [\w.-]+ was allowed to
-  start INSIDE that escape, so ESC and "[" were left in the prematch
-  (and saved as two junk lines - a bare "\x1b[" - at the END of the
-  backup) while "1H" was swallowed into the hostname: the prompt was
-  learned as "1HIS Nr 337583" and logged that way. It still worked
-  only because the same escape preceded every later prompt, which
-  also meant any change in the switch's terminal handling would have
-  broken the end-of-config match. wait_for_command_prompt() now
-  matches any escape sequence(s) as part of the prompt unit
-  ((?:\x1b\[[\d;?]*[A-Za-z])* before the pattern), the post-checks
-  and the learned name are taken from stripansi() of that match, and
-  the later prompt regexps accept the same optional escape prefix.
-  Result: the prompt is learned as the true hostname ("IS Nr
-  337583"), the saved backup no longer ends in escape junk (11 lines
-  instead of 13 in the test), and the behaviour is IDENTICAL whether
-  or not the switch emits the escape (verified with the mock both
-  ways; unchanged-comparison and -P 3 atomic output intact). Log
-  lines "found prompt" / "found end of configuration" show the
-  stripped text.
-+ FIX, ProCurve.pm (telnet) - regression from the escape handling
-  above, seen live on swi11024: the switch clears the screen with a
-  run of 23 CRLFs and then emits ESC[?25l (DEC "hide cursor") before
-  the prompt. The prompt regex now consumed that escape as part of
-  the match, but stripansi()'s private-mode rule stripped only the
-  "h" (set) form, not "l" (reset), so "25l" survived and was
-  swallowed into the hostname ("25lswi11024_swi320059"); the "no
-  page" prompt match then failed and the fetch aborted. The CRLF run
-  was also printed raw inside the "found command prompt" debug line -
-  the "huge empty space" in the screen output. stripansi() now strips
-  ESC[?...h AND ESC[?...l (ProCurve.pm and ProCurveSSH.pm), and every
-  "found command prompt" debug line shows the stripped text. Verified
-  against a telnet mock replaying the exact swi11024 sequence: clean
-  hostname, "no page" accepted, 7-line config saved with zero escape
-  or CR bytes, no blank lines in the log.
-+ FIX, ProCurve.pm: a switch that answers "show run" with nothing but
-  its prompt crashed the run ("Modification of non-creatable array
-  value attempted, subscript -1" at the trailing-escape strip of the
-  last config line) instead of the fetch failing cleanly as an empty
-  configuration. Guarded. Found while building the mock above.
-+ FIX (first live -P 4 run): "could not open dir: <repo>/<dev>.status.tmp.<pid>:
-  No such file or directory" followed by "latest config not found",
-  after which changes_only saved an UNCHANGED config. A race that
-  only exists under -P: the parent writes device A's .status file
-  (temp file + atomic rename in the repository root) while a worker's
-  scan_dir lists that root for device B. The worker's readdir saw the
-  temp name, the rename then removed it, -f failed, and the old code
-  treated a non-file as a directory to recurse into; the failed
-  opendir was escalated to a fatal scan error. Two fixes: (1)
-  scan_dir skips any entry that is neither a regular file nor a
-  directory at stat time (vanished, socket, broken symlink) instead of
-  recursing into it, and treats an opendir failing with ENOENT as "no
-  backups here" rather than an error - under -P, entries appearing
-  and disappearing in shared directories is normal, and a repository
-  that does not exist yet on a device's first run is the same case;
-  (2) the .status temp file is now a dotfile
-  (".<dev_id>.status.tmp.<pid>"), which scan_dir ignores by name, so
-  the race cannot even arise. Verified with a deterministic
-  reproduction (an entry that is gone by stat time): the pre-fix
-  scan_dir fails with exactly the live error, the fixed one returns
-  the correct file set with no error; a -P 4 rerun shows 8/8
-  unchanged configs discarded and zero errors, atomic output intact.
++ Added shared expect_enable_prompt() handling with per-model hooks
+  (prompt prefix and suffix) for device-specific prompts, and migrated
+  the models to it, removing their private copies where no
+  model-specific behaviour was needed. Login and enable-mode behaviour
+  is unchanged.
+
++ Added shared ANSI/VT100 escape-sequence stripping and migrated the
+  ProCurve models to it.
+
++ Added parallel device fetching (-P N): independent devices are fetched
+  concurrently, with each device's output shown as one uninterrupted
+  block in completion order. -P 1 (the default) is unchanged.
+
++ Fixed ProCurve cursor-control and hide-cursor escape handling, and
+  stopped treating an empty configuration as valid data.
+
+- Fixed a race between parallel workers (-P) and the repository scan.
 
 9.57
-============
-+ New model NexusSSH.pm (label nexus-ssh) for Cisco Nexus switches
-  (NX-OS; observed on 10.4(7)) over SSH. Modeled on ArubaCXSSH.pm
-  (Net::OpenSSH pty driven through Net::Telnet, shared prompt
-  handling). From a real PuTTY session log: SSH authentication lands
-  on "<hostname># " after the MOTD banner and the NX-OS copyright text;
-  NX-OS has no Cisco-IOS-style "enable", so a ">" prompt is reported
-  as an error naming the reason. Pager disabled with "terminal length
-  0"; "show running-config" opens with "!Command:", "!Running
-  configuration last done at:" and "!Time:" comment lines, which are
-  kept in the backup; "!Time:" changes on every run and is ignored in
-  the comparison (config_equal_ignoring_lines), while "!Running
-  configuration last done at:" changes only with the configuration
-  and deliberately counts. The start of the config is verified against
-  "!Command:"; NX-OS's "^" error pointer is recognized alongside "%".
-  "exit" closes the session. debug=on writes the 0600 debug file with
-  the ssh authentication record and the session dump. Registered in
-  Detector.pm; default block and sample device in device_table.example;
-  README (intro, model table, options) and HTML documentation updated.
-  Verified against a real sshd whose login shell replays the captured
-  session: backup starts at "!Command:", a second run with a different
-  "!Time:" is discarded as unchanged, a real change is kept, ">"
-  prompt and wrong password fail cleanly, debug file is 0600.
-+ PERFORMANCE, Abstract::scan_dir: finding one device's backups used to
-  walk the ENTIRE repository tree, descending into every other
-  device's directory and stat()ing every file, discarding all but one
-  device's. find_latest calls it once per device per run (for
-  changes_only and keep=N expiry), and -Z/-S/-o call it once per
-  device too. Measured on a synthetic repository of 2,500 devices x 30
-  backups (150k inodes, warm cache): 704 ms per device, i.e. ~29
-  minutes of pure directory walking per nightly run and again per
-  maintenance check. The layout is <repo>/YYYYMM/YYYYMMDD/<dev_id>/,
-  so at the day level scan_dir now opens only "<day>/<dev_id>" and
-  skips the day if that directory is absent (ENOENT, the cheap common
-  case). Month directories and anything not matching the known layout
-  are still walked as before, so oddly placed files remain
-  discoverable. Result: 0.41 ms per device (~1,700x); a 2,500-device
-  run spends ~1 s here instead of ~29 min; -Z for 20 devices went
-  from 13.7 s to 0.18 s end-to-end. Results are identical to the old
-  walk (verified side-by-side for 100 devices and for files at
-  non-standard depths); the real fetch/unchanged/expiry paths and
-  -l/-g/-Z/-s/-z regression-tested unchanged. No layout change, no
-  migration, no new dependency.
-+ README introduction: the device list stopped at NEC Univerge IX and
-  omitted every model added since; it now names them all.
+====
+
++ Added the nexus-ssh model for Cisco Nexus (NX-OS) over SSH.
+
++ Made the per-device repository scan much faster by descending only
+  into the relevant directory instead of walking the whole tree.
+
++ Completed the model list in the README.
 
 9.56
-============
-This entry consolidates every change from the 9.x fork (9.25 through
-9.56) into one description of how 9.56 differs from upstream 0.25.
-Intermediate states that were later superseded are not listed.
+====
+
+  This entry summarises how the 9.x fork differs from upstream 0.25.
+  Intermediate fork versions that were later superseded are not listed.
 
 MODELS AND TRANSPORTS
-+ SSH counterparts of the telnet models, driving the shell through a
-  Net::OpenSSH pseudo-terminal wrapped in Net::Telnet so the existing
-  prompt handling is reused: cisco-ios-ssh, cisco-asa-ssh, comware-ssh,
-  procurve-ssh. SSH host keys are deliberately not verified
-  (StrictHostKeyChecking=no, UserKnownHostsFile=/dev/null): the job
-  runs unattended and a switch's host key changes on every hardware
-  swap; documented in SECURITY NOTES.
-+ New telnet/SSH models: comware-ssh (HPE Comware/H3C), hirschmann
-  (Hirschmann Railswitch; "(<name>) >"/"#" prompt, no enable password,
-  config anchored on "!Current Configuration:"), zyxel (Zyxel switches,
-  Cisco-IOS-like CLI, full "terminal length 0"/"show running-config"
-  spelling), planet-ssh (PLANET managed switches; both firmware
-  variants - with and without the switch's own Username:/Password:
-  dialog after SSH login, with or without a "Building configuration..."
-  banner, one or two "exit"s to leave; input is typed with a
-  configurable inter-character pause, type_delay, default 100 ms,
-  because the switch drops bursts arriving right after a prompt),
-  aruba-cx-ssh (Aruba CX / AOS-CX; administrator account required, no
-  "enable"; also backs up HPE Aruba AOS-8 access points).
-+ New web-UI transport (AbstractHTTP.pm, LWP::UserAgent with cookie
-  jar) for switches without a CLI: tplink-web-sg105e (TP-Link Easy
-  Smart TL-SG105E/PE, both the IP-bound and the cookie-bound session
-  variants) and procurve-web-1700 (HP ProCurve 1700). The binary
-  config is stored uuencoded so it fits the text repository,
-  changes_only comparison and -g retrieval; restore with uudecode.
-  debug=on records every request/response with the password masked.
-+ New SNMP+TFTP transport, procurve-snmp (HP ProCurve ProVision incl.
-  the 4000M/8000M chassis): an SNMP set arms the switch's TFTP export,
-  the config is fetched by TFTP, a second set disarms it - always,
-  even after a failed transfer. Credential is the SNMP read-write
-  community (community=, no user/pass); remote_file= defaults to
-  "browse" (readable display export), later firmware also accepts
-  "running-config"; oid= and snmp_version= are overridable. Requires
-  Net::SNMP and Net::TFTP.
-+ Prompt handling made robust across real devices: hostnames with
-  spaces (ProCurve "IS Nr 337542#", Aruba "apgmg01 UG IT-Buero#") and
-  non-ASCII characters are matched by a whole-line, newline-bounded
-  token; the learned prompt is quoted byte-safely
-  (regexp_quote_keep_bytes, not quotemeta, which mangles multi-byte
-  UTF-8) and normalized to raw bytes; aruba-cx-ssh waits for output to
-  go idle (prompt_settle_ms, default 150) before matching so a banner
-  line ending in "#" is not mistaken for the prompt. ProCurve login
-  handles the "Press any key to continue" banner, the "save current
-  configuration [y/n]" prompt, and confirms "no page" before fetching.
-+ Volatile lines that must not count as a change are ignored in the
-  comparison per model (Abstract::config_equal_ignoring_lines): the
-  Cisco ASA "!!: Written by ..." save timestamp, the PLANET "! System
-  Up Time:" header. Comware/ProCurve/Aruba banner and header lines
-  ("Building configuration...", "Current configuration:", "Running
-  configuration:") are stripped by anchor, not by a blind line count.
-+ A fetch that fails partway is never saved as an empty backup:
-  dump_config refuses undefined/empty content, Detector treats a
-  0-byte saved file as a failed fetch and discards it, and the three
-  models that used to call dump_config unconditionally no longer do.
 
-BACKUP FILES, NAMING AND ORDERING
-+ Saved configuration files end with a trailing newline on the last
-  line, matching the device's own output (before, the last line had
-  none). The first run after upgrading reports every device as
-  "changed" once.
-+ filename_append_suffix must start with "." (a file extension); a
-  dotless suffix, or one containing "/" or whitespace, fails that
-  device's backup with an error and writes nothing. Do not add or
-  change a suffix once a device has backups (old and new names would
-  coexist; see -s/-S).
-+ Every operation that orders backups ("latest" for changes_only,
-  keep=N expiry, -g/-n/-m, -l, -z/-Z, -s/-S) sorts by the parsed
-  timestamp YYYYMMDD.HHMMSS, not by a string sort of the whole name,
-  so neither the timezone token nor a suffix can disturb the order.
-  One shared parser (Abstract::parse_backup_filename) recognizes every
-  timezone form strftime produces - "+0200" (Linux, modern Windows), a
-  bare name such as "CEST"/"CET"/"NFT"/"DFT" that changes with DST
-  (AIX), "-CEST" (Solaris), a multi-word name such as "W. Europe
-  Standard Time" (older Windows), or none (timezone=hide).
-+ Backup filenames have one-second resolution; two backups of one
-  device within the same second would share a name. Accepted and
-  documented (BACKUP FILE NAMING): a real fetch never completes in
-  under a second.
-+ timeout defaults to 30 seconds when set neither on the device line
-  nor the model's default: line, and says so at debug level ("Using
-  30s fetch timeout because the timeout was not set for this model").
-  Before, an unset timeout fell through to the library's own default
-  (10 s telnet/SSH, 180 s web UI).
++ Added SSH counterparts of the telnet models where the device allows it
+  (Cisco IOS, Cisco ASA, Comware, ProCurve). These transports do not
+  verify the SSH host key; the limitation is documented.
 
-COMMAND-LINE MAINTENANCE TOOLS
-+ -g dev_id [-n N] retrieves a backed-up config (1 = latest); -m M
-  with -g prints a diff between backup N and older backup M; -l dev_id
-  lists a device's backups; -z dev_id / -Z check one / every loaded
-  device for zero-byte backups; -f file writes the result data to a
-  file. Exit status carries the result (1 = something found / failed).
-+ -o finds orphaned backups - device directories on disk with no
-  matching dev_id in the loaded device table - across every
-  configured repository= path. -o -D deletes them: each file by its
-  exact name (unlink, logged "rm <file>"), then the directory by one
-  plain rmdir, then the day (YYYYMMDD) and month (YYYYMM) directories
-  this leaves empty; never a wildcard, never a recursive delete. -T
-  previews the commands without deleting.
-+ -e finds empty directories in the <repo>/YYYYMM/YYYYMMDD/<dev_id>/
-  layout, bottom-up, listing each as level (device/day/month) and
-  path; -e -D removes them bottom-up by one plain rmdir each, every
-  command reported; -e -D -T previews. Only names of the expected
-  shape are ever candidates; the repository root is never touched.
-  -D therefore requires -o or -e.
-+ -s dev_id checks that all of a device's backups carry the same
-  filename suffix and, if so, that it matches the configured
-  filename_append_suffix (exit 0 consistent+matching, 1 inconsistent,
-  2 consistent but not matching); -S checks every loaded device for
-  consistency only (exit 0/1). The suffix is recognized after the
-  timezone token when separated by ".", "-" or "_".
-+ The listing/check modes (-l, -z, -Z, -o, -e, -s, -S) end their
-  result data with one summary line prefixed "#" (the same text the
-  run logs), so a check that finds nothing still writes a non-empty,
-  self-describing -f file. Parsers of these listings must skip lines
-  starting with "#". -f receives only the result data; all
-  info/debug/error lines go to stderr.
-+ -?, -h and --help print the usage to stdout and exit 0.
-+ device_table options may be quoted in double quotes to contain a
-  comma (Text::ParseWords); new free-text comment= option; -devices=
-  and -line= may be repeated.
++ Added new models and transports: Comware (SSH), Hirschmann, Zyxel,
+  PLANET (SSH), Aruba CX (SSH), TP-Link Easy Smart (web UI), ProCurve
+  1700 (web UI), and ProCurve ProVision (SNMP + TFTP).
 
-E-MAIL SUMMARY (fetchconfig/Mailer.pm)
-+ End-of-run summary e-mail as an HTML table (device, date, time,
-  duration, success/failed, size, changed/unchanged/forced/n-a) with a
-  statistics table above it, configured by an "email:" line
-  (from=, to=, smtp=, optional user=/password= for AUTH LOGIN). No mail
-  and no SMTP connection unless an "email:" line is present; none for
-  the lookup modes. Per-device to= overrides the recipient; those
-  devices are bundled into their own e-mail while the global recipient
-  always gets everything.
-+ email: options port= (TLS-aware default: 25 for off/starttls, 465
-  for ssl), tls=off|starttls|ssl (needs IO::Socket::SSL only when
-  enabled; if TLS is requested but unavailable the mail is refused,
-  never downgraded to plaintext), footer= (the footer's copyright
-  text; " - Version <n>" is fixed). Email-line values may be quoted
-  to contain a comma. From/To/Subject have line breaks stripped
-  (header-injection guard).
-+ Rendering: colorized tables with inline styles, "failed" in red and
-  "changed" in blue, Outlook-safe line heights and spacer, generic
-  sans-serif font, Content-Transfer-Encoding: 8bit.
++ Improved prompt handling for devices that change their prompt between
+  login, enable, configuration and command modes.
 
-STATUS FILE
-+ After every backup attempt <repository>/<dev_id>.status is written
-  (INI-style: [<dev_id>], backup_start_date/time, backup_end_date/
-  time, backup_duration_sec, backup_state=success|failed|skipped,
-  backup_changed=unchanged|changed|forced|unknown), atomically,
-  unconditionally (no email: line needed), for every model. Meant for
-  external tools such as fetchconfig-web.
++ Added per-model handling of volatile configuration lines so that
+  values expected to change between fetches do not create spurious
+  differences.
+
++ A failed fetch no longer replaces a good backup with an empty file.
+
+BACKUP FILES AND COMPARISON
+
++ Preserved the trailing newline in saved configurations.
++ Parse backup timestamps and timezone tokens (numeric offset, AIX,
+  Solaris and Windows forms) and order backups by parsed time rather
+  than by filename.
++ Validated the filename suffix option (filename_append_suffix).
++ Gave operations a 30-second default timeout so they cannot wait
+  indefinitely.
+
+COMMAND-LINE OPTIONS
+
++ Added maintenance and lookup options for listing, retrieving,
+  comparing and cleaning up stored configurations (-g, -m, -n, -l, -z,
+  -Z, -s, -S, -o, -e, -D, -T), and -f to write results to a file.
++ Clearer errors for invalid option combinations and values.
+
+E-MAIL
+
++ Added an e-mail summary of each run, with options for recipients,
+  formatting and TLS, and without exposing passwords in diagnostics.
+
+STATUS
+
++ Added a per-device status file recording the outcome of the last run,
+  so a failed fetch does not leave misleading success information.
 
 SECURITY
-+ dev_id is validated (letters, digits, "_", ".", "-"; not dots-only,
-  which would resolve to the repository or its parent) before it is
-  used in paths, regexes or logs; pass=/enable=/community= are masked
-  in every logged device-table line; shell-based mkdir replaced by
-  File::Path::make_path; two-argument open() replaced by the
-  three-argument form.
-+ Session debug logging is opt-in per device (debug=on), written to
-  <repository>/<dev_id>.debug with mode 0600 regardless of umask,
-  because it records credentials verbatim; for the SSH models the
-  file opens with the ssh client's own account of the authentication.
-+ New README/HTML SECURITY NOTES section (debug-file credentials, the
-  deliberate no-host-key-check policy, dev_id rules, SMTP/AUTH LOGIN).
 
-CORE FIXES
-+ Abstract::dump_config no longer leaks $, (output field separator)
-  into later prints; the second-level dump_log filename typo
-  ("<dev_id>..debug") fixed; ProCurve "-- MORE --" pagination handled
-  in the SSH model; Zyxel/ProCurve prompts tolerate an optional
-  trailing space.
++ Validated device identifiers and other externally supplied values.
++ Masked passwords and community strings in logs and e-mail.
++ Created debug files with restrictive (0600) permissions.
++ Used safer filesystem calls (three-argument open, File::Path).
++ Documented the security limitations of each transport.
+
+CORE
+
++ Reduced duplicated per-model code by moving common behaviour into
+  shared helpers.
++ Improved error propagation so failures are reported rather than
+  silently treated as success.
++ Preserved command-line and backup compatibility throughout.
 
 DOCUMENTATION
-+ README rewritten and extended (PERL MODULE REQUIREMENTS with the
-  core-vs-non-core split per transport, every one of the 32 models
-  with an options block headed by its label, EMAIL NOTIFICATIONS,
-  RETRIEVING A PREVIOUSLY BACKED UP CONFIG incl. all maintenance
-  tools, WEB UI BACKUPS, PROCURVE SNMP BACKUPS, SECURITY NOTES, BACKUP
-  FILE NAMING, STATUS FILE), American English. README.retrieve merged
-  in. New fetchconfig-documentation.html, shipped in the tarball,
-  mirroring the README with a per-model option matrix that agrees with
-  each model's actual options.
-+ Copyright "Rainer Tammer"; Mailer footer default "(c) 2006-2026
-  Everton da Silva Marques, Rainer Tammer and others".
+
++ Updated the README, model documentation, command-line help and
+  configuration examples for the new models, transports and options.
 
 0.25
 ====

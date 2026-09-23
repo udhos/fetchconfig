@@ -84,7 +84,10 @@ INSTALLATION (UNIX/Linux)
 	need LWP::UserAgent and HTTP::Request::Common; and the
 	procurve-snmp model needs Net::SNMP and Net::TFTP. All the
 	other modules fetchconfig uses are part of the Perl core
-	(5.28 and later). Install whichever non-core ones you need,
+	(5.26 and later; tested on 5.26, 5.28 and 5.40). Install
+	whichever non-core ones you need
+	(the file DEPENDENCIES lists every module, core vs CPAN for Perl
+	5.26/5.28/5.40, broken down by feature),
 	e.g.:
 
 		cpan install Net::Telnet Net::OpenSSH
@@ -111,7 +114,8 @@ INSTALLATION (Windows)
 	need LWP::UserAgent and HTTP::Request::Common; and the
 	procurve-snmp model needs Net::SNMP and Net::TFTP. All the
 	other modules fetchconfig uses are part of the Perl core
-	(5.28 and later). Install whichever non-core ones you need,
+	(5.26 and later; tested on 5.26, 5.28 and 5.40). Install
+	whichever non-core ones you need,
 	e.g.:
 
 		cpan install Net::Telnet Net::OpenSSH

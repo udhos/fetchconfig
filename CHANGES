@@ -4,6 +4,21 @@
 
 9.62
 ============
++ Release hygiene for the public repository: added a LICENSE file (a copy
+  of COPYING, the GPL-2.0+ text, so GitHub detects the license); .gitignore
+  now excludes __pycache__/, *.pyc, *.bak and *.orig (the Python bytecode
+  cache from tools/md2html.py was removed from the tree); README states the
+  Perl floor as 5.26 (tested 5.26/5.28/5.40, was "5.28 and later") and
+  points to the DEPENDENCIES file; How-To-add-a-model.md/.html updated to
+  9.62.
+
++ HTML documentation: the sidebar navigation was out of order relative
+  to the section bodies (it listed Web UI backups before ProCurve SNMP,
+  and Security notes / Status file before the Reference sections). The
+  nav now follows the document's own reading order exactly (kickers
+  01-14): ..., Options reference, Security notes, Status file, ProCurve
+  SNMP backups, Web UI backups. Navigation only; no section text moved.
+
 + Command-line options are now parsed with Getopt::Long (core in every
   Perl, so no new dependency) instead of the hand-written @ARGV loop.
   fetchconfig's single-dash, long-ish option syntax (-devices=, -line=,

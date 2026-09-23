@@ -53,8 +53,9 @@ sub fetch {
     die "model::Abstract->fetch: SPECIALIZE ME";
 }
 
-# chat_banner is used to allow temporary modification 
+# chat_banner is used to allow temporary modification
 # of timeout throught the 'banner_timeout' option
+#
 sub chat_banner {
     my ($self, $t, $dev_opt_tab, $login_pattern) = @_;
 
@@ -145,9 +146,9 @@ sub chat_show_conf {
     undef;
 }
 
-###################################
-# Implement model::Abstract - End #
-###################################
+#
+# Implement model::Abstract - End
+##################################
 
 sub log_debug {
     my ($self, $msg) = @_;
@@ -231,19 +232,17 @@ sub opt_trim {
 #
 #     <dev_id>.run.YYYYMMDD.HHMMSS<tz><suffix>
 #
-# <tz> is whatever strftime produced when the file was written 
-# (see local_timestamp) and varies by platform and DST. 
-#
-# Observed forms:
-#
-#   Linux / modern Windows (%z) : +0200  -0500 
-#                                 numeric offset
-#   AIX (%Z, no separator)      : CEST  CET  NFT  DFT
-#                                 bare name, changes with DST 
-#   Solaris (our "-%Z" fallback): -BRST  -CEST
-#                                 dash + name
-#   Windows MSVCRT (%Z / old %z): W. Europe Standard Time, Mitteleuropäische Sommerzeit
-#                                 words with spaces, a dot, possibly non-ASCII letters
+# <tz> is whatever strftime produced when the file was written (see
+# local_timestamp) and varies by platform and DST. Observed forms:
+#   Linux / modern Windows (%z):  +0200  -0500          numeric offset
+#   AIX (%Z, no separator):       CEST  CET  NFT  DFT   bare name,
+#                                                       changes with DST
+#   Solaris (our "-%Z" fallback): -BRST  -CEST          dash + name
+#   Windows MSVCRT (%Z / old %z): W. Europe Standard Time
+#                                 Mitteleuropäische Sommerzeit
+#                                                       words with spaces,
+#                                                       a dot, possibly
+#                                                       non-ASCII letters
 #   timezone=hide:                (empty)
 #
 # <suffix> is the filename_append_suffix. Since 9.55 it must start with

@@ -353,7 +353,16 @@ def convert(md_text, source_name, title=None):
     return build_page(title, '\n'.join(r.out), build_toc(r.headings), source_name)
 
 
+def _u(value):
+    """Return value as text. Under Python 2, argv items are bytes; decode them
+    as UTF-8 so a non-ASCII --title (e.g. an em dash) is handled correctly."""
+    if isinstance(value, bytes):
+        return value.decode('utf-8')
+    return value
+
+
 def main(argv):
+    argv = [_u(a) for a in argv]
     args = [a for a in argv[1:] if not a.startswith('--')]
     title = None
     if '--title' in argv:

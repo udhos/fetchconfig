@@ -2,6 +2,147 @@
 # fetchconfig.pl - CHANGES
 #
 
+9.62
+============
++ Command-line options are now parsed with Getopt::Long (core in every
+  Perl, so no new dependency) instead of the hand-written @ARGV loop.
+  fetchconfig's single-dash, long-ish option syntax (-devices=, -line=,
+  -P, -g, ...) is preserved exactly: Getopt::Long is configured
+  no_auto_abbrev, no_bundling, no_ignore_case, pass_through, so "-d" is
+  not short for "-devices", "-Ze" is not "-Z -e", -s and -S stay
+  distinct, and an unknown option is reported as before. -v and
+  -h/-?/--help are handled ahead of Getopt::Long to keep their exact
+  behaviour. The change is provably behaviour-preserving: the exit code
+  and error message of 23 representative invocations (missing arguments,
+  non-integer -P/-n, the -s "argument must not be an option" rule, the
+  mutual-exclusion and -P-refusal checks, help/version) were captured
+  from the old parser and diffed against the new one - identical in
+  every case. The only addition is a harmless superset: "-g=dev" now
+  works as well as "-g dev". The per-option value validation and the
+  cross-option rules (-D needs -o/-e; the lookup modes are mutually
+  exclusive; -P is refused with them) are unchanged.
+  (A subprocess test t/20-options-cli.t was added and then REMOVED: it
+  launched fetchconfig.pl per case, and some cases reach a point where
+  the child blocks on a device or pipe with no stdin, hanging the run.
+  The parser's behaviour is already pinned by the capture/diff above, so
+  the flawed test was dropped rather than kept behind an env flag.)
+  Fix: the top-level fatal-exit paths (no device table, mutually
+  exclusive modes, -D/-T/-m/-P validation) used a bare "die", which
+  Perl reports as a spurious "Died at fetchconfig.pl line N." after the
+  usage text. This predates 9.62 (the same line appeared in 9.61) but is
+  now cleaned up: those seven sites use die "\n", which suppresses the
+  location suffix. The usage text and the exit status (255) are
+  unchanged, and the option-behaviour matrix still matches the pre-
+  Getopt::Long baseline exactly. The die "...: $!" calls for pipe/fork
+  errors are deliberately left as-is, since a location is useful there.
++ Documentation: new file DEPENDENCIES lists every Perl module
+  fetchconfig uses, direct and indirect, with core-vs-CPAN status for
+  Perl 5.26 (SLES 15 SP7), 5.28 (AIX 7.2 TL5) and 5.40, broken down by
+  feature. Key points: no transport module is core in any release
+  (including 5.40); everything else fetchconfig uses is core in all
+  three; the base install needs only Net::Telnet from CPAN, and a
+  model's transport module is loaded only when that model is used.
+  Net::SNMP's SNMPv3 crypto prerequisites (Crypt::DES, Digest::SHA1,
+  Digest::HMAC; Crypt::DES optionally via CryptX) are documented as
+  build-time-only for v1/v2c use. README points to it.
+
+9.61
+============
++ F3 (first increment): a test suite under t/, run with prove or the new
+  Makefile. Three files to start, covering the two functions with the
+  worst regression history plus a compile guard:
+    00-compile.t        loads every module and compiles fetchconfig.pl;
+                        a model whose optional transport module
+                        (Net::OpenSSH, Net::Telnet, ...) is not installed
+                        is skipped, not failed, so the suite is green on a
+                        host that only has the transports it uses.
+    10-stripansi.t      22 cases for stripansi(): CSI with 1/2/3+
+                        parameters, ?25h/?25l private modes, ESC E and the
+                        other two-byte escapes, NUL and CR, the verbatim
+                        swi11024 prompt sequence, and negatives (brackets
+                        and subscripts in a config line must survive);
+                        plus idempotence.
+    12-backup-filename.t  parse_backup_filename() for every timezone form
+                        (+0200, CEST, -CEST, multi-word Windows, none) and
+                        suffix, malformed names -> (), a dotted dev_id, and
+                        sort_backups_desc() ordering newest-first by PARSED
+                        timestamp across mixed tz forms (never string
+                        order) with unparsable names reported.
+    11-quote.t          29 cases for regexp_quote_keep_bytes() (the
+                        byte-safe prompt quoter that replaced quotemeta):
+                        the escape set incl. space/=/#/>, "." made literal,
+                        UTF-8 bytes preserved unescaped (the "Buro" bug),
+                        and the property that a quoted prompt matches its
+                        own source string; plus escape_brackets() and
+                        dequote_value().
+    14-options.t        26 cases for mask_secrets() (pass/enable/community
+                        masked, case-insensitive, global; the pinned fact
+                        that "password=" is NOT masked), opt_trim(),
+                        dev_option() resolution (device -> model default ->
+                        undef, timeout's 30s fallback) and dev_option_flag()
+                        (on/off/unset, case- and whitespace-insensitive).
+    Run:  prove -I. t/     or     perl Makefile.PL && make test
+    Only core Perl (Test::More, prove) is needed; nothing from CPAN.
+    Suite total (Tier 1): 139 assertions across 5 files.
++ F3 (Tier 2): filesystem tests against a throwaway File::Temp
+  repository built and removed inside each test - self-contained under
+  t/, no network. These need a concrete model for dev_option, so they
+  skip cleanly (skip_all) on a host missing that model's transport
+  module.
+    30-repository.t     17 cases: dump_config() writes the backup at
+                        <repo>/YYYYMM/YYYYMMDD/<dev_id>/<dev_id>.run.<ts>
+                        <tz><suffix> with a terminal newline; refuses an
+                        empty config; validates filename_append_suffix
+                        (must start ".", no "/" or whitespace); timezone=
+                        hide blanks the tz. find_latest() returns the
+                        newest backup by PARSED timestamp across mixed tz
+                        forms and returns undef for no backups / a missing
+                        repository.
+    31-config-equal.t   7 cases: config_equal_ignoring_lines() equal when
+                        only the ignored (volatile) line differs, unequal
+                        on a real difference, stripping wherever the line
+                        appears; a missing file compares unequal so the
+                        newer version is kept.
+    32-tools.t          15 cases: the maintenance predicates dir_is_empty
+                        and _only_entry_is (empty / non-empty / subdir-only
+                        / missing), and safe_rmdir (removes an empty dir,
+                        refuses a non-empty one via rmdir, test mode reports
+                        without removing).
+    Suite total: 178 assertions across 8 files (139 always; +39 Tier 2
+    where the model's transport module is present, as on the AIX host).
++ Makefile.PL: generates a Makefile. "make test" runs the suite; "make"
+  and "make install" are placeholders that print a not-implemented notice
+  (fetchconfig is deployed by hand per the README, not as a CPAN
+  distribution). Written without ExtUtils::MakeMaker, so it has no
+  non-core dependency and behaves the same on AIX and Linux.
+
++ F5 refactor: the repository maintenance and lookup modes moved out of
+  fetchconfig.pl into a new module, fetchconfig/Tools.pm. These are the
+  modes behind -g, -l, -z, -Z, -o, -e, -s and -S, which read (and with
+  -D prune) the repository but never fetch a device: scan_backups,
+  locate_backup, slurp_file, emit_content, retrieve_config,
+  compare_config, list_backups, check_zero_backups,
+  check_zero_backups_all, check_suffix_consistency,
+  scan_repo_for_backup_dirs, check_empty_dirs, check_orphaned_backups
+  and their helpers (configured_repositories, dir_is_empty, safe_rmdir,
+  prune_empty_parents, _only_entry_is) - about 1,075 lines. fetchconfig.pl
+  drops from 1,703 to 630 lines and now holds only option parsing, the
+  fetch-phase driver (sequential and -P), device-table loading and the
+  usage text. No behaviour change: every sub kept its name, arguments
+  and exit codes; the two script globals the modes read ($log and $me)
+  are passed once via fetchconfig::Tools->init(log => ..., me => ...),
+  and the driver's dispatch calls them as fetchconfig::Tools::name(...).
+  The dependency is one-way (Tools calls Detector/Abstract; nothing in
+  Tools calls back into the driver). Verified by running the tree
+  before and after the split side by side: -l, -Z, -e and -e -D
+  (the deleting mode) produce byte-identical output and identical exit
+  codes and side effects on identical repositories.
+  (F2 - turning Detector/Mailer into instances - was evaluated and
+  deliberately NOT done: both are pure singletons with no second-instance
+  use today, and the -P result path relies on Mailer's package state
+  being isolated per fork, which the change would have to re-derive at
+  real risk of a parallel-fetch regression for no current benefit.)
+
 9.60
 ============
 + Documentation: How-To-add-a-model.md and How-To-add-a-model.html, a
@@ -21,6 +162,8 @@
   links, rules, blockquotes; output is byte-identical on both
   interpreter families - verified by forcing the Python-2 escape path).
   Regenerate with: python tools/md2html.py How-To-add-a-model.md.
+  (Run the script by name - "python tools/md2html.py ..."; argv is
+  decoded as UTF-8 so a non-ASCII --title works under Python 2.7.)
 
 + New model MediantSBC.pm (label mediant-sbc) for AudioCodes Mediant
   SBCs / gateways with the current Cisco-style CLI ("Welcome to

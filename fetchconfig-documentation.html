@@ -477,7 +477,7 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.60</span>
+      <span class="pill">v9.62</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
@@ -522,7 +522,7 @@
       <p class="lede">A Perl script for retrieving and backing up the configuration of network devices at scale &mdash; over telnet, SSH or a device&rsquo;s web UI, across dozens of vendors, with change tracking, e-mail summaries, and a repository you can script against.</p>
       <div class="hero-stats">
         <div class="hero-stat"><span class="num">34</span><span class="label">device platforms</span></div>
-        <div class="hero-stat"><span class="num">9.60</span><span class="label">version</span></div>
+        <div class="hero-stat"><span class="num">9.62</span><span class="label">version</span></div>
         <div class="hero-stat"><span class="num">Telnet / SSH / HTTP / SNMP</span><span class="label">transports</span></div>
         <div class="hero-stat"><span class="num">Linux / AIX / Windows</span><span class="label">tested platforms</span></div>
       </div>
@@ -602,13 +602,13 @@ move fetchconfig-0.0 fetchconfig
 
       <section id="modules">
         <h2>Perl module requirements</h2>
-        <p>fetchconfig runs on Perl 5.28 or later. Most of the modules it uses are in the Perl core on those versions and need no separate installation (<code>Text::ParseWords</code>, <code>POSIX</code>, <code>IO::Handle</code>, <code>Time::HiRes</code>, <code>MIME::Base64</code>, <code>FindBin</code>, <code>File::Temp</code>, <code>File::Path</code>, <code>File::Compare</code>). The modules below are <strong>not</strong> in the core and must be installed separately &mdash; but only if you use the devices that need them.</p>
+        <p>fetchconfig runs on Perl 5.26 or later (tested on 5.26, 5.28 and 5.40; see the DEPENDENCIES file for the full module list and core-vs-CPAN status). Most of the modules it uses are in the Perl core on those versions and need no separate installation (<code>Text::ParseWords</code>, <code>POSIX</code>, <code>IO::Handle</code>, <code>Time::HiRes</code>, <code>MIME::Base64</code>, <code>FindBin</code>, <code>File::Temp</code>, <code>File::Path</code>, <code>File::Compare</code>). The modules below are <strong>not</strong> in the core and must be installed separately &mdash; but only if you use the devices that need them.</p>
         <div class="table-wrap">
           <table>
             <thead><tr><th>Module(s)</th><th>Needed for</th></tr></thead>
             <tbody>
               <tr><td><code>Net::Telnet</code></td><td>Every run. Telnet devices, and also driving the pseudo-terminal for all SSH devices &mdash; in practice fetchconfig cannot back up any device without it.</td></tr>
-              <tr><td><code>Net::SMTP</code></td><td>Every run. Ships with most Perl installations (the <em>libnet</em> distribution) but is not in the core. fetchconfig loads its reporting code on every run &mdash; it writes the per-device <a href="#status-file">status file</a> even when no e-mail is configured &mdash; so this must be present regardless. No SMTP connection is made unless an <code>email:</code> line is configured.</td></tr>
+              <tr><td><code>Net::SMTP</code></td><td>Every run. Part of the core <em>libnet</em> distribution (core since Perl 5.7.3), so no separate installation is needed. fetchconfig loads its reporting code on every run &mdash; it writes the per-device <a href="#status-file">status file</a> even when no e-mail is configured &mdash; so this must be present regardless. No SMTP connection is made unless an <code>email:</code> line is configured.</td></tr>
               <tr><td><code>Net::OpenSSH</code></td><td>All SSH-based models: <code>cisco-ios-ssh</code>, <code>cisco-asa-ssh</code>, <code>comware-ssh</code>, <code>procurve-ssh</code>, <code>planet-ssh</code>, <code>aruba-cx-ssh</code> and any other <code>*-ssh</code> model.</td></tr>
               <tr><td><code>LWP::UserAgent</code>, <code>HTTP::Request::Common</code></td><td>The web-UI models <code>tplink-web-sg105e</code> and <code>procurve-web-1700</code> (no CLI). Both come with the <em>libwww-perl</em> distribution.</td></tr>
               <tr><td><code>Net::SNMP</code>, <code>Net::TFTP</code></td><td>The <code>procurve-snmp</code> model (HP ProCurve ProVision, including the 4000M/8000M chassis), which backs up over SNMP + TFTP.</td></tr>

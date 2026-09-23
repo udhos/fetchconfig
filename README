@@ -2,6 +2,9 @@
 # fetchconfig.pl - README
 
 (Developers: How-To-add-a-model.md / .html is the programming manual for
+writing a model; "perl Makefile.PL && make test" (or "prove -I. t/") runs
+the test suite under t/. Perl module requirements (core vs CPAN for
+Perl 5.26/5.28/5.40, by feature) are in the file DEPENDENCIES.
 writing a new device model.)
 #
 

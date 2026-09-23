@@ -1,0 +1,93 @@
+# fetchconfig.pl - Perl module dependencies
+
+Core status is shown for three Perl releases:
+
+  5.26  SLES 15 SP7
+  5.28  AIX 7.2 TL5
+  5.40  current
+
+"core" = ships with that Perl; "CPAN" = must be installed separately.
+None of the CPAN modules below has ever been part of core Perl, and none
+becomes core in 5.40 - the network/web/SNMP transport libraries are CPAN
+in every release. Everything fetchconfig needs that is NOT a transport is
+core in all three releases, unchanged between 5.26 and 5.40.
+
+fetchconfig loads a model's transport module only when that model is used
+(one "use" per model file), so a site installs only what its device types
+require. The base install (telnet models) needs exactly one CPAN module,
+Net::Telnet.
+
+
+## Runtime dependencies by feature
+
+### Base (always) - core except Net::Telnet
+
+  Module                 5.26  5.28  5.40   Used for
+  Net::Telnet            CPAN  CPAN  CPAN   every telnet model (31 models)
+  POSIX                  core  core  core   strftime (timestamps)
+  Text::ParseWords       core  core  core   quoted device-table values
+  File::Path             core  core  core   make_path (repository dirs)
+  File::Compare          core  core  core   default config comparison
+  File::Basename         core  core  core   path handling
+  File::Temp             core  core  core   parallel-fetch temp files
+  FindBin                core  core  core   locate the library tree
+  IO::Handle             core  core  core   autoflush
+  Time::HiRes            core  core  core   prompt_settle_ms (sub-second)
+  Getopt::Long           core  core  core   command-line option parsing
+
+  Net::Telnet in turn uses only core modules (Socket, IO::Socket::INET,
+  Errno, Fcntl).
+
+### E-mail summary (Mailer) - all core
+
+  Net::SMTP              core  core  core   sending the summary mail
+  MIME::Base64           core  core  core   mail encoding
+  (STARTTLS/SSL additionally needs IO::Socket::SSL + Net::SSLeay, CPAN,
+  only when email: tls=starttls|ssl is configured.)
+
+### SSH models (aruba-cx-ssh, nexus-ssh, planet-ssh, cisco-ios-ssh,
+### cisco-asa-ssh, comware-ssh, procurve-ssh, mediant-sbc)
+
+  Net::OpenSSH           CPAN  CPAN  CPAN   SSH transport
+  IO::Pty                CPAN  CPAN  CPAN   pseudo-terminal (Net::OpenSSH dep)
+  (also the "ssh" client binary at runtime; core File::Spec/POSIX/Fcntl.)
+
+### Web-UI models (tplink-web-sg105e, procurve-web-1700)
+
+  LWP::UserAgent         CPAN  CPAN  CPAN   HTTP client
+  HTTP::Request::Common  CPAN  CPAN  CPAN   request construction
+    pulls in (all CPAN): HTTP::Request, HTTP::Response, HTTP::Headers,
+    HTTP::Message, HTTP::Date, HTTP::Cookies, URI, LWP::Protocol, Try::Tiny
+    (HTTP::Tiny is core). HTTPS additionally: LWP::Protocol::https,
+    IO::Socket::SSL, Net::SSLeay (all CPAN).
+
+### SNMP+TFTP model (procurve-snmp)
+
+  Net::SNMP              CPAN  CPAN  CPAN   SNMP (arm the TFTP export)
+  Net::TFTP              CPAN  CPAN  CPAN   fetch the exported file
+    Net::SNMP prerequisites (from its Makefile.PL):
+      Carp, Errno, Exporter, IO::Socket, Math::BigInt, Digest::MD5  - core
+      Crypt::DES >= 2.03    CPAN  } required at BUILD time; loaded at
+      Digest::SHA1 >= 1.02  CPAN  } RUNTIME only for SNMPv3. If procurve-snmp
+      Digest::HMAC >= 1.00  CPAN  } uses SNMP v1/v2c they are never loaded.
+    Note: on some platforms Crypt::DES is satisfied via CryptX (CPAN); the
+    classic Crypt::DES is a self-contained XS module needing a C compiler.
+    Choose whichever is easier to install on the target host.
+
+
+## Development only (not needed to run fetchconfig)
+
+  Test::More / prove     core  core  core   the t/ test suite
+  ExtUtils::MakeMaker     -     -     -      NOT used; Makefile.PL writes
+                                             the Makefile itself (no dep)
+
+  tools/md2html.py is Python (2.7/3.x), unrelated to the Perl runtime.
+
+
+## Summary: minimum CPAN modules to install
+
+  telnet-only site        Net::Telnet
+  + SSH models            Net::OpenSSH, IO::Pty  (+ ssh binary)
+  + web models            LWP::UserAgent stack (libwww-perl, URI, ...)
+  + procurve-snmp         Net::SNMP, Net::TFTP  (+ SNMPv3 crypto if used)
+  + SMTP over TLS         IO::Socket::SSL, Net::SSLeay

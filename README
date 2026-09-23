@@ -1908,13 +1908,14 @@ BACKUP FILE NAMING
 	orders backups ("latest" for changes_only, keep=N expiry, -g/-n/
 	-m, -l, -z/-Z, -s/-S) orders them by the PARSED timestamp
 	YYYYMMDD.HHMMSS rather than by a plain string sort of the whole
-	name, so neither the tz token nor a suffix can disturb the order. Two backups of the same device completed
-	within the same second would get the same name; the second would
-	overwrite the first, and the changes_only comparison would then
-	compare the file with itself. This is an accepted limitation: a
-	real fetch (login, pager, full configuration, logout) essentially
-	never completes in under a second, and scheduled runs are minutes
-	apart. It only shows up in artificial back-to-back test runs.
+	name, so neither the tz token nor a suffix can disturb the order.
+	Two backups of the same device completed within the same second
+	would get the same name; the second would overwrite the first,
+	and the changes_only comparison would then compare the file with
+	itself. This is an accepted limitation: a real fetch (login,
+	pager, full configuration, logout) essentially never completes
+	in under a second, and scheduled runs are minutes apart. It
+	only shows up in artificial back-to-back test runs.
 
 STATUS FILE
 

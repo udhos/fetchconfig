@@ -5,6 +5,43 @@
 9.62
 ====
 
++ Added tools/record-session.pl, a standalone session recorder for
+  capturing a telnet or SSH session with a device as a byte-accurate log,
+  to help write a new model and to gather unit-test fixtures. It connects
+  the way a model does, hands you an interactive session, and writes the
+  stream both directions to a .txt (decoded, direction-marked) and a .hex
+  (offset/hex/ASCII, the PuTTY style this project parses). SSH login is
+  given with -u/-p; telnet login and the enable password are typed live.
+  Secrets are masked at the same length so the .hex stays a faithful
+  fixture: the SSH credentials and any -m token exactly, plus a
+  best-effort set of patterns for hashes and community strings the device
+  prints. Masking is applied on line boundaries, so a secret split across
+  two reads is still caught. The tool warns that output masking is best
+  effort and to review the files before sharing.  Lines are split on CR, LF or CRLF, so a router that ends lines and
+  echoes typed input with a bare CR is recorded (and masked) one line at
+  a time, interleaved in order - not accumulated into a single unmasked
+  block at the end of the session. In the .txt rendering a line's own
+  terminator (CR, LF or CRLF) is removed before control bytes are shown,
+  so a genuine blank line appears blank rather than as "<0d>"; the .hex
+  is unaffected and always holds the complete raw byte stream. For readability the .txt is now rendered through a small ANSI/VT100
+  screen emulator: a menu-driven, cursor-addressed device (HP ProCurve)
+  is shown as the screens the operator saw - a snapshot at each screen
+  clear and at the end - instead of an unreadable escape-code stream,
+  while a line-oriented device (Cisco IOS) renders as a normal scrolling
+  transcript. Typed input appears as "> ..." lines in sequence. The .hex
+  is unchanged and remains the exact byte record for building a model. A screen snapshot is taken both when the device clears the
+  screen and before each typed command, so a device that redraws its
+  prompts in place without a clear (ProCurve: privileged "#" -> operator
+  ">" -> logout "[y/n]?") shows every prompt state; and over SSH the pty
+  is sized to the local terminal so a full-screen device renders within
+  it live.
+  A README.record-session documents the tool. Input typed after a
+  Password:-style prompt (Password:/password#/Password> ...) is masked -
+  input and echo, same length - until Enter, so a telnet login or enable
+  password the tool cannot otherwise know is not left in the .txt/.hex
+  (best effort; review before sharing). record-session.pl gained -V/--version (prints the version - kept in step with fetchconfig, 9.62 - and the copyright/licence); README.record-session now lists the required non-core modules (Net::Telnet always; Net::OpenSSH + IO::Pty for SSH). Typed input is accumulated across keystrokes and shown as whole commands rather than one character per line, the terminal auto-reply to a cursor-position query (ESC[..R) is dropped from the .txt input view (kept in .hex), and long runs of blank rows in an emulated screen are collapsed to a single blank line.
+
+
 + Command-line options are now parsed with Getopt::Long (a core module)
   instead of a hand-written argument loop. The existing single-dash
   option syntax is preserved exactly - short and long options, their

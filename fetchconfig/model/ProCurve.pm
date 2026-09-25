@@ -283,7 +283,7 @@ sub chat_login_telnet {
       {
         $self->log_debug("send login password OK");
       }
-      $ok = $t->print($dev_pass);
+      $ok = $self->print_secret($t, $dev_pass);
       if (!$ok)
       {
         $self->log_error("could not send login password");
@@ -334,7 +334,7 @@ sub chat_login_telnet {
       $self->log_error("login password needed but not provided");
       return undef;
     }
-    $ok = $t->print($dev_pass);
+    $ok = $self->print_secret($t, $dev_pass);
     if (!$ok)
     {
       $self->log_error("could not send login password");
@@ -381,7 +381,7 @@ sub chat_login_telnet {
         $self->log_error("enable password needed but not provided");
         return undef;
       }
-      $ok = $t->print($dev_enable);
+      $ok = $self->print_secret($t, $dev_enable);
       if (!$ok)
       {
         $self->log_error("could not send enable password");

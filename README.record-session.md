@@ -1,0 +1,117 @@
+# record-session.pl - the session capture tool
+
+## What it is
+
+`tools/record-session.pl` is a standalone helper for capturing a telnet or SSH
+session with a network device as a byte-accurate log. Use it when writing a new
+fetchconfig model, and to gather fixtures for the test suite: it records exactly
+what a device sends and what you type, so you can see the prompts, escape
+sequences and command output a model has to handle.
+
+It connects the way a model does - `Net::Telnet` for telnet, `Net::OpenSSH`
+wrapped in `Net::Telnet` for SSH - then hands you a live interactive session and
+writes two files.
+
+## Output files
+
+- **`<base>.hex`** - an offset + hex + ASCII dump of the EXACT bytes, both
+  directions, in the PuTTY "all session output" style. This is the
+  authoritative record you build a model from. Direction is marked `<` (device
+  -> you) and `>` (you -> device).
+- **`<base>.txt`** - a human-readable render. Device output is replayed through
+  a small ANSI/VT100 screen emulator, so a menu-driven, cursor-addressed device
+  (e.g. HP ProCurve) is shown as the SCREENS you saw - not as an unreadable
+  stream of escape codes. A screen snapshot is written when the device clears
+  the screen AND before each command you type, so every prompt state is captured
+  (e.g. ProCurve privileged `#` -> operator `>` -> logout `[y/n]?`). A
+  line-oriented device (Cisco IOS) renders as a normal scrolling transcript.
+  Typed input appears as `> ...` lines.
+
+The `.hex` is the truth; the `.txt` is a readability aid, and its header says so.
+
+## Usage
+
+```
+record-session.pl -h HOST [-t ssh|telnet] [-u USER] [-p PASS]
+                  [-o BASE] [-m SECRET]... [--no-auto-secrets]
+                  [--timeout N]
+```
+
+- `-h, --host HOST` - device hostname or IP (HOST:PORT allowed)
+- `-t, --transport T` - ssh (default) or telnet
+- `-u, --user USER` - SSH login username (SSH only; telnet logs in live at the
+  device prompts)
+- `-p, --password PASS` - SSH login password (SSH only; prompted, no echo, if
+  `-p` is given with no value)
+- `-o, --output BASE` - output basename -> `BASE.txt` and `BASE.hex` (default:
+  `session-<host>-<timestamp>`)
+- `-m, --mask SECRET` - an exact string to mask, repeatable; matched literally
+  so a value may contain commas or semicolons. Use for SNMP communities, the
+  enable password, and any other known secret.
+- `--no-auto-secrets` - do not apply the built-in output patterns
+- `--timeout N` - per-read timeout in seconds (default 30)
+- `--help` - show help
+- `-V, --version` - print version and copyright, then exit
+
+End the session with the device's own `exit`/`logout` or with `Ctrl-]` (as in
+`telnet(1)`). Enter the enable password at the device's own prompt during the
+session.
+
+Examples:
+
+```
+# SSH, credentials on the command line, mask two known secrets:
+record-session.pl -h sw1.example.com -t ssh -u manager \
+                  -m public -m myEnablePass -o sw1-ssh
+
+# Telnet, log in interactively:
+record-session.pl -h sw1.example.com -t telnet -o sw1-telnet
+```
+
+## Masking
+
+All masking is SAME-LENGTH: a secret of N bytes becomes N mask characters, so
+byte offsets and line lengths are preserved and the `.hex` stays a faithful
+fixture.
+
+Masked automatically:
+
+- the SSH `-u`/`-p` values (the tool knows them);
+- every `-m` string, on an exact byte match in either direction;
+- a best-effort set of patterns for secrets the DEVICE prints (Cisco
+  "password 7 ...", "secret 5 ...", "snmp-server community X", keys);
+- the input typed after a "Password:"-style prompt. Because a telnet
+  login/enable password is typed live and often echoed by the device, the tool
+  watches for a prompt ending in `Password:` / `password#` / `Password>` etc.
+  and masks everything - input and echo - until you press Enter.
+
+Masking of what the DEVICE prints, and the password-prompt heuristic, are BEST
+EFFORT and can miss things (an unusual prompt, a hash format not in the pattern
+set). ALWAYS review both files before sharing them or committing them as
+fixtures. The tool prints this reminder when it finishes.
+
+## Notes
+
+- Over SSH the pty is sized to your local terminal (from `stty size`, else
+  80x40) so a full-screen device draws within your terminal during the live
+  session instead of overflowing it. A 40-row device such as the ProCurve 8212zl
+  then renders live the way PuTTY shows it.
+
+- Perl module requirements. Everything the tool uses is part of the Perl core
+  (`Getopt::Long`, `IO::Handle`, `POSIX`, `IO::Select`) EXCEPT the transport
+  modules, which come from CPAN:
+
+  - `Net::Telnet` - required for BOTH transports (telnet directly, and SSH is
+    wrapped in `Net::Telnet`). Always needed.
+  - `Net::OpenSSH` - required for `-t ssh` only; also needs the `ssh` client
+    binary in PATH.
+  - `IO::Pty` - pulled in by `Net::OpenSSH` (pseudo-terminal); needed for
+    `-t ssh`.
+
+  Install, e.g.: `cpan install Net::Telnet Net::OpenSSH` (`IO::Pty` comes in as
+  a `Net::OpenSSH` prerequisite). A telnet-only user needs only `Net::Telnet`.
+  None of these is core in any Perl release, including 5.40; see the top-level
+  DEPENDENCIES file.
+
+- The live terminal shows the device's raw output (so you can navigate menus);
+  the readable, emulated view is in the `.txt`.

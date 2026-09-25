@@ -361,8 +361,155 @@ def _u(value):
     return value
 
 
+def to_text(md):
+    """Render Markdown to a readable plain-text version: strip the inline and
+    block markup, keep the structure (headings underlined, list bullets,
+    fenced code indented, pipe tables as aligned columns). Good enough for a
+    README.foo companion to the README.foo.html, from a single README.foo.md
+    source."""
+    out = []
+    lines = md.replace('\r\n', '\n').split('\n')
+    in_code = False
+    i = 0
+    n = len(lines)
+    while i < n:
+        raw = lines[i]
+        line = raw
+        # fenced code blocks: keep verbatim, indented, drop the fences
+        m = re.match(r'^\s*```', line)
+        if m:
+            in_code = not in_code
+            i += 1
+            continue
+        if in_code:
+            out.append('    ' + line)
+            i += 1
+            continue
+        # pipe table: a row of |...| followed by a |---|---| separator
+        if (line.strip().startswith('|') and i + 1 < n
+                and re.match(r'^\s*\|?[\s:|-]*-{3,}[\s:|-]*\|?\s*$', lines[i + 1])):
+            rows = []
+            header = _split_row(line)
+            i += 2  # skip header and separator
+            while i < n and lines[i].strip().startswith('|'):
+                rows.append(_split_row(lines[i]))
+                i += 1
+            out.extend(_format_table(header, rows))
+            continue
+        # headings: text then an underline of = or -
+        h = re.match(r'^(#{1,6})\s+(.*)$', line)
+        if h:
+            level = len(h.group(1))
+            text = _inline_text(h.group(2))
+            out.append('')
+            out.append(text)
+            out.append(('=' if level <= 2 else '-') * max(3, len(text)))
+            i += 1
+            continue
+        # list items: normalise bullets/numbers, keep indentation
+        li = re.match(r'^(\s*)([-*+]|\d+\.)\s+(.*)$', line)
+        if li:
+            indent, marker, text = li.group(1), li.group(2), li.group(3)
+            bullet = marker if re.match(r'\d+\.', marker) else '-'
+            out.append('%s%s %s' % (indent, bullet, _inline_text(text)))
+            i += 1
+            continue
+        # horizontal rule
+        if re.match(r'^\s*([-*_])\1{2,}\s*$', line):
+            out.append('-' * 60)
+            i += 1
+            continue
+        # blockquote
+        bq = re.match(r'^\s*>\s?(.*)$', line)
+        if bq:
+            out.append('    ' + _inline_text(bq.group(1)))
+            i += 1
+            continue
+        out.append(_inline_text(line))
+        i += 1
+    text = '\n'.join(out)
+    text = re.sub(r'\n{3,}', '\n\n', text)   # collapse blank runs
+    text = _ascii(text)                        # READMEs are US-ASCII
+    return text.lstrip('\n') + '\n'
+
+
+def _split_row(line):
+    """Split a Markdown table row into cell texts (inline markup stripped)."""
+    s = line.strip()
+    s = re.sub(r'^\|', '', s)
+    s = re.sub(r'\|$', '', s)
+    # split on unescaped pipes, then unescape \|
+    cells = re.split(r'(?<!\\)\|', s)
+    return [_inline_text(c.strip().replace('\\|', '|')) for c in cells]
+
+
+def _format_table(header, rows):
+    """Format a table as aligned plain-text columns."""
+    cols = max([len(header)] + [len(r) for r in rows]) if rows else len(header)
+    def pad(r):
+        return r + [''] * (cols - len(r))
+    header = pad(header)
+    rows = [pad(r) for r in rows]
+    widths = [len(header[c]) for c in range(cols)]
+    for r in rows:
+        for c in range(cols):
+            widths[c] = max(widths[c], len(r[c]))
+    def fmt(r):
+        return '  '.join(r[c].ljust(widths[c]) for c in range(cols)).rstrip()
+    out = ['']
+    out.append(fmt(header))
+    out.append('  '.join('-' * widths[c] for c in range(cols)))
+    for r in rows:
+        out.append(fmt(r))
+    out.append('')
+    return out
+
+
+def _ascii(s):
+    """Transliterate the common non-ASCII typographic characters to ASCII so
+    the generated plain-text README stays US-ASCII."""
+    for a, b in ((u'\u2014', ' - '), (u'\u2013', '-'), (u'\u2018', "'"),
+                 (u'\u2019', "'"), (u'\u201c', '"'), (u'\u201d', '"'),
+                 (u'\u2192', '->'), (u'\u2190', '<-'), (u'\u2026', '...'),
+                 (u'\u00a0', ' '), (u'\u00b7', '*')):
+        s = s.replace(a, b)
+    return s
+
+
+def _inline_text(s):
+    """Strip inline Markdown markup for the plain-text render."""
+    s = re.sub(r'`([^`]*)`', r'\1', s)                       # code spans
+    s = re.sub(r'\*\*([^*]+)\*\*', r'\1', s)                 # bold
+    s = re.sub(r'__([^_]+)__', r'\1', s)                     # bold
+    s = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'\1', s)        # italic
+    s = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1 (\2)', s)    # links -> text (url)
+    return s
+
+
+def convert_file(src, want_html=True, want_text=True, title=None):
+    """Convert one .md to .html and/or .txt (companion names)."""
+    with io.open(src, 'r', encoding='utf-8') as f:
+        md = f.read()
+    base = re.sub(r'\.(md|markdown)$', '', src)
+    made = []
+    if want_html:
+        dst = base + '.html'
+        with io.open(dst, 'w', encoding='utf-8') as f:
+            f.write(convert(md, src.split('/')[-1], title))
+        made.append(dst)
+    if want_text:
+        dst = base           # README.foo.md -> README.foo (plain text)
+        if dst == src:       # avoid overwriting the source if no .md suffix
+            dst = base + '.txt'
+        with io.open(dst, 'w', encoding='utf-8') as f:
+            f.write(to_text(md))
+        made.append(dst)
+    return made
+
+
 def main(argv):
     argv = [_u(a) for a in argv]
+    opts = set(a for a in argv[1:] if a.startswith('--'))
     args = [a for a in argv[1:] if not a.startswith('--')]
     title = None
     if '--title' in argv:
@@ -370,17 +517,47 @@ def main(argv):
         if k + 1 < len(argv):
             title = argv[k + 1]
             args = [a for a in args if a != title]
+
+    # --all DIR : convert every *.md under DIR to .html and .txt companions
+    if '--all' in opts:
+        import os
+        root = args[0] if args else '.'
+        found = 0
+        for dirpath, _dirs, files in os.walk(root):
+            for name in sorted(files):
+                if name.endswith('.md') or name.endswith('.markdown'):
+                    src = os.path.join(dirpath, name)
+                    made = convert_file(src,
+                                        want_html='--text-only' not in opts,
+                                        want_text='--html-only' not in opts)
+                    print('%s -> %s' % (src, ', '.join(made)))
+                    found += 1
+        if not found:
+            print('no .md files found under %s' % root, file=sys.stderr)
+            return 1
+        return 0
+
     if not args:
         print('usage: md2html.py input.md [output.html] [--title "Title"]', file=sys.stderr)
+        print('       md2html.py --all DIR [--html-only|--text-only]', file=sys.stderr)
         return 2
+
+    # single-file: keep the historical behaviour (input.md [output.html]);
+    # also honour --text-only / --html-only.
     src = args[0]
-    dst = args[1] if len(args) > 1 else re.sub(r'\.(md|markdown)$', '', src) + '.html'
-    with io.open(src, 'r', encoding='utf-8') as f:
-        md = f.read()
-    html = convert(md, src.split('/')[-1], title)
-    with io.open(dst, 'w', encoding='utf-8') as f:
-        f.write(html)
-    print('%s -> %s' % (src, dst))
+    want_html = '--text-only' not in opts
+    want_text = '--text-only' in opts or '--both' in opts
+    if len(args) > 1 and want_html:
+        # explicit output name given: single html output (historical)
+        dst = args[1]
+        with io.open(src, 'r', encoding='utf-8') as f:
+            md = f.read()
+        with io.open(dst, 'w', encoding='utf-8') as f:
+            f.write(convert(md, src.split('/')[-1], title))
+        print('%s -> %s' % (src, dst))
+        return 0
+    made = convert_file(src, want_html=want_html, want_text=want_text, title=title)
+    print('%s -> %s' % (src, ', '.join(made)))
     return 0
 
 

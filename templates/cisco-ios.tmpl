@@ -1,0 +1,70 @@
+# cisco-ios.tmpl - generic-model template for Cisco IOS / IOS-XE,
+# telnet and SSH, via per-transport entry states.
+#
+# Model of the flow: each state WAITS for the response to the command the
+# PREVIOUS state sent, then sends the next command. So the prompt that a
+# state matches is the prompt produced by the previous command - it is not
+# re-waited-for. SSH lands already-authenticated at the prompt; the ssh
+# entry state matches that first prompt and sends enable straight away.
+
+transport      ssh telnet
+banner_timeout 30
+fetch_timeout  120
+prompt_settle  250
+max_visits     8
+strip_ansi     no
+
+prompt_head    ''
+prompt_tail    '#'
+
+ignore  /^! Last configuration change/
+ignore  /^! NVRAM config last updated/
+ignore  /^ntp clock-period /
+
+# Where the real config starts - drops the echoed "show running-config"
+# command and the "Building configuration..." preamble from the saved file.
+# Where the real config starts - drops the echoed "show running-config"
+# command and the "Building configuration..." / "Current configuration"
+# preamble (and the leading blank), so the saved file starts at the first
+# "!" line like a config backed up directly via TFTP.
+capture_from  /^!/
+
+# ---- SSH entry: already authenticated; match the first prompt, send enable ----
+state_login_ssh
+    expect /(\S+)[>#]$/    -> send "enable"         -> goto enable_pw
+
+# ---- telnet entry: interactive login ----
+state_login_telnet
+    expect /Username: $/   -> send user            -> goto state_password_telnet
+    expect /Password: $/   -> send_secret pass      -> goto after_login
+
+state_password_telnet
+    expect /Password: $/   -> send_secret pass      -> goto after_login
+
+# after telnet login: match the first prompt, send enable
+state after_login
+    expect /(\S+)[>#]$/    -> send "enable"         -> goto enable_pw
+
+# response to "enable": either a Password: prompt or (if already enabled) the # prompt
+state enable_pw
+    expect /Password: $/   -> send_secret enable    -> goto pager
+    expect prompt          -> send "term len 0"      -> goto show
+
+# response to the enable password: the prompt; then send the pager command
+state pager
+    expect prompt          -> send "term len 0"      -> goto show
+
+# response to "term len 0": the prompt; send the show command
+state show
+    expect prompt          -> send "show running-config" -> goto capture
+
+# capture everything until the prompt returns.
+state capture
+    capture_start
+    expect prompt          -> capture_stop           -> goto logout
+
+# We are already at the prompt (capture just matched it), so send "exit"
+# WITHOUT waiting for the prompt again - a standalone send step. This
+# avoids the 30s logout hang.
+state logout
+    send "exit" -> done

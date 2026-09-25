@@ -919,6 +919,45 @@ DEVICE SUPPORT
 	devices to ASCII.
 
 
+TEMPLATE-DRIVEN MODEL (GENERIC)
+
+	Besides the per-device Perl models listed above, fetchconfig has a
+	"generic" model whose device interaction is described by a TEMPLATE
+	file instead of Perl code. A template is a small state machine of
+	expect/send steps with the transport, prompt, timeouts, interrupt
+	screens and ignore-lines as data. For a clean-CLI device this is a
+	short file rather than a ~200-line module, and a family of similar
+	devices can share or clone one template.
+
+	A device selects it in the device table with the model "generic" and
+	a template name, for example:
+
+		generic  sw1  10.0.0.1  model=cisco-ios,transport=ssh,user=...
+
+	This loads templates/cisco-ios.tmpl. transport is ssh or telnet.
+	Templates for Cisco IOS/IOS-XE (both transports) and HP ProCurve
+	(menu/VT100) are provided as worked examples.
+
+	Two companion tools support the workflow: tools/record-session.pl
+	captures a real telnet/SSH session as a byte-accurate log to build a
+	template from, and tools/generate_template.pl scaffolds a template
+	draft from such a capture.
+
+	The generic model and its tools are documented separately:
+
+	  README.generic-model    the generic model and template grammar,
+	                          quick reference
+	  README.template_engine  the full engineering reference: architecture,
+	                          grammar, execution semantics, writing and
+	                          generating templates
+	  README.record-session   the record-session.pl capture tool
+
+	The template parser is production-ready; the execution engine has been
+	verified on Cisco IOS-XE over telnet and SSH and on an HP ProCurve
+	menu switch. Verify a template against the target device before relying
+	on it.
+
+
 TROUBLESHOOTING
 
 	Note: some older SSH implementations (e.g. older HP/Aruba
@@ -1771,6 +1810,73 @@ WEB UI BACKUPS (TP-LINK EASY SMART, PROCURVE 1700)
 	A line-by-line diff between two backups (-m) is possible but
 	not meaningful for these models - it only shows that, not
 	what, changed.
+
+
+	The generic module (GenericTemplate) recognizes the following
+	options. It is the template-driven model (see TEMPLATE-DRIVEN
+	MODEL above and README.generic-model); most of the timing and
+	prompt options below may also be set in the template file, and
+	a device-table option overrides the template value of the same
+	name.
+
+	model		Mandatory. The template to load: templates/<model>.tmpl
+			(e.g. model=cisco-ios). The only option with no
+			template-file equivalent.
+	transport	Which transport to use, "ssh" or "telnet". If omitted,
+			the template's first-listed transport is used.
+	user		Login username. Mandatory for SSH; for telnet it is
+			sent at the device's "Username:" prompt if the
+			template's login sequence uses it.
+	pass		Login password. Mandatory for SSH; for telnet as above.
+	enable		Enable password, if the template enters enable mode.
+	repository	Mandatory. Base directory for saving the config files.
+	keep		Optional. How many backups to keep per device.
+	changes_only	Optional. Only save when the config changed since the
+			last run (honouring the template's "ignore" lines).
+	timeout		Optional, default 30 seconds (see the cisco-ios/
+			cisco-cat section). May be set in the template.
+	fetch_timeout	Optional. Timeout for reading the show output. May be
+			set in the template.
+	banner_timeout	Optional, default 30. Seconds to wait for the first
+			prompt after connecting. May be set in the template.
+	fetch_delay	Optional, default 0. Seconds to pause after connecting
+			before interacting. May be set in the template.
+	prompt_settle	Optional. Prompt settle time in milliseconds. May be
+			set in the template.
+	max_visits	Optional, default 8. Global cap on how many times a
+			template state may be re-entered (bounds self-loops).
+			May be set in the template.
+	strip_ansi	Optional, "yes" or "no" (default no). Strip VT100/ANSI
+			escape sequences from device output. May be set in
+			the template.
+	prompt_head	Optional. Regex matched before the learned hostname
+			when building the prompt pattern. May be set in the
+			template.
+	prompt_tail	Optional, default "#". Regex matched after the learned
+			hostname. May be set in the template.
+	ssh_extra_opts	Optional. Extra options passed to the ssh client
+			(e.g. legacy key-exchange/cipher settings for old
+			switches). May be set in the template.
+	template_dir	Optional. Directory to load the template from. An
+			absolute path, or relative to the current working
+			directory. Defaults to the templates/ directory that
+			ships beside fetchconfig.pl (located regardless of the
+			working directory), so this is only needed to load
+			templates from elsewhere.
+	debug		Optional. debug=on writes a 0600 session log to
+			<repository>/<dev_id>.debug (passwords masked).
+	on_fetch_run	Optional (see the cisco-ios/cisco-cat section).
+	on_fetch_cat	Optional (see the cisco-ios/cisco-cat section).
+	timezone	Optional (see the cisco-ios/cisco-cat section).
+	filename_append_suffix	Optional (see the cisco-ios/cisco-cat
+			section).
+	comment		Optional (see the cisco-ios/cisco-cat section).
+
+	The following are set only in the template file, not on the
+	device line: capture_from (regex marking where the saved config
+	starts) and skip_first (drop the first N captured lines). See
+	README.generic-model for the full template grammar.
+
 
 PROCURVE SNMP BACKUPS
 

@@ -24,6 +24,7 @@ package fetchconfig::model::Detector; # fetchconfig/model/Detector.pm
 use strict;
 use warnings;
 use fetchconfig::Mailer;
+use fetchconfig::model::GenericTemplate;
 use fetchconfig::model::CiscoIOS;
 use fetchconfig::model::CiscoIOSSSH;
 use fetchconfig::model::CiscoCAT;
@@ -425,6 +426,7 @@ sub init {
 
     fetchconfig::Mailer->init($log);
 
+    $class->register(fetchconfig::model::GenericTemplate->new($log));
     $class->register(fetchconfig::model::CiscoIOS->new($log));
     $class->register(fetchconfig::model::CiscoIOSSSH->new($log));
     $class->register(fetchconfig::model::CiscoCAT->new($log));

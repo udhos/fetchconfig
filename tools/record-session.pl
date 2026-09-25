@@ -90,7 +90,7 @@ my $show_version;
 # Kept in step with fetchconfig's version by hand. NOT imported from
 # fetchconfig::Constants, so this tool is self-contained and can be copied
 # and run on its own.
-my $VERSION = '9.62';
+my $VERSION = '9.63';
 
 # Password-prompt masking state. Declared here (before the relay runs) so
 # the value exists when record_raw is first called - a "my" initialiser

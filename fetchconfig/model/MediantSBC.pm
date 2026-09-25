@@ -161,7 +161,7 @@ sub telnet_login {
     }
     $self->log_debug("found password prompt: [Password: ]");
 
-    if (!$t->print($dev_pass)) {
+    if (!$self->print_secret($t, $dev_pass)) {
 	$self->log_error("could not send login password");
 	return 1;
     }
@@ -185,7 +185,7 @@ sub chat_enable {
     }
     $self->log_debug("found enable password prompt: [Password: ]");
 
-    if (!$t->print($dev_enable)) {
+    if (!$self->print_secret($t, $dev_enable)) {
 	$self->log_error("could not send enable password");
 	return 1;
     }

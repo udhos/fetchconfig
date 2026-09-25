@@ -326,6 +326,29 @@ sub secure_debug_file {
 }
 
 #
+# print_secret - send a secret (login/enable password) over the telnet
+# connection WITHOUT letting it reach the debug log. Net::Telnet's dump_log
+# records the session verbatim, so a plain $t->print($password) writes the
+# password in clear text (the file is 0600, but that is not masking). This
+# helper turns dump_log/input_log off around the send, writes a marker, and
+# restores them. Returns whatever $t->print returned. Models that log the
+# session should send passwords with this instead of $t->print($secret).
+#
+sub print_secret {
+    my ($self, $t, $secret) = @_;
+    # Net::Telnet returns "" (not undef) from dump_log/input_log when no log
+    # is set, so test for a real, truthy handle - an empty string is "no log".
+    my $dl = $t->dump_log;   $dl = undef unless (ref($dl) || (defined($dl) && $dl ne '' && $dl ne '0'));
+    my $il = $t->input_log;  $il = undef unless (ref($il) || (defined($il) && $il ne '' && $il ne '0'));
+    $t->dump_log(undef)  if defined $dl;
+    $t->input_log(undef) if defined $il;
+    my $ok = $t->print($secret);
+    if (defined $dl) { print { $dl } "\n# [secret sent - not logged]\n"; $t->dump_log($dl); }
+    $t->input_log($il) if defined $il;
+    return $ok;
+}
+
+#
 # Removes terminal control noise from device output: VT100/ANSI escape
 # sequences, NUL bytes and carriage returns. Used by the models whose
 # devices drive a full-screen or cursor-addressed terminal (ProCurve,

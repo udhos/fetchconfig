@@ -184,6 +184,27 @@ default:	procurve-web-1700	fetch_timeout=120
 default:	procurve-web-1700	repository=/var/fetchconfig/save
 default:	procurve-web-1700	debug=off
 
+# The "generic" model is template-driven: instead of a per-vendor Perl
+# module, the device interaction (login, enable, show command, logout,
+# menu/pager handling, prompt) comes from a template file
+# templates/<model>.tmpl selected with the mandatory model=<name> option.
+# The template supplies the state machine, prompt, timeouts, interrupt
+# screens and ignore-lines; a device-table option of the same name
+# OVERRIDES the template value. transport=ssh|telnet (auto not yet
+# supported). See README.generic-model and templates/cisco-ios.tmpl.
+#
+# NOTE (9.63): the template parser is production-ready, but the execution
+# engine is BETA - verify a template against the real device before
+# relying on it in production.
+default:	generic		user=backup,pass=fran,enable=jose
+default:	generic		timeout=10,keep=5,changes_only=0
+default:	generic		repository=/var/fetchconfig/save
+default:	generic		debug=off
+# template_dir: where to load templates/<model>.tmpl from. Defaults to the
+# templates/ dir shipped beside fetchconfig.pl (found regardless of the
+# working directory); set it only to load templates from elsewhere.
+#default:	generic		template_dir=/etc/fetchconfig/templates
+
 
 # Many devices? Fetch them concurrently: fetchconfig.pl -devices=... -P 20
 # (see README, PARALLEL FETCHING). The device table itself needs no change.
@@ -221,6 +242,16 @@ procurve-snmp	hp4000-sw01	153.3.231.23
 tplink-web-sg105e	tpl-sw01	172.29.200.120
 
 procurve-web-1700	hp1700-sw01	172.29.200.130
+
+# generic (template-driven). model=<name> is MANDATORY and selects
+# templates/<name>.tmpl. transport picks ssh or telnet (from the option
+# here, else the template's first-listed transport). A device-table
+# option overrides the same-named template value (e.g. banner_timeout).
+generic		gen-rtr01	10.6.0.1	model=cisco-ios,transport=telnet
+generic		gen-rtr02	10.6.0.2	model=cisco-ios,transport=ssh,user=svc,pass=secret
+# (model=procurve shown for illustration; only templates/cisco-ios.tmpl
+#  ships in 9.63 - a fetch with a missing template fails with a clear error)
+generic		gen-sw01	10.6.0.3	model=procurve,transport=ssh,banner_timeout=60
 
 terayon-os	cmts-1		10.10.1.1
 terayon-os	cmts-2		10.10.1.2

@@ -477,7 +477,7 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.62</span>
+      <span class="pill">v9.63</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
@@ -504,6 +504,7 @@
       <div class="nav-group">
         <div class="nav-group-label">Reference</div>
         <a href="#device-support">Device support</a>
+        <a href="#template-model">Template model</a>
         <a href="#troubleshooting">Troubleshooting</a>
         <a href="#options">Options reference</a>
         <a href="#security">Security notes</a>
@@ -522,7 +523,7 @@
       <p class="lede">A Perl script for retrieving and backing up the configuration of network devices at scale &mdash; over telnet, SSH or a device&rsquo;s web UI, across dozens of vendors, with change tracking, e-mail summaries, and a repository you can script against.</p>
       <div class="hero-stats">
         <div class="hero-stat"><span class="num">34</span><span class="label">device platforms</span></div>
-        <div class="hero-stat"><span class="num">9.62</span><span class="label">version</span></div>
+        <div class="hero-stat"><span class="num">9.63</span><span class="label">version</span></div>
         <div class="hero-stat"><span class="num">Telnet / SSH / HTTP / SNMP</span><span class="label">transports</span></div>
         <div class="hero-stat"><span class="num">Linux / AIX / Windows</span><span class="label">tested platforms</span></div>
       </div>
@@ -944,8 +945,28 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
         </div>
       </section>
 
-      <section id="troubleshooting">
+      <section id="template-model">
         <div class="section-kicker">10</div>
+        <h2>Template-driven model (generic)</h2>
+        <p class="prose-muted">Describe a device with a template instead of a Perl module.</p>
+        <p>Besides the per-device Perl models, fetchconfig has a <code>generic</code> model whose device interaction is described by a <strong>template</strong> file rather than Perl code. A template is a small state machine of expect/send steps, with the transport, prompt, timeouts, interrupt screens and ignore-lines as data. For a clean-CLI device this is a short file rather than a ~200-line module, and similar devices can share or clone one template.</p>
+        <p>A device selects it in the device table with the model <code>generic</code> and a template name:</p>
+        <pre><code>generic  sw1  10.0.0.1  model=cisco-ios,transport=ssh,user=...</code></pre>
+        <p>This loads <code>templates/cisco-ios.tmpl</code>; <code>transport</code> is <code>ssh</code> or <code>telnet</code>. Templates for Cisco IOS/IOS-XE (both transports) and HP ProCurve (menu/VT100) ship as worked examples. Two companion tools support the workflow: <code>tools/record-session.pl</code> captures a real session as a byte-accurate log to build a template from, and <code>tools/generate_template.pl</code> scaffolds a template draft from such a capture.</p>
+        <div class="callout">
+          <div class="callout-title">Further reading</div>
+          <p>The generic model and its tools are documented separately:</p>
+          <ul>
+            <li><a href="README.generic-model.html">README.generic-model</a> &mdash; the generic model and template grammar (quick reference)</li>
+            <li><a href="README.template_engine.html">README.template_engine</a> &mdash; the full engineering reference: architecture, grammar, execution semantics, writing and generating templates</li>
+            <li><a href="README.record-session.html">README.record-session</a> &mdash; the record-session.pl capture tool</li>
+          </ul>
+        </div>
+        <p class="prose-muted">The template parser is production-ready; the execution engine has been verified on Cisco IOS-XE over telnet and SSH and on an HP ProCurve menu switch. Verify a template against the target device before relying on it.</p>
+      </section>
+
+      <section id="troubleshooting">
+        <div class="section-kicker">11</div>
         <h2>Troubleshooting</h2>
         <div class="callout warn">
           <div class="callout-title">Legacy SSH key exchange</div>
@@ -957,7 +978,7 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
       </section>
 
       <section id="options">
-        <div class="section-kicker">11</div>
+        <div class="section-kicker">12</div>
         <h2>Options reference</h2>
         <p>The modules <code>CiscoIOS</code>, <code>CiscoCAT</code>, <code>CiscoASA</code>, and <code>CiscoPIX</code> recognize the following options; nearly every other model reuses the same set (see the per-model matrix below for exactly which apply).</p>
 
@@ -1061,7 +1082,7 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
       </section>
 
       <section id="status-file">
-        <div class="section-kicker">12</div>
+        <div class="section-kicker">13</div>
         <h2>Status file</h2>
         <p>After every backup attempt fetchconfig writes a small status file next to the backups, at <code>&lt;repository&gt;/&lt;dev_id&gt;.status</code>. It is written for every device and every model, and does <em>not</em> depend on the <code>email:</code> line &mdash; it is a plain repository artifact, meant for external tools (for example a web front-end that reads <code>backup_duration_sec</code> to size a progress spinner). It is overwritten on every run and written atomically, so a reader never sees a half-written file.</p>
         <span class="file-label">&lt;dev_id&gt;.status</span>
@@ -1088,7 +1109,7 @@ backup_changed=changed</code></pre>
       </section>
 
       <section id="procurve-snmp">
-        <div class="section-kicker">13</div>
+        <div class="section-kicker">14</div>
         <h2>ProCurve SNMP backups (ProVision, 4000M/8000M)</h2>
         <p>The older HP ProCurve ProVision chassis (4000M, 8000M) can only be managed remotely through a VT100 menu, which is not usable for scripted backup. They will, however, export a text copy of their configuration over TFTP when told to over SNMP, and that is what <code>procurve-snmp</code> does. It is a transport unlike the other models &mdash; no shell and no web UI, but SNMP plus TFTP &mdash; and so has no <code>user</code>/<code>pass</code>: the credential is the SNMP read-write <code>community</code>.</p>
         <p>An SNMP set arms the switch&rsquo;s TFTP export, the config is fetched from the switch by TFTP, and a second SNMP set disables the export again. That disable always runs, even when the transfer failed, so the switch is never left with its TFTP server open.</p>
@@ -1103,7 +1124,7 @@ backup_changed=changed</code></pre>
       </section>
 
       <section id="tplink">
-        <div class="section-kicker">14</div>
+        <div class="section-kicker">15</div>
         <h2>Web UI backups (TP-Link Easy Smart, ProCurve 1700)</h2>
         <p>Some switches have no CLI at all &mdash; TP-Link Easy Smart switches (TL&#8209;SG105E, TL&#8209;SG105PE and siblings) and the HP ProCurve 1700 series. The <code>tplink-web-sg105e</code> and <code>procurve-web-1700</code> models retrieve the config the same way a browser does on the switch&rsquo;s config backup page: they log in over plain HTTP (the switches offer no HTTPS), download the config file, and log out again. The two models share their HTTP plumbing (<code>AbstractHTTP.pm</code>); the login, download and logout requests are per device, taken from packet captures of real browser sessions.</p>
         <p><strong>TP-Link:</strong> both session mechanisms seen on real devices are handled &mdash; the TL&#8209;SG105E binds the login session to the client&rsquo;s IP address, the TL&#8209;SG105PE v2 uses a session cookie. Either way the switch only allows a limited number of concurrent logins; if it reports the login table as full, the backup of that device is reported as failed rather than forcing another user out.</p>

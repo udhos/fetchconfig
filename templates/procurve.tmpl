@@ -1,0 +1,75 @@
+# procurve.tmpl - HP ProCurve (menu/VT100 firmware) over telnet or SSH.
+#
+# The hard case: a full-screen VT100 CLI. The switch prints "Press any key
+# to continue", may drop into an ASCII menu, and cursor-addresses its
+# prompt (ESC sequences around the hostname). strip_ansi makes the output
+# readable; prompt_head consumes the leading escapes; the interrupt screens
+# dismiss the banners/menus wherever they appear.
+#
+# NOTE: this template is a STARTING POINT derived from captured sessions.
+# The pager command, the exact menu keystrokes and the volatile ignore
+# lines should be confirmed against your own ProCurve firmware before
+# relying on it. See README.generic-model.
+
+transport      ssh telnet
+banner_timeout 45
+fetch_timeout  180
+prompt_settle  500                 # ProCurve needs a longer settle
+max_visits     8
+strip_ansi     yes
+
+# old switches need legacy kex/cipher (matches the ProCurveSSH model)
+ssh_extra_opts 'KexAlgorithms +diffie-hellman-group14-sha1 -HostKeyAlgorithms +ssh-rsa -Ciphers +aes128-cbc'
+
+# the hostname is cursor-drawn; head consumes leading VT100 escapes,
+# tail is the "# " (or "> ") the CLI ends with.
+prompt_head    '(?:\x1b\[[\d;?]*[A-Za-z])*'
+prompt_tail    '# ?'
+
+# screens that can appear at ANY expect while we wait for the prompt
+interrupt /Press any key to continue/          -> send_nolf " "
+interrupt /Do you want to log out \[y\/n\]/    -> send_nolf "y"
+interrupt /Do you want to save current config/ -> send_nolf "y"
+
+# NOTE: the "; J... Configuration Editor" / "; Ver #..." header lines are
+# STATIC (they change only on a firmware upgrade), so they are deliberately
+# NOT ignored - an upgrade is a real change a backup should record. Add an
+# ignore rule only for a line the switch rewrites on its own every read
+# (confirm against your firmware); there may be none.
+
+# ProCurve config starts at the "; ... Configuration Editor" comment (which
+# must be KEPT). This drops only the echoed "show running-config" command and
+# the "Running configuration:" preamble that precede it.
+capture_from  /^;/     # ProCurve config starts at the "; Configuration Editor" line
+
+# ---- SSH entry: authenticated; reach the CLI prompt (may pass a menu) ----
+state_login_ssh
+    expect prompt          -> send "no page"       -> goto show   # already at CLI
+    expect /(\d+)\. Command Line \(CLI\)/ -> send_match -> goto state_login_ssh  # pick CLI by its shown number
+    # (Press any key handled by the global interrupt)
+
+# ---- telnet entry: interactive login, then reach the CLI ----
+state_login_telnet
+    expect /Username: /    -> send user            -> goto state_password_telnet
+    expect /Password: /    -> send_secret pass      -> goto reach_cli
+
+state_password_telnet
+    expect /Password: /    -> send_secret pass      -> goto reach_cli
+
+# after telnet login: land on the CLI, or escape the menu (bounded loop)
+state reach_cli
+    expect prompt          -> send "no page"       -> goto show   # at CLI
+    expect /(\d+)\. Command Line \(CLI\)/ -> send_match -> goto reach_cli  # pick CLI by its shown number
+
+# response to "no page" (pager off) is the prompt; send the show command
+state show
+    expect prompt          -> send "show running-config" -> goto capture
+
+# capture everything until the prompt returns
+state capture
+    capture_start
+    expect prompt          -> capture_stop           -> goto logout
+
+# already at the prompt - send exit without waiting (standalone send)
+state logout
+    send "exit" -> done

@@ -110,7 +110,7 @@ sub chat_login {
 	    return undef;
         }
 
-	$ok = $t->print($dev_pass);
+	$ok = $self->print_secret($t, $dev_pass);
 	if (!$ok) {
 	    $self->log_error("could not send login password");
 	    return undef;
@@ -149,7 +149,7 @@ sub chat_login {
 		return undef;
 	    }
 
-	    $ok = $t->print($dev_enable);
+	    $ok = $self->print_secret($t, $dev_enable);
 	    if (!$ok) {
 		$self->log_error("could not send enable password");
 		return undef;
@@ -179,23 +179,8 @@ sub chat_login {
     $prompt;
 }
 
-sub expect_enable_prompt {
-    my ($self, $t, $prompt, $label) = @_;
-
-    if (!defined($prompt)) {
-	$self->log_error("internal failure: undefined command prompt");
-	return undef;
-    }
-
-    my $enable_prompt_regexp = '/' . $prompt . '# $/';
-
-    my ($prematch, $match) = $t->waitfor(Match => $enable_prompt_regexp);
-    if (!defined($prematch)) {
-	$self->log_error("$label: could not match enable command prompt: $enable_prompt_regexp");
-    }
-
-    ($prematch, $match);
-}
+# expect_enable_prompt: inherited from model::Abstract since 9.59; the step label is passed as its 4th argument.
+sub prompt_tail { '# $' }
 
 sub expect_config_prompt {
     my ($self, $t, $prompt, $label) = @_;
@@ -234,7 +219,7 @@ sub chat_fetch {
     }
 
     my ($prematch, $match);
-    ($prematch, $match) = $self->expect_enable_prompt($t, $prompt, 'fetching-config');
+    ($prematch, $match) = $self->expect_enable_prompt($t, $prompt, undef, 'fetching-config');
     if (!defined($prematch)) {
 	$self->log_error("could not find end of configuration");
 	return 1;
@@ -290,7 +275,7 @@ sub chat_conf_mode_exit {
 	return 1;
     }
 
-    my ($prematch, $match) = $self->expect_enable_prompt($t, $prompt, 'exiting-config-mode');
+    my ($prematch, $match) = $self->expect_enable_prompt($t, $prompt, undef, 'exiting-config-mode');
     if (!defined($prematch)) {
 	$self->log_error("could not find after-config-exit-commmand command prompt");
 	return 1;

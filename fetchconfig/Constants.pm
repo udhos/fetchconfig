@@ -1,5 +1,6 @@
 # fetchconfig - Retrieving configuration for multiple devices
 # Copyright (C) 2007 Everton da Silva Marques
+# Copyright (c) 2026 Rainer Tammer
 #
 # fetchconfig is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,14 +17,14 @@
 # Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
 # MA 02110-1301 USA.
 #
-# $Id: Constants.pm,v 1.17 2012/11/28 14:17:28 evertonm Exp $
+# $Id: Constants.pm,v 9.17 2026/08/25 12:00:00 tammer Exp $
 
 package fetchconfig::Constants; # fetchconfig/Constants.pm
 
 use strict;
 use warnings;
 
-my $version = '0.26';
+my $version = '9.63';
 
 sub version {
     $version;

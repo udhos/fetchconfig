@@ -97,7 +97,7 @@ sub chat_login {
 			return undef;
 		}
 
-		$ok = $t->print($dev_pass);
+		$ok = $self->print_secret($t, $dev_pass);
 		if (!$ok) {
 			$self->log_error("could not send login password");
 			return undef;

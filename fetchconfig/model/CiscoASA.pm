@@ -1,6 +1,7 @@
 # fetchconfig - Retrieving configuration for multiple devices
 # Copyright (C) 2009 rip@devco.net
 # Copyright (C) 2006 Everton da Silva Marques
+# Copyright (c) 2026 Rainer Tammer
 #
 # fetchconfig is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,7 +18,7 @@
 # Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
 # MA 02110-1301 USA.
 #
-# $Id: CiscoASA.pm,v 1.1 2009/01/21 13:22:58 evertonm Exp $
+# $Id: CiscoASA.pm,v 9.1 2026/08/25 12:00:00 tammer Exp $
 
 package fetchconfig::model::CiscoASA; # fetchconfig/model/CiscoASA.pm
 
@@ -37,6 +38,21 @@ sub label {
 }
 
 # "sub new" fully inherited from fetchconfig::model::Abstract
+
+#
+# The ASA rewrites its "!!: Written by <user> at <time> <tz> <weekday>
+# <month> <day> <year>" banner line on every "show run", even when
+# nothing else in the configuration changed. Ignore that one line
+# when deciding whether the configuration actually changed.
+#
+sub config_equal {
+    my ($self, $prev_dir, $prev_file, $curr_dir, $curr_file) = @_;
+
+    $self->log_debug("ignore !!: Written by ...");
+
+    $self->config_equal_ignoring_lines($prev_dir, $prev_file, $curr_dir, $curr_file,
+					qr/^!!: Written by \S+ at /);
+}
 
 sub fetch {
     my ($self, $file, $line_num, $line, $dev_id, $dev_host, $dev_opt_tab) = @_;
@@ -102,7 +118,7 @@ sub chat_login {
 	    return undef;
         }
 
-	$ok = $t->print($dev_pass);
+	$ok = $self->print_secret($t, $dev_pass);
 	if (!$ok) {
 	    $self->log_error("could not send login password");
 	    return undef;
@@ -137,7 +153,7 @@ sub chat_login {
 		return undef;
 	    }
 
-	    $ok = $t->print($dev_enable);
+	    $ok = $self->print_secret($t, $dev_enable);
 	    if (!$ok) {
 		$self->log_error("could not send enable password");
 		return undef;
@@ -167,25 +183,8 @@ sub chat_login {
     $prompt;
 }
 
-sub expect_enable_prompt {
-    my ($self, $t, $prompt) = @_;
-
-    if (!defined($prompt)) {
-	$self->log_error("internal failure: undefined command prompt");
-	return undef;
-    }
-
-    $prompt =~ s/\//\\\//g;
-
-    my $enable_prompt_regexp = '/' . $prompt . '# $/';
-
-    my ($prematch, $match) = $t->waitfor(Match => $enable_prompt_regexp);
-    if (!defined($prematch)) {
-	$self->log_error("could not match enable command prompt: $enable_prompt_regexp");
-    }
-
-    ($prematch, $match);
-}
+# expect_enable_prompt: inherited from model::Abstract since 9.58; this model's device fact is below.
+sub prompt_tail { '# $' }
 
 sub chat_fetch {
     my ($self, $t, $dev_id, $dev_host, $prompt, $fetch_timeout, $show_cmd, $conf_ref) = @_;
@@ -206,7 +205,7 @@ sub chat_fetch {
 	$custom_cmd = ($show_cmd eq 'wrterm') ? 'write term' : $show_cmd;
     }
 
-    if ($self->chat_show_conf($t, 'show run', $custom_cmd)) {
+    if ($self->chat_show_conf($t, 'more system:running-config', $custom_cmd)) {
 	return 1;
     }
 
@@ -273,6 +272,7 @@ sub do_fetch {
 
     my $dev_timeout = $self->dev_option($dev_opt_tab, "timeout");
 
+    # my $t = new Net::Telnet(Errmode => 'return', Timeout => $dev_timeout, Max_buffer_length => 1048576, dump_log => '/tmp/telnet.debug');
     my $t = new Net::Telnet(Errmode => 'return', Timeout => $dev_timeout);
 
     my $ok = $t->open($dev_host);

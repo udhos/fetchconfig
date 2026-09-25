@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fetchconfig Generic Template Engine</title>
+<style>
+:root { --fg:#1f2328; --bg:#ffffff; --muted:#59636e; --line:#d1d9e0; --code:#f6f8fa; --link:#0969da; --accent:#1f6feb; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg:#e6edf3; --bg:#0d1117; --muted:#9198a1; --line:#3d444d; --code:#161b22; --link:#4493f8; --accent:#4493f8; }
+}
+html { -webkit-text-size-adjust: 100%; }
+body { margin:0; background:var(--bg); color:var(--fg);
+  font: 16px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+main { max-width: 900px; margin: 0 auto; padding: 32px 24px 64px; }
+nav.toc { border:1px solid var(--line); border-radius:6px; padding:12px 18px; margin:24px 0 32px; background:var(--code); }
+nav.toc strong { display:block; margin-bottom:6px; }
+nav.toc ul { margin:0; padding-left:18px; }
+nav.toc li { margin:2px 0; }
+h1, h2, h3, h4 { line-height:1.25; margin:1.6em 0 .6em; font-weight:600; }
+h1 { font-size:2em; border-bottom:1px solid var(--line); padding-bottom:.3em; margin-top:0; }
+h2 { font-size:1.5em; border-bottom:1px solid var(--line); padding-bottom:.3em; }
+h3 { font-size:1.2em; }
+h4 { font-size:1em; }
+h2 a.anchor, h3 a.anchor { visibility:hidden; text-decoration:none; color:var(--muted); margin-left:.3em; }
+h2:hover a.anchor, h3:hover a.anchor { visibility:visible; }
+p { margin: 0 0 1em; }
+a { color: var(--link); }
+code { font: 0.9em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  background: var(--code); padding: .15em .35em; border-radius: 4px; }
+pre { background: var(--code); border:1px solid var(--line); border-radius: 6px; padding: 14px 16px; overflow-x: auto; margin: 0 0 1.2em; }
+pre code { background: none; padding: 0; font-size: 0.85em; }
+table { border-collapse: collapse; width: 100%; margin: 0 0 1.2em; display:block; overflow-x:auto; }
+th, td { border: 1px solid var(--line); padding: 6px 12px; vertical-align: top; }
+th { background: var(--code); }
+tr:nth-child(even) td { background: rgba(127,127,127,.06); }
+blockquote { border-left: 4px solid var(--line); margin: 0 0 1em; padding: 0 1em; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+ul, ol { margin: 0 0 1em; padding-left: 2em; }
+li { margin: .2em 0; }
+input[type=checkbox] { margin-right: .4em; }
+footer { color: var(--muted); font-size: .85em; border-top: 1px solid var(--line); margin-top: 3em; padding-top: 1em; }
+</style>
+</head>
+<body>
+<main>
+<nav class="toc"><strong>Contents</strong><ul><li><a href="#1-why-it-exists">1. Why it exists</a></li><li><a href="#2-architecture">2. Architecture</a></li><li><a href="#3-selecting-the-model">3. Selecting the model</a></li><li><a href="#4-template-grammar">4. Template grammar</a></li><ul><li><a href="#41-directives-top-of-file">4.1 Directives (top of file)</a></li><li><a href="#42-trimming-the-saved-config">4.2 Trimming the saved config</a></li><li><a href="#43-global-lists">4.3 Global lists</a></li><li><a href="#44-states">4.4 States</a></li><li><a href="#45-validation">4.5 Validation</a></li></ul><li><a href="#5-execution-semantics">5. Execution semantics</a></li><li><a href="#6-writing-a-template">6. Writing a template</a></li><li><a href="#7-generating-a-template">7. Generating a template</a></li><li><a href="#8-limitations">8. Limitations</a></li></ul></nav>
+<h1 id="fetchconfig-generic-template-engine">fetchconfig Generic Template Engine</h1>
+<p>This document describes the template-driven <strong>generic model</strong> for fetchconfig:
+its architecture, the template grammar, the execution semantics, and how to
+write, test and generate templates. It is written for a software engineer who
+will author templates or work on the engine itself.</p>
+<h2 id="1-why-it-exists">1. Why it exists</h2>
+<p>Historically each device family in fetchconfig is a Perl module under
+<code>fetchconfig/model/</code> (about 150-300 lines) implementing a fixed interaction:
+log in, enter enable mode, disable the pager, send a show command, capture the
+output, log out. The models differ mostly in <em>data</em> - prompt strings, the
+show command, which lines are volatile - not in <em>logic</em>.</p>
+<p>The generic model factors that interaction out as <strong>data</strong>. A device is
+described by a template (<code>templates/&lt;name&gt;.tmpl</code>); the model
+<code>fetchconfig::model::GenericTemplate</code> interprets it. For a clean-CLI device a
+template is a short file instead of a Perl module, and a family of similar
+devices can share or clone one.</p>
+<p>The engine has been verified against Cisco IOS-XE over both telnet and SSH and
+against an HP ProCurve menu/VT100 switch. It is not a full terminal emulator
+and does not aim to replace every hand-written model; a device whose behaviour
+the state machine cannot express still needs Perl (see <em>Limitations</em>).</p>
+<h2 id="2-architecture">2. Architecture</h2>
+<p>Three pieces:</p>
+<ul><li><strong><code>GenericTemplateParser</code></strong> - pure function: parse template text into a structure, validate it, return `{ directives, states, interrupts, ignores, errors }<code>. No I/O, no device. Fully unit-tested (</code>t/40-template-parser.t`).</li><li><strong><code>GenericTemplate</code></strong> (the engine) - a <code>fetchconfig::model::Abstract</code> subclass registered as the model <code>generic</code>. It loads the template for a device, opens the transport (reusing <code>Abstract::ssh_open</code> for SSH), runs the state machine, captures the config, trims it, and hands it to <code>Abstract::dump_config</code>. The fetch pipeline (compare, discard-if-unchanged, expire, record) is inherited unchanged.</li><li><strong><code>tools/generate_template.pl</code></strong> - scaffolds a template <em>draft</em> from a session captured with <code>tools/record-session.pl</code> (see <em>Generating</em>).</li></ul>
+<p>The engine reuses the shared machinery in <code>Abstract</code>: <code>ssh_open</code>,
+<code>wait_for_command_prompt</code>, <code>stripansi</code>, <code>regexp_quote_keep_bytes</code>,
+<code>print_secret</code>, <code>dump_config</code>, <code>config_equal_ignoring_lines</code>. It adds only the
+template interpreter.</p>
+<h2 id="3-selecting-the-model">3. Selecting the model</h2>
+<p>In the device table:</p>
+<pre><code>generic  &lt;dev_id&gt;  &lt;host&gt;  model=&lt;name&gt;,transport=ssh|telnet,&lt;options&gt;</code></pre>
+<ul><li><code>model=&lt;name&gt;</code> is <strong>mandatory</strong>; it loads <code>templates/&lt;name&gt;.tmpl</code>.</li><li><code>transport</code> is <code>ssh</code> or <code>telnet</code> (there is no <code>auto</code> yet). If omitted, the template&#x27;s first-listed transport is used.</li><li>A device-table option <strong>overrides</strong> the same-named template value. This is the standard two-layer resolution (<code>Abstract::dev_option</code>): the template is the model default, the device line is the per-device override.</li></ul>
+<p>All standard options apply: <code>user</code>, <code>pass</code>, <code>enable</code>, <code>repository</code>,
+<code>timeout</code>, <code>keep</code>, <code>changes_only</code>, <code>on_fetch_run</code>, <code>on_fetch_cat</code>,
+<code>timezone</code>, <code>filename_append_suffix</code>, <code>comment</code>, <code>debug</code>.</p>
+<h2 id="4-template-grammar">4. Template grammar</h2>
+<p>A template is line-oriented. <code>#</code> begins a comment <strong>except</strong> inside a
+<code>/regex/</code>, a <code>&quot;double-quoted&quot;</code> or a <code>&#x27;single-quoted&#x27;</code> string. Blank lines are
+ignored.</p>
+<h3 id="41-directives-top-of-file">4.1 Directives (top of file)</h3>
+<p>All optional; defaults in parentheses.</p>
+<table><thead><tr><th style="text-align:left">Directive</th><th style="text-align:left">Meaning</th></tr></thead><tbody><tr><td style="text-align:left"><code>transport ssh telnet</code></td><td style="text-align:left">allowed transports, in preference order</td></tr><tr><td style="text-align:left"><code>banner_timeout N</code></td><td style="text-align:left">seconds to wait for the first prompt (30)</td></tr><tr><td style="text-align:left"><code>fetch_timeout N</code></td><td style="text-align:left">seconds to wait for the show output (base <code>timeout</code>)</td></tr><tr><td style="text-align:left"><code>fetch_delay N</code></td><td style="text-align:left">seconds to pause after connect (0)</td></tr><tr><td style="text-align:left"><code>prompt_settle N</code></td><td style="text-align:left">prompt settle time, ms (Abstract default)</td></tr><tr><td style="text-align:left"><code>max_visits N</code></td><td style="text-align:left">global cap on self-loops (8)</td></tr><tr><td style="text-align:left"><code>strip_ansi yes|no</code></td><td style="text-align:left">strip VT100/ANSI escapes from device output (no)</td></tr><tr><td style="text-align:left"><code>prompt_head &#x27;REGEX&#x27;</code></td><td style="text-align:left">matched before the learned hostname (empty)</td></tr><tr><td style="text-align:left"><code>prompt_tail &#x27;REGEX&#x27;</code></td><td style="text-align:left">matched after it (<code>#</code>)</td></tr><tr><td style="text-align:left"><code>ssh_extra_opts &#x27;STRING&#x27;</code></td><td style="text-align:left">extra ssh client options (legacy crypto)</td></tr></tbody></table>
+<h3 id="42-trimming-the-saved-config">4.2 Trimming the saved config</h3>
+<p>The capture is the text between the show-command send and the next prompt; it
+begins with the device echoing the command and any preamble (&quot;Building
+configuration...&quot;, &quot;Running configuration:&quot;). Trim it with one of:</p>
+<table><thead><tr><th style="text-align:left">Directive</th><th style="text-align:left">Meaning</th></tr></thead><tbody><tr><td style="text-align:left"><code>capture_from /regex/</code></td><td style="text-align:left">start the saved file at the first line matching the regex (keeps that line). Self-adjusting.</td></tr><tr><td style="text-align:left"><code>skip_first N</code></td><td style="text-align:left">drop exactly the first N captured lines (fixed count).</td></tr></tbody></table>
+<p>If both are given, <code>skip_first</code> is applied first, then <code>capture_from</code>. The
+engine logs <code>dropped N leading noise line(s)...</code> and <code>fetched: N lines</code> (the
+count actually saved).</p>
+<p>Example (Cisco, matches a TFTP export):</p>
+<pre><code>capture_from  /^!/</code></pre>
+<h3 id="43-global-lists">4.3 Global lists</h3>
+<p>Checked/applied regardless of state:</p>
+<ul><li><code>interrupt /REGEX/ -&gt; ACTION</code> - a screen that may appear at any prompt wait (a menu, &quot;Press any key&quot;, a &quot;[y/n]?&quot; confirmation). Handled by <code>wait_for_command_prompt</code>.</li><li><code>ignore /REGEX/</code> - a line the device rewrites on its own every read (a timestamp, a re-salted hash). It is removed from <strong>both</strong> files before a <code>changes_only</code> comparison, so it does not cause a spurious backup. Do <strong>not</strong> ignore a line that reflects a real change (e.g. a firmware-version header that changes only on upgrade).</li></ul>
+<h3 id="44-states">4.4 States</h3>
+<p>The engine starts at the reserved entry state for the chosen transport:</p>
+<ul><li><code>state_login_ssh</code> / <code>state_password_ssh</code></li><li><code>state_login_telnet</code> / <code>state_password_telnet</code></li></ul>
+<p>At least one of <code>state_login_ssh</code> / <code>state_login_telnet</code> must exist. SSH is
+already authenticated when the session opens, so its entry state typically just
+matches the prompt; telnet does interactive login. The two paths converge (via
+<code>goto</code>) on the shared states.</p>
+<p>Other states: <code>state &lt;name&gt; [max_visits N]</code>.</p>
+<p>Inside a state:</p>
+<pre><code>expect PATTERN -&gt; ACTION [-&gt; goto STATE | -&gt; done]
+send &quot;text&quot; | send user|pass|enable [-&gt; goto STATE | -&gt; done]
+send_secret pass|enable
+send_nolf &quot;text&quot;
+send_match
+nop
+capture_start
+capture_stop</code></pre>
+<ul><li><code>expect PATTERN</code> waits for <code>PATTERN</code> (a <code>/regex/</code> or the bareword <code>prompt</code>) then performs <code>ACTION</code>. **Multiple <code>expect</code>s in one state are tried in order, first match wins** - order the most specific first.</li><li><code>PATTERN = prompt</code> is the learned prompt: <code>prompt_head</code> + the byte-quoted hostname + <code>prompt_tail</code>, tolerating trailing VT100 escapes. The hostname is learned the first time a <code>prompt</code> expect matches, using a generic <code>(\S+)</code> capture.</li><li>A <strong>standalone <code>send</code></strong> (no preceding <code>expect</code>) sends immediately without waiting for a prompt - used after capture to send <code>exit</code> (the device is already at the prompt).</li><li><code>send_secret</code> sends a password, masked in the debug log (<code>print_secret</code>).</li><li><code>send_nolf</code> sends without a trailing newline (a pager space, a menu key).</li><li><code>send_match</code> sends the captured group <code>$1</code> from the state&#x27;s matching <code>expect</code> regex, as a keystroke - e.g. pick a menu item by its shown number: <code>expect /(\d+)\. Command Line \(CLI\)/ -&gt; send_match</code>. This survives a menu that renumbers its items.</li><li><code>capture_start</code> / <code>capture_stop</code> bracket the config: the saved config is the text captured between the show-command send and the closing prompt.</li></ul>
+<p>A transition is <code>-&gt; goto STATE</code>, <code>-&gt; done</code>, or (for a plain <code>expect</code> with no
+arrow) an implicit re-entry of the same state (&quot;stay&quot;). A state that can
+re-enter itself must be bounded by <code>max_visits</code>.</p>
+<h3 id="45-validation">4.5 Validation</h3>
+<p>The parser rejects a template that could hang or misbehave, at load time:</p>
+<ul><li>an unbounded self-loop (a state that can <code>goto</code> itself with no <code>max_visits</code>)</li><li>a <code>goto</code> to an unknown state</li><li>a missing or duplicated <code>capture_start</code> / <code>capture_stop</code></li><li>an unreachable state (from any transport entry state)</li><li>no transport entry state</li><li>a bad <code>transport</code> value</li></ul>
+<h2 id="5-execution-semantics">5. Execution semantics</h2>
+<p>For each state the engine:</p>
+<ol><li>Applies any <code>capture_start</code> in the state (turns capturing on).</li><li>If the state has a standalone <code>send</code>, performs it and transitions - no wait.</li><li>Otherwise builds one combined <code>waitfor</code> from the state&#x27;s <code>expect</code> patterns (in order) plus the global <code>interrupt</code> patterns, with the state&#x27;s timeout (<code>banner_timeout</code>, or <code>fetch_timeout</code> while capturing).</li><li>On a match, classifies which pattern matched (first wins). An <code>interrupt</code> sends its keystroke and re-enters the state. A <code>prompt</code> learns the hostname on first match. The matched <code>expect</code>&#x27;s <code>ACTION</code> runs, then its transition.</li><li>While capturing, the text before each matched prompt (the <code>prematch</code>) is accumulated, ANSI-stripped if <code>strip_ansi yes</code>.</li><li>On <code>capture_stop</code>, capturing ends and <code>capture_done</code> is set.</li></ol>
+<p>A state that times out logs which patterns it was waiting for. Self-loops are
+bounded by <code>max_visits</code>; there is also an absolute per-fetch step budget.</p>
+<p><strong>Saving.</strong> If capture completed, the config is saved even if a later step
+(e.g. logout) fails - a clean logout is cosmetic, the config is the
+deliverable. After capture, <code>skip_first</code> then <code>capture_from</code> trim the leading
+noise, the dropped and saved counts are logged, and <code>dump_config</code> writes the
+file.</p>
+<p><strong>Security.</strong> With <code>debug=on</code> the telnet session log (<code>dump_log</code>) is written
+0600, and passwords sent via <code>send_secret</code> are kept out of it (<code>print_secret</code>
+disables logging around the send and writes a marker). Masking of secrets the
+<em>device</em> prints (config hashes, SNMP communities) is the operator&#x27;s job via
+<code>ignore</code> or by reviewing the file. This is best effort.</p>
+<h2 id="6-writing-a-template">6. Writing a template</h2>
+<ol><li>Capture a real session with <code>tools/record-session.pl</code> - it produces a byte-accurate <code>.hex</code> and a readable <code>.txt</code> (see <code>README.record-session</code>).</li><li>Either write the template by hand from the <code>.txt</code>/<code>.hex</code>, or scaffold a draft with <code>generate_template.pl</code> (below) and edit it.</li><li>Set <code>transport</code>, the login states, the prompt (<code>prompt_head</code>/<code>prompt_tail</code>), the show command, and the capture markers.</li><li>Add <code>capture_from</code> (or <code>skip_first</code>) so the saved file starts at the real config.</li><li>Add <code>interrupt</code> lines for any menu/banner/confirmation screens, and <code>ignore</code> lines for genuinely volatile config lines (needs two captures minutes apart to identify).</li><li>Test against the device with the generic model; check the saved file and the <code>dropped</code>/<code>fetched</code> log lines.</li></ol>
+<p>See <code>templates/cisco-ios.tmpl</code> (telnet + SSH, clean CLI) and
+<code>templates/procurve.tmpl</code> (menu/VT100, with <code>strip_ansi</code>, interrupts, a
+menu-or-shell branch and <code>send_match</code>) for worked examples.</p>
+<h2 id="7-generating-a-template">7. Generating a template</h2>
+<pre><code>tools/generate_template.pl -f SESSION.hex [-t ssh|telnet] [-o OUT.tmpl]</code></pre>
+<p>It reconstructs the device and input streams from the <code>.hex</code>, infers the
+transport, the prompt (host and tail), whether the device is VT100 (-&gt;
+<code>strip_ansi</code> and an escape-consuming <code>prompt_head</code>), and the show command that
+was typed. It emits an annotated template with <code># TODO</code> markers for the
+judgment calls a single capture cannot reveal: which lines are volatile, the
+pager command, menu handling. **The output is a draft to review and test, not
+a finished template.**</p>
+<h2 id="8-limitations">8. Limitations</h2>
+<ul><li><code>transport=auto</code> is not implemented.</li><li>There is no escape-hatch to a named Perl helper: a device whose behaviour the state machine cannot express still needs a Perl model.</li><li>The prompt learner assumes the prompt is a hostname token followed by <code>prompt_tail</code>; a device with a radically different prompt needs custom <code>prompt_head</code>/<code>prompt_tail</code>.</li><li><code>skip_first</code> is a fixed count; prefer <code>capture_from</code> when the preamble length varies between firmware versions.</li><li>Everything device-facing must be verified on real hardware; a capture shows one session, not every path a device can take.</li></ul>
+<footer>Generated from <code>README.template_engine.md</code> by <code>md2html.py</code>.</footer>
+</main>
+</body>
+</html>

@@ -110,7 +110,7 @@ sub chat_login {
 
     #$self->log_debug("sending password: '$dev_pass'");
 
-    $ok = $t->print($dev_pass);
+    $ok = $self->print_secret($t, $dev_pass);
     if (!$ok) {
 	$self->log_error("could not send login password");
 	return undef;
@@ -131,23 +131,8 @@ sub chat_login {
     $prompt;
 }
 
-sub expect_enable_prompt {
-    my ($self, $t, $prompt) = @_;
-
-    if (!defined($prompt)) {
-	$self->log_error("internal failure: undefined command prompt");
-	return undef;
-    }
-
-    my $enable_prompt_regexp = '/' . $prompt . ' > $/';
-
-    my ($prematch, $match) = $t->waitfor(Match => $enable_prompt_regexp);
-    if (!defined($prematch)) {
-	$self->log_error("could not match enable command prompt: $enable_prompt_regexp");
-    }
-
-    ($prematch, $match);
-}
+# expect_enable_prompt: the private copy that stood here was dead code (never called; the end of the
+# configuration is found by expect_enable_prompt_paging below). Removed in 9.59.
 
 sub expect_enable_prompt_paging {
     my ($self, $t, $prompt, $paging_prompt) = @_;

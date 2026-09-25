@@ -17,3 +17,12 @@ nytprof.out
 /pm_to_blib
 *.o
 *.bs
+device_table
+
+# Python bytecode cache (from tools/md2html.py)
+__pycache__/
+*.pyc
+
+# editor/backup artifacts
+*.bak
+*.orig

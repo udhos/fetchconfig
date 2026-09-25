@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The template-driven &quot;generic&quot; model</title>
+<style>
+:root { --fg:#1f2328; --bg:#ffffff; --muted:#59636e; --line:#d1d9e0; --code:#f6f8fa; --link:#0969da; --accent:#1f6feb; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg:#e6edf3; --bg:#0d1117; --muted:#9198a1; --line:#3d444d; --code:#161b22; --link:#4493f8; --accent:#4493f8; }
+}
+html { -webkit-text-size-adjust: 100%; }
+body { margin:0; background:var(--bg); color:var(--fg);
+  font: 16px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+main { max-width: 900px; margin: 0 auto; padding: 32px 24px 64px; }
+nav.toc { border:1px solid var(--line); border-radius:6px; padding:12px 18px; margin:24px 0 32px; background:var(--code); }
+nav.toc strong { display:block; margin-bottom:6px; }
+nav.toc ul { margin:0; padding-left:18px; }
+nav.toc li { margin:2px 0; }
+h1, h2, h3, h4 { line-height:1.25; margin:1.6em 0 .6em; font-weight:600; }
+h1 { font-size:2em; border-bottom:1px solid var(--line); padding-bottom:.3em; margin-top:0; }
+h2 { font-size:1.5em; border-bottom:1px solid var(--line); padding-bottom:.3em; }
+h3 { font-size:1.2em; }
+h4 { font-size:1em; }
+h2 a.anchor, h3 a.anchor { visibility:hidden; text-decoration:none; color:var(--muted); margin-left:.3em; }
+h2:hover a.anchor, h3:hover a.anchor { visibility:visible; }
+p { margin: 0 0 1em; }
+a { color: var(--link); }
+code { font: 0.9em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  background: var(--code); padding: .15em .35em; border-radius: 4px; }
+pre { background: var(--code); border:1px solid var(--line); border-radius: 6px; padding: 14px 16px; overflow-x: auto; margin: 0 0 1.2em; }
+pre code { background: none; padding: 0; font-size: 0.85em; }
+table { border-collapse: collapse; width: 100%; margin: 0 0 1.2em; display:block; overflow-x:auto; }
+th, td { border: 1px solid var(--line); padding: 6px 12px; vertical-align: top; }
+th { background: var(--code); }
+tr:nth-child(even) td { background: rgba(127,127,127,.06); }
+blockquote { border-left: 4px solid var(--line); margin: 0 0 1em; padding: 0 1em; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+ul, ol { margin: 0 0 1em; padding-left: 2em; }
+li { margin: .2em 0; }
+input[type=checkbox] { margin-right: .4em; }
+footer { color: var(--muted); font-size: .85em; border-top: 1px solid var(--line); margin-top: 3em; padding-top: 1em; }
+</style>
+</head>
+<body>
+<main>
+<nav class="toc"><strong>Contents</strong><ul><li><a href="#what-it-is">What it is</a></li><li><a href="#selecting-it-in-the-device-table">Selecting it in the device table</a></li><li><a href="#template-grammar">Template grammar</a></li><li><a href="#example">Example</a></li><li><a href="#security">Security</a></li><li><a href="#limitations">Limitations</a></li></ul></nav>
+<h1 id="the-template-driven-generic-model">The template-driven &quot;generic&quot; model</h1>
+<h2 id="what-it-is">What it is</h2>
+<p>The &quot;generic&quot; model lets a device be backed up from a TEMPLATE file instead of a
+hand-written Perl model. The template describes the login/enable/show/logout
+interaction as a small state machine; the generic model interprets it. For a
+clean-CLI device (Cisco IOS and similar) a template is a short data file rather
+than ~200 lines of Perl.</p>
+<p>STATUS: the template parser/validator is production-ready and unit tested. The
+execution engine has been verified against a real Cisco IOS-XE over both telnet
+and SSH. Menu/VT100 devices (ProCurve) are supported by the format
+(<code>strip_ansi</code>, interrupt screens, multi-expect branches) but need their own
+template and real-device testing.</p>
+<p>For the full engineering reference (architecture, execution semantics, writing
+and generating templates) see <code>README.template_engine</code>. This file is the quick
+reference.</p>
+<h2 id="selecting-it-in-the-device-table">Selecting it in the device table</h2>
+<pre><code>generic  &lt;dev_id&gt;  &lt;host&gt;  model=&lt;name&gt;,transport=ssh|telnet,&lt;options&gt;</code></pre>
+<ul><li><code>model=&lt;name&gt;</code> is MANDATORY: it loads <code>templates/&lt;name&gt;.tmpl</code>.</li><li><code>transport</code> is ssh or telnet (auto is not yet supported); if omitted, the template&#x27;s first-listed transport is used.</li><li>A device-table option OVERRIDES the same-named value in the template (e.g. <code>banner_timeout=60</code> on the device line beats the template&#x27;s).</li></ul>
+<p>Standard options work as for any model: <code>user</code>, <code>pass</code>, <code>enable</code>, <code>repository</code>,
+<code>timeout</code>, <code>keep</code>, <code>changes_only</code>, <code>on_fetch_run</code>, <code>on_fetch_cat</code>, <code>timezone</code>,
+<code>filename_append_suffix</code>, <code>comment</code>, <code>debug</code>.</p>
+<h2 id="template-grammar">Template grammar</h2>
+<p>Lines: <code>#</code> begins a comment (except inside a <code>/regex/</code> or a <code>&quot;string&quot;</code> or
+<code>&#x27;string&#x27;</code>); blank lines are ignored.</p>
+<p>Top-of-file directives (all optional; defaults in parentheses):</p>
+<table><thead><tr><th style="text-align:left">Directive</th><th style="text-align:left">Meaning</th></tr></thead><tbody><tr><td style="text-align:left"><code>transport ssh telnet</code></td><td style="text-align:left">allowed transports, in preference order</td></tr><tr><td style="text-align:left"><code>banner_timeout N</code></td><td style="text-align:left">wait for the first prompt, seconds (30)</td></tr><tr><td style="text-align:left"><code>fetch_timeout N</code></td><td style="text-align:left">wait for the show output, seconds (base)</td></tr><tr><td style="text-align:left"><code>fetch_delay N</code></td><td style="text-align:left">pause after connect, seconds (0)</td></tr><tr><td style="text-align:left"><code>prompt_settle N</code></td><td style="text-align:left">prompt settle time, ms (Abstract default)</td></tr><tr><td style="text-align:left"><code>max_visits N</code></td><td style="text-align:left">global self-loop cap (8)</td></tr><tr><td style="text-align:left"><code>strip_ansi yes|no</code></td><td style="text-align:left">strip VT100 escapes from output (no)</td></tr><tr><td style="text-align:left"><code>prompt_head &#x27;REGEX&#x27;</code></td><td style="text-align:left">matched before the learned hostname (empty)</td></tr><tr><td style="text-align:left"><code>prompt_tail &#x27;REGEX&#x27;</code></td><td style="text-align:left">matched after it (<code>#</code>)</td></tr><tr><td style="text-align:left"><code>ssh_extra_opts &#x27;STRING&#x27;</code></td><td style="text-align:left">extra ssh options (legacy crypto)</td></tr><tr><td style="text-align:left"><code>capture_from /REGEX/</code></td><td style="text-align:left">start the saved config at the first matching line</td></tr><tr><td style="text-align:left"><code>skip_first N</code></td><td style="text-align:left">drop the first N captured lines</td></tr></tbody></table>
+<p>Global (checked in every state):</p>
+<ul><li><code>interrupt /REGEX/ -&gt; &lt;action&gt;</code> - a screen that can appear anywhere (menu, &quot;Press any key&quot;, &quot;[y/n]?&quot;).</li><li><code>ignore /REGEX/</code> - a volatile config line to ignore when comparing backups.</li></ul>
+<p>States. The engine starts at the reserved entry state for the chosen transport:</p>
+<ul><li><code>state_login_ssh</code> / <code>state_password_ssh</code> - SSH is already authenticated, so these usually just match the prompt.</li><li><code>state_login_telnet</code> / <code>state_password_telnet</code> - telnet does interactive login here.</li></ul>
+<p>At least one of <code>state_login_ssh</code> / <code>state_login_telnet</code> must be present.</p>
+<p>Other states: <code>state &lt;name&gt; [max_visits N]</code>.</p>
+<p>Inside a state:</p>
+<ul><li><code>expect PATTERN -&gt; ACTION [-&gt; goto STATE | -&gt; done]</code> - <code>PATTERN</code> is <code>/regex/</code> or the bareword <code>prompt</code> (the learned prompt: <code>prompt_head</code> + quoted hostname + <code>prompt_tail</code>). Multiple expects in one state are tried in order, FIRST MATCH WINS - order the most specific first. A self-loop (goto the same state) must be bounded by <code>max_visits</code>.</li><li><code>send &quot;text&quot;</code> | <code>send user|pass|enable</code> - send WITH newline. As a standalone step (no preceding expect) it sends immediately, without waiting for a prompt<ul><li>used after capture to send <code>exit</code>.</li></ul></li><li><code>send_secret pass|enable</code> - send, masked in the debug log.</li><li><code>send_nolf &quot;text&quot;</code> - send WITHOUT newline (pager space, menu key).</li><li><code>send_match</code> - send the captured group <code>$1</code> from the expect regex, as a keystroke (pick a menu item by its shown number).</li><li><code>nop</code> - do nothing.</li><li><code>capture_start</code> / <code>capture_stop</code> - bracket the config; capture is the text between the show-command send and the next prompt.</li></ul>
+<p>A template must contain exactly one <code>capture_start</code> and one <code>capture_stop</code>. The
+validator (run at load time) rejects: an unbounded self-loop, a goto to an
+unknown state, a missing/duplicate capture marker, an unreachable state, a
+missing transport entry state, a bad transport.</p>
+<h2 id="example">Example</h2>
+<p>See <code>templates/cisco-ios.tmpl</code> (telnet + SSH) and, for a menu/VT100 device,
+<code>templates/procurve.tmpl</code>.</p>
+<h2 id="security">Security</h2>
+<p>With <code>debug=on</code> the session debug log masks the passwords sent via <code>send_secret</code>
+(the shared <code>print_secret</code> helper turns <code>dump_log</code> off around the send). Masking
+of secrets the DEVICE prints (config hashes, SNMP communities) relies on
+<code>ignore</code>/<code>-m</code> as usual - review a debug log before sharing it. The debug file is
+0600.</p>
+<h2 id="limitations">Limitations</h2>
+<ul><li><code>transport=auto</code> is not implemented (use ssh or telnet).</li><li>There is no escape-hatch to a named Perl helper yet: a device whose behaviour the state machine cannot express still needs a Perl model.</li><li><code>generate_template.pl</code> scaffolds a template from a captured <code>.hex</code> but its output is a DRAFT to review, not a finished model.</li></ul>
+<footer>Generated from <code>README.generic-model.md</code> by <code>md2html.py</code>.</footer>
+</main>
+</body>
+</html>

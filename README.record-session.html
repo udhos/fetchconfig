@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>record-session.pl - the session capture tool</title>
+<style>
+:root { --fg:#1f2328; --bg:#ffffff; --muted:#59636e; --line:#d1d9e0; --code:#f6f8fa; --link:#0969da; --accent:#1f6feb; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg:#e6edf3; --bg:#0d1117; --muted:#9198a1; --line:#3d444d; --code:#161b22; --link:#4493f8; --accent:#4493f8; }
+}
+html { -webkit-text-size-adjust: 100%; }
+body { margin:0; background:var(--bg); color:var(--fg);
+  font: 16px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+main { max-width: 900px; margin: 0 auto; padding: 32px 24px 64px; }
+nav.toc { border:1px solid var(--line); border-radius:6px; padding:12px 18px; margin:24px 0 32px; background:var(--code); }
+nav.toc strong { display:block; margin-bottom:6px; }
+nav.toc ul { margin:0; padding-left:18px; }
+nav.toc li { margin:2px 0; }
+h1, h2, h3, h4 { line-height:1.25; margin:1.6em 0 .6em; font-weight:600; }
+h1 { font-size:2em; border-bottom:1px solid var(--line); padding-bottom:.3em; margin-top:0; }
+h2 { font-size:1.5em; border-bottom:1px solid var(--line); padding-bottom:.3em; }
+h3 { font-size:1.2em; }
+h4 { font-size:1em; }
+h2 a.anchor, h3 a.anchor { visibility:hidden; text-decoration:none; color:var(--muted); margin-left:.3em; }
+h2:hover a.anchor, h3:hover a.anchor { visibility:visible; }
+p { margin: 0 0 1em; }
+a { color: var(--link); }
+code { font: 0.9em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  background: var(--code); padding: .15em .35em; border-radius: 4px; }
+pre { background: var(--code); border:1px solid var(--line); border-radius: 6px; padding: 14px 16px; overflow-x: auto; margin: 0 0 1.2em; }
+pre code { background: none; padding: 0; font-size: 0.85em; }
+table { border-collapse: collapse; width: 100%; margin: 0 0 1.2em; display:block; overflow-x:auto; }
+th, td { border: 1px solid var(--line); padding: 6px 12px; vertical-align: top; }
+th { background: var(--code); }
+tr:nth-child(even) td { background: rgba(127,127,127,.06); }
+blockquote { border-left: 4px solid var(--line); margin: 0 0 1em; padding: 0 1em; color: var(--muted); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+ul, ol { margin: 0 0 1em; padding-left: 2em; }
+li { margin: .2em 0; }
+input[type=checkbox] { margin-right: .4em; }
+footer { color: var(--muted); font-size: .85em; border-top: 1px solid var(--line); margin-top: 3em; padding-top: 1em; }
+</style>
+</head>
+<body>
+<main>
+<nav class="toc"><strong>Contents</strong><ul><li><a href="#what-it-is">What it is</a></li><li><a href="#output-files">Output files</a></li><li><a href="#usage">Usage</a></li><li><a href="#masking">Masking</a></li><li><a href="#notes">Notes</a></li></ul></nav>
+<h1 id="record-sessionpl---the-session-capture-tool">record-session.pl - the session capture tool</h1>
+<h2 id="what-it-is">What it is</h2>
+<p><code>tools/record-session.pl</code> is a standalone helper for capturing a telnet or SSH
+session with a network device as a byte-accurate log. Use it when writing a new
+fetchconfig model, and to gather fixtures for the test suite: it records exactly
+what a device sends and what you type, so you can see the prompts, escape
+sequences and command output a model has to handle.</p>
+<p>It connects the way a model does - <code>Net::Telnet</code> for telnet, <code>Net::OpenSSH</code>
+wrapped in <code>Net::Telnet</code> for SSH - then hands you a live interactive session and
+writes two files.</p>
+<h2 id="output-files">Output files</h2>
+<ul><li><strong><code>&lt;base&gt;.hex</code></strong> - an offset + hex + ASCII dump of the EXACT bytes, both directions, in the PuTTY &quot;all session output&quot; style. This is the authoritative record you build a model from. Direction is marked <code>&lt;</code> (device -&gt; you) and <code>&gt;</code> (you -&gt; device).</li><li><strong><code>&lt;base&gt;.txt</code></strong> - a human-readable render. Device output is replayed through a small ANSI/VT100 screen emulator, so a menu-driven, cursor-addressed device (e.g. HP ProCurve) is shown as the SCREENS you saw - not as an unreadable stream of escape codes. A screen snapshot is written when the device clears the screen AND before each command you type, so every prompt state is captured (e.g. ProCurve privileged <code>#</code> -&gt; operator <code>&gt;</code> -&gt; logout <code>[y/n]?</code>). A line-oriented device (Cisco IOS) renders as a normal scrolling transcript. Typed input appears as <code>&gt; ...</code> lines.</li></ul>
+<p>The <code>.hex</code> is the truth; the <code>.txt</code> is a readability aid, and its header says so.</p>
+<h2 id="usage">Usage</h2>
+<pre><code>record-session.pl -h HOST [-t ssh|telnet] [-u USER] [-p PASS]
+                  [-o BASE] [-m SECRET]... [--no-auto-secrets]
+                  [--timeout N]</code></pre>
+<ul><li><code>-h, --host HOST</code> - device hostname or IP (HOST:PORT allowed)</li><li><code>-t, --transport T</code> - ssh (default) or telnet</li><li><code>-u, --user USER</code> - SSH login username (SSH only; telnet logs in live at the device prompts)</li><li><code>-p, --password PASS</code> - SSH login password (SSH only; prompted, no echo, if <code>-p</code> is given with no value)</li><li><code>-o, --output BASE</code> - output basename -&gt; <code>BASE.txt</code> and <code>BASE.hex</code> (default: <code>session-&lt;host&gt;-&lt;timestamp&gt;</code>)</li><li><code>-m, --mask SECRET</code> - an exact string to mask, repeatable; matched literally so a value may contain commas or semicolons. Use for SNMP communities, the enable password, and any other known secret.</li><li><code>--no-auto-secrets</code> - do not apply the built-in output patterns</li><li><code>--timeout N</code> - per-read timeout in seconds (default 30)</li><li><code>--help</code> - show help</li><li><code>-V, --version</code> - print version and copyright, then exit</li></ul>
+<p>End the session with the device&#x27;s own <code>exit</code>/<code>logout</code> or with <code>Ctrl-]</code> (as in
+<code>telnet(1)</code>). Enter the enable password at the device&#x27;s own prompt during the
+session.</p>
+<p>Examples:</p>
+<pre><code># SSH, credentials on the command line, mask two known secrets:
+record-session.pl -h sw1.example.com -t ssh -u manager \
+                  -m public -m myEnablePass -o sw1-ssh
+
+# Telnet, log in interactively:
+record-session.pl -h sw1.example.com -t telnet -o sw1-telnet</code></pre>
+<h2 id="masking">Masking</h2>
+<p>All masking is SAME-LENGTH: a secret of N bytes becomes N mask characters, so
+byte offsets and line lengths are preserved and the <code>.hex</code> stays a faithful
+fixture.</p>
+<p>Masked automatically:</p>
+<ul><li>the SSH <code>-u</code>/<code>-p</code> values (the tool knows them);</li><li>every <code>-m</code> string, on an exact byte match in either direction;</li><li>a best-effort set of patterns for secrets the DEVICE prints (Cisco &quot;password 7 ...&quot;, &quot;secret 5 ...&quot;, &quot;snmp-server community X&quot;, keys);</li><li>the input typed after a &quot;Password:&quot;-style prompt. Because a telnet login/enable password is typed live and often echoed by the device, the tool watches for a prompt ending in <code>Password:</code> / <code>password#</code> / <code>Password&gt;</code> etc. and masks everything - input and echo - until you press Enter.</li></ul>
+<p>Masking of what the DEVICE prints, and the password-prompt heuristic, are BEST
+EFFORT and can miss things (an unusual prompt, a hash format not in the pattern
+set). ALWAYS review both files before sharing them or committing them as
+fixtures. The tool prints this reminder when it finishes.</p>
+<h2 id="notes">Notes</h2>
+<ul><li>Over SSH the pty is sized to your local terminal (from <code>stty size</code>, else 80x40) so a full-screen device draws within your terminal during the live session instead of overflowing it. A 40-row device such as the ProCurve 8212zl then renders live the way PuTTY shows it.</li></ul>
+<ul><li>Perl module requirements. Everything the tool uses is part of the Perl core (<code>Getopt::Long</code>, <code>IO::Handle</code>, <code>POSIX</code>, <code>IO::Select</code>) EXCEPT the transport modules, which come from CPAN:</li></ul>
+<ul><li><code>Net::Telnet</code> - required for BOTH transports (telnet directly, and SSH is wrapped in <code>Net::Telnet</code>). Always needed.</li><li><code>Net::OpenSSH</code> - required for <code>-t ssh</code> only; also needs the <code>ssh</code> client binary in PATH.</li><li><code>IO::Pty</code> - pulled in by <code>Net::OpenSSH</code> (pseudo-terminal); needed for <code>-t ssh</code>.</li></ul>
+<p>  Install, e.g.: <code>cpan install Net::Telnet Net::OpenSSH</code> (<code>IO::Pty</code> comes in as
+  a <code>Net::OpenSSH</code> prerequisite). A telnet-only user needs only <code>Net::Telnet</code>.
+  None of these is core in any Perl release, including 5.40; see the top-level
+  DEPENDENCIES file.</p>
+<ul><li>The live terminal shows the device&#x27;s raw output (so you can navigate menus); the readable, emulated view is in the <code>.txt</code>.</li></ul>
+<footer>Generated from <code>README.record-session.md</code> by <code>md2html.py</code>.</footer>
+</main>
+</body>
+</html>

@@ -1,5 +1,10 @@
+########################################################################
+# We are looking for testes of this improved version.                  #
+# This version should be config compatible                             # 
+########################################################################
 #
 # fetchconfig.pl - README
+#
 
 (Developers: How-To-add-a-model.md / .html is the programming manual for
 writing a model; "perl Makefile.PL && make test" (or "prove -I. t/") runs

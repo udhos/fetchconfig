@@ -4,7 +4,6 @@
 ########################################################################
 #
 # fetchconfig.pl - README
-#
 
 (Developers: How-To-add-a-model.md / .html is the programming manual for
 writing a model; "perl Makefile.PL && make test" (or "prove -I. t/") runs

@@ -200,6 +200,9 @@ default:	generic		user=backup,pass=fran,enable=jose
 default:	generic		timeout=10,keep=5,changes_only=0
 default:	generic		repository=/var/fetchconfig/save
 default:	generic		debug=off
+# model= may be set here too, so generic devices sharing one template
+# need not each repeat it; a device line can still override it.
+#default:	generic		model=cisco-ios
 # template_dir: where to load templates/<model>.tmpl from. Defaults to the
 # templates/ dir shipped beside fetchconfig.pl (found regardless of the
 # working directory); set it only to load templates from elsewhere.

@@ -939,6 +939,89 @@ sub check_empty_dirs {
     exit($rc);
 }
 
+sub list_templates {
+    my ($out_file) = @_;
+    $log->debug("list templates");
+    my @dev_ids = fetchconfig::model::Detector->device_ids;
+
+    # Collect the template directories to scan. Always include the default
+    # templates/ directory shipped beside fetchconfig.pl (via FindBin), so
+    # -t works on any device table - even one with no generic devices. Then
+    # add every distinct template_dir a loaded device configures.
+    my %dir_seen;
+    my @dirs;
+
+    require FindBin;
+    my $default_dir = "$FindBin::Bin/templates";
+    if (!$dir_seen{$default_dir}++) { push @dirs, $default_dir; }
+
+    # A "default: generic template_dir=..." line sets template_dir on the
+    # generic MODEL's defaults (not on a device), so read it from the model
+    # itself. This is the common case: template_dir configured once via a
+    # default: line, with the actual generic devices inheriting it.
+    my $generic = fetchconfig::model::Detector->model_by_label('generic');
+    if (defined($generic)) {
+        my $dopt = $generic->{default_options};
+        if (ref($dopt) eq 'HASH') {
+            my $dir = $dopt->{template_dir};
+            if (defined($dir) && $dir ne '' && !$dir_seen{$dir}++) {
+                push @dirs, $dir;
+            }
+        }
+    }
+
+    foreach my $dev_id (@dev_ids) {
+	my $info = fetchconfig::model::Detector->device_info($dev_id);
+	next unless defined($info);
+	my $mod         = $info->{model};
+	my $dev_opt_tab = $info->{dev_opt_tab};
+	# an explicit template_dir= on the device line; the generic model's
+	# default is already covered by $default_dir above.
+	my $dir = $mod->dev_option($dev_opt_tab, "template_dir");
+	next unless defined($dir) && $dir ne '';
+	next if $dir_seen{$dir}++;
+	push @dirs, $dir;
+    }
+
+    # Report the directories being scanned (numbered), for diagnosis.
+    {
+	my $i = 0;
+	for my $dir (@dirs) { ++$i; $log->debug("$i. template dir: $dir"); }
+    }
+
+    # Scan the directories for *.tmpl, collect unique template names.
+    my %tmpl_seen;
+    my @names;
+    foreach my $dir (@dirs) {
+	next unless -d $dir;
+	local *TDIR;
+	next unless opendir(TDIR, $dir);
+	my @files = readdir(TDIR);
+	closedir(TDIR);
+	foreach my $f (@files) {
+	    next unless $f =~ /^(.+)\.tmpl$/;
+	    my $name = $1;
+	    next if $tmpl_seen{$name}++;
+	    push @names, $name;
+	}
+    }
+    @names = sort @names;
+
+    my $out = '';
+    my $i = 0;
+    foreach my $name (@names) {
+	++$i;
+	$out .= "$i $name\n";
+    }
+    my $summary = @names
+	? "found " . scalar(@names) . " template(s) in " . scalar(@dirs) . " directory/directories"
+	: "no templates found in " . scalar(@dirs) . " directory/directories";
+    if (@names) { $log->debug($summary); } else { $log->info($summary); }
+    emit_content('ALL', $out, $out_file,
+		 "listing of " . scalar(@names) . " template(s)", $summary);
+    exit(@names ? 0 : 1);
+}
+
 sub check_orphaned_backups {
     my ($out_file, $delete, $test) = @_;
 
@@ -991,6 +1074,7 @@ sub check_orphaned_backups {
 
     my $orphan_dirs     = 0;
     my $orphan_files    = 0;
+    my $orphan_sidecars = 0;   # orphaned .status / .debug files at a repo root
     my $delete_failures = 0;
 
     foreach my $name (sort keys %found) {
@@ -1074,24 +1158,62 @@ sub check_orphaned_backups {
 	}
     }
 
+    # Orphaned side files. A device's .status and .debug files live at the
+    # repository ROOT as <dev_id>.status / <dev_id>.debug (not inside the
+    # dated device directory that holds the .run.* backups), so the scan
+    # above never sees them. Sweep each repository root for <name>.status
+    # and <name>.debug whose <name> is not a currently loaded device, so a
+    # decommissioned device does not leave a stale status entry or - more
+    # importantly - a credential-bearing .debug file behind. Reported
+    # always; deleted only under -D, by exact name (never a wildcard), each
+    # file individually, honouring -T.
+    foreach my $repo (@repos) {
+	local *RDIR;
+	next unless opendir(RDIR, $repo);
+	my @entries = readdir(RDIR);
+	closedir(RDIR);
+	foreach my $entry (sort @entries) {
+	    next if $entry =~ /^\./;
+	    next unless $entry =~ /^(.+)\.(status|debug)$/;
+	    my ($name) = ($1);
+	    next if $known_dev_id{$name};   # belongs to a loaded device
+	    my $full = "$repo/$entry";
+	    next unless -f $full;
+	    my $size = (stat($full))[7];
+	    $size = 0 unless defined($size);
+	    ++$orphan_sidecars;
+	    $out .= sprintf("%s\t%d\t%d\t%s\n", $name, 1, $size, $full);
+	    next unless $delete;
+	    if ($test) {
+		$log->info("would delete: rm $full");
+		next;
+	    }
+	    $log->info("deleting: rm $full");
+	    if (!unlink($full)) {
+		$log->error("could not delete file: $full: $!");
+		++$delete_failures;
+	    }
+	}
+    }
+
     my $nrepos = scalar(@repos);
     my $summary;
     if ($delete) {
 	if ($test) {
-	    $summary = "(-T) checked $nrepos repository/repositories, found $orphan_dirs orphaned device dir(s)/$orphan_files backup file(s) - showing delete commands only, nothing deleted";
+	    $summary = "(-T) checked $nrepos repository/repositories, found $orphan_dirs orphaned device dir(s)/$orphan_files backup file(s) and $orphan_sidecars orphaned status/debug file(s) - showing delete commands only, nothing deleted";
 	    $log->info($summary);
 	}
 	elsif ($delete_failures > 0) {
-	    $summary = "checked $nrepos repository/repositories, found $orphan_dirs orphaned device dir(s), $delete_failures failed to delete";
+	    $summary = "checked $nrepos repository/repositories, found $orphan_dirs orphaned device dir(s) and $orphan_sidecars orphaned status/debug file(s), $delete_failures failed to delete";
 	    $log->error($summary);
 	}
 	else {
-	    $summary = "checked $nrepos repository/repositories, found $orphan_dirs orphaned device dir(s), all deleted";
+	    $summary = "checked $nrepos repository/repositories, found $orphan_dirs orphaned device dir(s) and $orphan_sidecars orphaned status/debug file(s), all deleted";
 	    $log->info($summary);
 	}
     }
-    elsif ($orphan_dirs > 0) {
-	$summary = "checked $nrepos repository/repositories, found $orphan_dirs orphaned device dir(s)/$orphan_files backup file(s)";
+    elsif ($orphan_dirs > 0 || $orphan_sidecars > 0) {
+	$summary = "checked $nrepos repository/repositories, found $orphan_dirs orphaned device dir(s)/$orphan_files backup file(s) and $orphan_sidecars orphaned status/debug file(s)";
 	$log->debug($summary);
     }
     else {
@@ -1100,9 +1222,9 @@ sub check_orphaned_backups {
     }
 
     emit_content('ALL', $out, $out_file,
-		 "listing of $orphan_dirs orphaned device dir(s) ($orphan_files backup file(s) total)", $summary);
+		 "listing of $orphan_dirs orphaned device dir(s) ($orphan_files backup file(s)) and $orphan_sidecars orphaned status/debug file(s)", $summary);
 
-    exit(($delete && !$test) ? ($delete_failures > 0 ? 1 : 0) : ($orphan_dirs > 0 ? 1 : 0));
+    exit(($delete && !$test) ? ($delete_failures > 0 ? 1 : 0) : (($orphan_dirs > 0 || $orphan_sidecars > 0) ? 1 : 0));
 }
 
 1;

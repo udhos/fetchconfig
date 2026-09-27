@@ -109,6 +109,13 @@ of secrets the DEVICE prints (config hashes, SNMP communities) relies on
 `ignore`/`-m` as usual - review a debug log before sharing it. The debug file is
 0600.
 
+Note that the debug-log masking does NOT make a backup safe to share: the SAVED
+CONFIG itself contains the device's credentials - and not always hashed. SNMP
+communities and some routing/VPN keys (BGP, OSPF, RADIUS/TACACS, IPsec
+pre-shared keys) are stored in cleartext, and Cisco "type 7" passwords are
+trivially reversible. Treat every backup as sensitive and restrict the
+repository directory, regardless of the debug setting.
+
 ## Limitations
 
 - `transport=auto` is not implemented (use ssh or telnet).

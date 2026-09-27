@@ -7,8 +7,10 @@
 
 (Developers: How-To-add-a-model.md / .html is the programming manual for
 writing a model; "perl Makefile.PL && make test" (or "prove -I. t/") runs
-the test suite under t/. Perl module requirements (core vs CPAN for
-Perl 5.26/5.28/5.40, by feature) are in the file DEPENDENCIES.
+the test suite under t/, and "make doc" regenerates the .md-derived docs
+(README.*, How-To-add-a-model) via tools/md2html.py. Perl module
+requirements (core vs CPAN for Perl 5.26/5.28/5.40, by feature) are in the
+file DEPENDENCIES.
 writing a new device model.)
 #
 
@@ -349,7 +351,7 @@ EMBEDDING DEVICE TABLE INTO COMMAND LINE
 	Example:
 	/path/to/fetchconfig.pl -line="default: tellabs-msr user=backup,pass=s&cr&t,timeout=10,keep=5,changes_only=0,fetch_timeout=1200,filename_append_suffix=.txt,repository=/path/to/repo" -line="tellabs-msr lab-router 10.0.0.1"
 
-RETRIEVING A PREVIOUSLY BACKED UP CONFIG
+RETRIEVING A STORED CONFIG, AND COMMAND-LINE OPTIONS
 
 	In addition to fetching configuration from devices,
 	fetchconfig.pl can also retrieve a configuration file
@@ -360,6 +362,11 @@ RETRIEVING A PREVIOUSLY BACKED UP CONFIG
 	config of a device to stdout, comparing today's config
 	against yesterday's, or pulling out an older backup by
 	its position in the history.
+
+	The examples below walk through retrieval and the related
+	repository-maintenance modes; the full command-line option
+	reference, grouped by purpose, follows at the end of this
+	section under "COMMAND-LINE OPTIONS (reference)".
 
 	1. Retrieve the latest (most recent) backup for a device,
         printing it to stdout:
@@ -435,6 +442,16 @@ RETRIEVING A PREVIOUSLY BACKED UP CONFIG
         by a device no longer in the table won't be found this way,
         since there's nothing left to read that path from.
 
+	Besides the dated backup directories, "-o" also lists a
+        removed device's <dev_id>.status and <dev_id>.debug files,
+        which live at the repository root (not inside the dated
+        directory). They are reported as single-file entries, and
+        with "-D" they are deleted along with the orphaned backups.
+        This matters for the .debug file in particular: it can hold
+        credentials (see SECURITY NOTES), so orphan cleanup removes
+        a decommissioned device's debug log rather than leaving it
+        behind.
+
 	To actually delete what "-o" found, add "-D". Since this is
         destructive, preview it first by also adding "-T" -- with
         "-T", the delete commands are only logged (to stderr), not
@@ -504,8 +521,16 @@ RETRIEVING A PREVIOUSLY BACKED UP CONFIG
 	options (model, repository, etc.) are resolved from the
 	device table -- the device itself is NOT contacted.
 
-	Retrieval command-line flags:
+	COMMAND-LINE OPTIONS (reference)
 
+	The options below are grouped by purpose. The retrieval
+	options read back a stored config (the examples above show
+	them in use); the housekeeping options check or clean the
+	repository; the template options work with the generic model;
+	and the generic options apply anywhere.
+
+	Retrieval options
+	-----------------
 	-g dev_id	Switches fetchconfig.pl to retrieval mode
                         for dev_id, instead of fetching configuration
                         from every device in the device table(s).
@@ -521,6 +546,26 @@ RETRIEVING A PREVIOUSLY BACKED UP CONFIG
                         <number> is exactly what "-n"/"-m" expect.
                         Mutually exclusive with "-g", "-z", "-Z" and "-o".
 
+	-n N		Optional. Selects which backup to retrieve,
+                        counting from the most recent:
+                        N=1 the latest (most recent) backup [default]
+                        N=2 the backup before that
+                        N=3 the backup before that, and so on.
+                        If omitted, N=1 is assumed.
+
+	-m M		Optional. Enables compare mode: instead of
+                        printing backup N, fetchconfig.pl prints a
+                        "diff" between backup M and backup N (M being
+                        the older one, N being the newer one). M is
+                        counted the same way as N (1=latest, 2=next
+                        most recent, ...), and requires "-g".
+                        M must be numerically higher than N (i.e.
+                        M must refer to an older backup than N);
+                        otherwise fetchconfig.pl reports an error
+                        and exits without comparing anything.
+
+	Housekeeping options
+	--------------------
 	-z dev_id	Switches fetchconfig.pl to zero-byte check
                         mode for dev_id: scans every backup on file,
                         newest first, and prints only the ones that
@@ -581,43 +626,6 @@ RETRIEVING A PREVIOUSLY BACKED UP CONFIG
                         path from. Mutually exclusive with "-g",
                         "-l", "-z" and "-Z".
 
-	-D		Requires "-o" or "-e". With "-o": also DELETES every orphaned
-                        device directory "-o" finds, not just lists
-                        it. The tab-separated listing (stdout/"-f")
-                        is unchanged; what's deleted (or, with "-T",
-                        would be deleted) is logged separately (to
-                        stderr): each backup file is deleted
-                        individually by its exact name (never a
-                        wildcard, never "rm -rf"/"rmdir /s"), logged
-                        as "rm <file>", followed by "rmdir <path>"
-                        for the now-empty directory. No shell command
-                        is actually spawned - deletion uses Perl's
-                        own unlink()/rmdir() directly; the logged
-                        lines are for your benefit, not literally
-                        executed. rmdir() only succeeds on a directory
-                        that's genuinely empty, so anything left
-                        behind unexpectedly (a file this scan didn't
-                        account for) makes that directory's removal
-                        fail loudly instead of being swept away
-                        regardless. A repository root itself (as
-                        opposed to an orphaned device directory under
-                        it) is never deleted, even if something
-                        unexpected made it look like a match.
-                        fetchconfig.pl exits with status 1 if any
-                        deletion failed, 0 if nothing needed deleting
-                        or everything found was deleted successfully.
-
-	-T		Requires "-D". Preview mode for both "-o -D" and
-                        "-e -D": logs the delete commands "-D" would
-                        run (see above) without actually deleting
-                        anything. Exit status with "-T" is the same as
-                        the plain check - "-o": 1 if anything orphaned
-                        was found; "-e": 1 if any empty directory was
-                        found; 0 otherwise - since "-T" doesn't attempt
-                        any deletion to succeed or fail. Use it before a
-                        bare "-o -D" or "-e -D" to see what would be
-                        removed first.
-
 	-e		Switches fetchconfig.pl to empty-directory check
                         mode: scans every "repository=" path configured
                         by a loaded device for empty directories in the
@@ -655,6 +663,43 @@ RETRIEVING A PREVIOUSLY BACKED UP CONFIG
                         status is 1 if any rmdir failed, 0 otherwise.
                         "-e -D -T" reports "would delete: rmdir <path>"
                         for each directory and deletes nothing.
+
+	-D		Requires "-o" or "-e". With "-o": also DELETES every orphaned
+                        device directory "-o" finds, not just lists
+                        it. The tab-separated listing (stdout/"-f")
+                        is unchanged; what's deleted (or, with "-T",
+                        would be deleted) is logged separately (to
+                        stderr): each backup file is deleted
+                        individually by its exact name (never a
+                        wildcard, never "rm -rf"/"rmdir /s"), logged
+                        as "rm <file>", followed by "rmdir <path>"
+                        for the now-empty directory. No shell command
+                        is actually spawned - deletion uses Perl's
+                        own unlink()/rmdir() directly; the logged
+                        lines are for your benefit, not literally
+                        executed. rmdir() only succeeds on a directory
+                        that's genuinely empty, so anything left
+                        behind unexpectedly (a file this scan didn't
+                        account for) makes that directory's removal
+                        fail loudly instead of being swept away
+                        regardless. A repository root itself (as
+                        opposed to an orphaned device directory under
+                        it) is never deleted, even if something
+                        unexpected made it look like a match.
+                        fetchconfig.pl exits with status 1 if any
+                        deletion failed, 0 if nothing needed deleting
+                        or everything found was deleted successfully.
+
+	-T		Requires "-D". Preview mode for both "-o -D" and
+                        "-e -D": logs the delete commands "-D" would
+                        run (see above) without actually deleting
+                        anything. Exit status with "-T" is the same as
+                        the plain check - "-o": 1 if anything orphaned
+                        was found; "-e": 1 if any empty directory was
+                        found; 0 otherwise - since "-T" doesn't attempt
+                        any deletion to succeed or fail. Use it before a
+                        bare "-o -D" or "-e -D" to see what would be
+                        removed first.
 
 	-s dev_id	Switches fetchconfig.pl to suffix-consistency
                         check mode for dev_id: checks that all of the
@@ -729,30 +774,51 @@ RETRIEVING A PREVIOUSLY BACKED UP CONFIG
                         any suffix following a real tz token are
                         unambiguous.
 
-	-n N		Optional. Selects which backup to retrieve,
-                        counting from the most recent:
-                        N=1 the latest (most recent) backup [default]
-                        N=2 the backup before that
-                        N=3 the backup before that, and so on.
-                        If omitted, N=1 is assumed.
+	Template options (generic model)
+	--------------------------------
+	-t, --list-template
+                        Lists the generic-model templates available to
+                        the loaded devices: scans the default templates/
+                        directory and every template_dir= a loaded device
+                        (or a "default: generic" line) configures, and
+                        prints the unique template names, numbered, one
+                        per line. Each scanned directory is logged as
+                        "N. template dir: <path>". Exit status is 0 if any
+                        template is found, 1 if none. Honours "-f".
+                        (See TEMPLATE-DRIVEN MODEL above.)
 
-	-m M		Optional. Enables compare mode: instead of
-                        printing backup N, fetchconfig.pl prints a
-                        "diff" between backup M and backup N (M being
-                        the older one, N being the newer one). M is
-                        counted the same way as N (1=latest, 2=next
-                        most recent, ...), and requires "-g".
-                        M must be numerically higher than N (i.e.
-                        M must refer to an older backup than N);
-                        otherwise fetchconfig.pl reports an error
-                        and exits without comparing anything.
+	--check-template PATH
+                        Structurally checks the generic-model template at
+                        PATH (grammar plus the load-time validator: self-
+                        loops, goto targets, capture markers, reachability,
+                        transport entry) and exits. PATH must be the FULL
+                        path to the .tmpl file - a bare template name is
+                        not resolved, because the same name can exist in
+                        different template_dir directories. Needs no device
+                        table. Prints "ok" or the errors; exits 0 ok, 1
+                        errors, 2 file problem. STRUCTURAL check only - it
+                        does not verify the template against a real device.
+                        Does NOT honour "-f" (result goes to the log).
 
+	Fetching options
+	----------------
+	-P N		Fetches with N concurrent worker processes
+                        (default 1 = sequential, device-table order, live
+                        output). With N>1 each device's output is buffered
+                        and shown as one uninterrupted block when it
+                        finishes, in completion order. Fetching only - not
+                        combinable with any of the retrieval/housekeeping/
+                        template listing modes. See PARALLEL FETCHING below.
+
+	Output option
+	-------------
 	-f file		Optional. Writes the RESULT DATA to "file" instead
                         of printing it to stdout: the retrieved config
                         (with "-g"), the diff (with "-m"), or the
                         listing rows (with "-l", "-z", "-Z", "-o", "-s",
-                        "-S"). The file is created/overwritten as
-                        needed.
+                        "-S", "-t"). The file is created/overwritten as
+                        needed. It does NOT apply to "--check-template",
+                        whose ok/error result is written to the log only.
 
                         The file receives ONLY that data - never the
                         screen output. All "info:"/"debug:"/"error:"
@@ -781,6 +847,13 @@ RETRIEVING A PREVIOUSLY BACKED UP CONFIG
                         listings (e.g. fetchconfig-web): skip lines that
                         start with "#". Before 9.55 a check that found
                         nothing produced a 0-byte file.
+
+	Generic options
+	---------------
+	-v, --version	Prints just the program version to stdout (one
+                        line, e.g. "9.64") and exits with status 0.
+                        Nothing else is written, so it is safe for a
+                        script to parse.
 
 	-?, -h, --help	Prints the usage/help text to stdout and exits
                         with status 0. (Before 9.55, "-?" was treated as
@@ -961,6 +1034,31 @@ TEMPLATE-DRIVEN MODEL (GENERIC)
 	menu switch. Verify a template against the target device before relying
 	on it.
 
+	A template can be structurally checked without a device:
+
+	./fetchconfig.pl --check-template templates/cisco-ios.tmpl
+
+	The argument must be the FULL PATH to the .tmpl file - a bare
+	template name is not resolved, because the same name can exist
+	in different template_dir directories.
+
+	This runs the grammar and the load-time validator (self-loops,
+	goto targets, capture markers, reachability, transport entry)
+	and prints "ok" or the errors; it exits 0 on ok, 1 on errors,
+	2 on a file problem, and needs no device table. This is a
+	STRUCTURAL check only - a template that passes may still need
+	adjusting against the real device (prompts, show command,
+	capture markers).
+
+	To list the templates available to the loaded devices:
+
+	./fetchconfig.pl -devices=device_table -t
+
+	"-t" (or "--list-template") scans every template_dir= a
+	loaded device configures, plus the default template directory,
+	and prints the template names it finds, numbered, one per
+	line. It exits 0 if any template is found, 1 if none.
+
 
 TROUBLESHOOTING
 
@@ -981,7 +1079,76 @@ TROUBLESHOOTING
 	---[/etc/ssh_config]------------------------------
 
 
-OPTIONS
+DEVICE OPTIONS
+
+	The generic module (GenericTemplate) recognizes the following
+	options. It is the template-driven model (see TEMPLATE-DRIVEN
+	MODEL above and README.generic-model); most of the timing and
+	prompt options below may also be set in the template file, and
+	a device-table option overrides the template value of the same
+	name.
+
+	model		Mandatory. The template to load: templates/<model>.tmpl
+			(e.g. model=cisco-ios). The only option with no
+			template-file equivalent. Like any option it may be
+			set on a "default: generic" line, so all generic
+			devices sharing one template need not repeat it - a
+			device line can still override it (e.g. one device on
+			model=procurve while the default is model=cisco-ios).
+	transport	Which transport to use, "ssh" or "telnet". If omitted,
+			the template's first-listed transport is used.
+	user		Login username. Mandatory for SSH; for telnet it is
+			sent at the device's "Username:" prompt if the
+			template's login sequence uses it.
+	pass		Login password. Mandatory for SSH; for telnet as above.
+	enable		Enable password, if the template enters enable mode.
+	repository	Mandatory. Base directory for saving the config files.
+	keep		Optional. How many backups to keep per device.
+	changes_only	Optional. Only save when the config changed since the
+			last run (honouring the template's "ignore" lines).
+	timeout		Optional, default 30 seconds (see the cisco-ios/
+			cisco-cat section). May be set in the template.
+	fetch_timeout	Optional. Timeout for reading the show output. May be
+			set in the template.
+	banner_timeout	Optional, default 30. Seconds to wait for the first
+			prompt after connecting. May be set in the template.
+	fetch_delay	Optional, default 0. Seconds to pause after connecting
+			before interacting. May be set in the template.
+	prompt_settle	Optional. Prompt settle time in milliseconds. May be
+			set in the template.
+	max_visits	Optional, default 8. Global cap on how many times a
+			template state may be re-entered (bounds self-loops).
+			May be set in the template.
+	strip_ansi	Optional, "yes" or "no" (default no). Strip VT100/ANSI
+			escape sequences from device output. May be set in
+			the template.
+	prompt_head	Optional. Regex matched before the learned hostname
+			when building the prompt pattern. May be set in the
+			template.
+	prompt_tail	Optional, default "#". Regex matched after the learned
+			hostname. May be set in the template.
+	ssh_extra_opts	Optional. Extra options passed to the ssh client
+			(e.g. legacy key-exchange/cipher settings for old
+			switches). May be set in the template.
+	template_dir	Optional. Directory to load the template from. An
+			absolute path, or relative to the current working
+			directory. Defaults to the templates/ directory that
+			ships beside fetchconfig.pl (located regardless of the
+			working directory), so this is only needed to load
+			templates from elsewhere.
+	debug		Optional. debug=on writes a 0600 session log to
+			<repository>/<dev_id>.debug (passwords masked).
+	on_fetch_run	Optional (see the cisco-ios/cisco-cat section).
+	on_fetch_cat	Optional (see the cisco-ios/cisco-cat section).
+	timezone	Optional (see the cisco-ios/cisco-cat section).
+	filename_append_suffix	Optional (see the cisco-ios/cisco-cat
+			section).
+	comment		Optional (see the cisco-ios/cisco-cat section).
+
+	The following are set only in the template file, not on the
+	device line: capture_from (regex marking where the saved config
+	starts) and skip_first (drop the first N captured lines). See
+	README.generic-model for the full template grammar.
 
 	The cisco-ios, cisco-cat, cisco-asa and cisco-pix modules
 	(CiscoIOS, CiscoCAT, CiscoASA and CiscoPIX) recognize the
@@ -1815,73 +1982,6 @@ WEB UI BACKUPS (TP-LINK EASY SMART, PROCURVE 1700)
 	not meaningful for these models - it only shows that, not
 	what, changed.
 
-
-	The generic module (GenericTemplate) recognizes the following
-	options. It is the template-driven model (see TEMPLATE-DRIVEN
-	MODEL above and README.generic-model); most of the timing and
-	prompt options below may also be set in the template file, and
-	a device-table option overrides the template value of the same
-	name.
-
-	model		Mandatory. The template to load: templates/<model>.tmpl
-			(e.g. model=cisco-ios). The only option with no
-			template-file equivalent.
-	transport	Which transport to use, "ssh" or "telnet". If omitted,
-			the template's first-listed transport is used.
-	user		Login username. Mandatory for SSH; for telnet it is
-			sent at the device's "Username:" prompt if the
-			template's login sequence uses it.
-	pass		Login password. Mandatory for SSH; for telnet as above.
-	enable		Enable password, if the template enters enable mode.
-	repository	Mandatory. Base directory for saving the config files.
-	keep		Optional. How many backups to keep per device.
-	changes_only	Optional. Only save when the config changed since the
-			last run (honouring the template's "ignore" lines).
-	timeout		Optional, default 30 seconds (see the cisco-ios/
-			cisco-cat section). May be set in the template.
-	fetch_timeout	Optional. Timeout for reading the show output. May be
-			set in the template.
-	banner_timeout	Optional, default 30. Seconds to wait for the first
-			prompt after connecting. May be set in the template.
-	fetch_delay	Optional, default 0. Seconds to pause after connecting
-			before interacting. May be set in the template.
-	prompt_settle	Optional. Prompt settle time in milliseconds. May be
-			set in the template.
-	max_visits	Optional, default 8. Global cap on how many times a
-			template state may be re-entered (bounds self-loops).
-			May be set in the template.
-	strip_ansi	Optional, "yes" or "no" (default no). Strip VT100/ANSI
-			escape sequences from device output. May be set in
-			the template.
-	prompt_head	Optional. Regex matched before the learned hostname
-			when building the prompt pattern. May be set in the
-			template.
-	prompt_tail	Optional, default "#". Regex matched after the learned
-			hostname. May be set in the template.
-	ssh_extra_opts	Optional. Extra options passed to the ssh client
-			(e.g. legacy key-exchange/cipher settings for old
-			switches). May be set in the template.
-	template_dir	Optional. Directory to load the template from. An
-			absolute path, or relative to the current working
-			directory. Defaults to the templates/ directory that
-			ships beside fetchconfig.pl (located regardless of the
-			working directory), so this is only needed to load
-			templates from elsewhere.
-	debug		Optional. debug=on writes a 0600 session log to
-			<repository>/<dev_id>.debug (passwords masked).
-	on_fetch_run	Optional (see the cisco-ios/cisco-cat section).
-	on_fetch_cat	Optional (see the cisco-ios/cisco-cat section).
-	timezone	Optional (see the cisco-ios/cisco-cat section).
-	filename_append_suffix	Optional (see the cisco-ios/cisco-cat
-			section).
-	comment		Optional (see the cisco-ios/cisco-cat section).
-
-	The following are set only in the template file, not on the
-	device line: capture_from (regex marking where the saved config
-	starts) and skip_first (drop the first N captured lines). See
-	README.generic-model for the full template grammar.
-
-
 PROCURVE SNMP BACKUPS
 
 	The older HP ProCurve ProVision chassis (4000M, 8000M) can only
@@ -1977,9 +2077,12 @@ SECURITY NOTES
 	umask. Still: only enable debug=on while troubleshooting, and
 	delete the .debug file afterwards. Backups and the .status file
 	are created with the process umask (typically 0644); the backups
-	do contain configuration secrets (SNMP communities, password
-	hashes), so restrict the repository directory itself if the host
-	is shared.
+	do contain configuration secrets - and not always hashed: SNMP
+	communities and some routing/VPN keys (BGP, OSPF, RADIUS/TACACS,
+	IPsec pre-shared keys) are stored in cleartext, and Cisco "type
+	7" passwords are trivially reversible. Restrict the repository
+	directory itself if the host is shared, and treat every backup
+	as sensitive.
 
 	SSH host keys are not verified. The SSH models connect with
 	StrictHostKeyChecking=no and UserKnownHostsFile=/dev/null, i.e.
@@ -2005,7 +2108,7 @@ BACKUP FILE NAMING
 
 	Backups are named <dev_id>.run.YYYYMMDD.HHMMSS[<tz>][<suffix>],
 	where <suffix> is the optional filename_append_suffix (must start
-	with a "."; see the OPTIONS section), i.e. with one-second
+	with a "."; see the DEVICE OPTIONS section), i.e. with one-second
 	resolution.
 
 	<tz> is whatever strftime produced on the backup host and so

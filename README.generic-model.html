@@ -92,6 +92,12 @@ missing transport entry state, a bad transport.</p>
 of secrets the DEVICE prints (config hashes, SNMP communities) relies on
 <code>ignore</code>/<code>-m</code> as usual - review a debug log before sharing it. The debug file is
 0600.</p>
+<p>Note that the debug-log masking does NOT make a backup safe to share: the SAVED
+CONFIG itself contains the device&#x27;s credentials - and not always hashed. SNMP
+communities and some routing/VPN keys (BGP, OSPF, RADIUS/TACACS, IPsec
+pre-shared keys) are stored in cleartext, and Cisco &quot;type 7&quot; passwords are
+trivially reversible. Treat every backup as sensitive and restrict the
+repository directory, regardless of the debug setting.</p>
 <h2 id="limitations">Limitations</h2>
 <ul><li><code>transport=auto</code> is not implemented (use ssh or telnet).</li><li>There is no escape-hatch to a named Perl helper yet: a device whose behaviour the state machine cannot express still needs a Perl model.</li><li><code>generate_template.pl</code> scaffolds a template from a captured <code>.hex</code> but its output is a DRAFT to review, not a finished model.</li></ul>
 <footer>Generated from <code>README.generic-model.md</code> by <code>md2html.py</code>.</footer>

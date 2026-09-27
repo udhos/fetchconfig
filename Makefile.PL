@@ -38,7 +38,7 @@ PROVE = prove
 # Default target: not implemented yet.
 all:
 \t\@echo "fetchconfig: 'make' (build) is not implemented yet."
-\t\@echo "Available target: 'make test'. See the README for manual installation."
+\t\@echo "Available targets: 'make test', 'make doc'. See the README for manual installation."
 
 # Run the test suite. Non-zero exit on any failure, so this drops into CI.
 test:
@@ -47,6 +47,12 @@ test:
 # Verbose variant, handy while developing a single test.
 test-verbose:
 \t\$(PROVE) -v -I. t/
+
+# Regenerate the documentation: every *.md becomes its plain-text and .html
+# companion via tools/md2html.py (README.*, How-To-add-a-model). The hand-
+# maintained fetchconfig-documentation.html is NOT touched.
+doc:
+\t\$(PERL) tools/md2html.py --all .
 
 # Installation is done by hand (README); not implemented here.
 install:
@@ -57,9 +63,9 @@ install:
 clean:
 \t-rm -f $makefile
 
-.PHONY: all test test-verbose install clean
+.PHONY: all test test-verbose doc install clean
 MAKEFILE
 close($fh);
 
 print "Wrote $makefile.\n";
-print "Targets: 'make test' (runs t/); 'make' and 'make install' are placeholders.\n";
+print "Targets: 'make test' (runs t/), 'make doc' (regenerates docs); 'make' and 'make install' are placeholders.\n";

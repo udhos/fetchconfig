@@ -90,7 +90,7 @@ ignored.</p>
 <p>The capture is the text between the show-command send and the next prompt; it
 begins with the device echoing the command and any preamble (&quot;Building
 configuration...&quot;, &quot;Running configuration:&quot;). Trim it with one of:</p>
-<table><thead><tr><th style="text-align:left">Directive</th><th style="text-align:left">Meaning</th></tr></thead><tbody><tr><td style="text-align:left"><code>capture_from /regex/</code></td><td style="text-align:left">start the saved file at the first line matching the regex (keeps that line). Self-adjusting.</td></tr><tr><td style="text-align:left"><code>skip_first N</code></td><td style="text-align:left">drop exactly the first N captured lines (fixed count).</td></tr></tbody></table>
+<table><thead><tr><th style="text-align:left">Directive</th><th style="text-align:left">Meaning</th></tr></thead><tbody><tr><td style="text-align:left"><code>capture_from /regex/</code></td><td style="text-align:left">start the config at the first matching line</td></tr><tr><td style="text-align:left"><code>skip_first N</code></td><td style="text-align:left">drop the first N captured lines</td></tr></tbody></table>
 <p>If both are given, <code>skip_first</code> is applied first, then <code>capture_from</code>. The
 engine logs <code>dropped N leading noise line(s)...</code> and <code>fetched: N lines</code> (the
 count actually saved).</p>
@@ -138,6 +138,11 @@ file.</p>
 disables logging around the send and writes a marker). Masking of secrets the
 <em>device</em> prints (config hashes, SNMP communities) is the operator&#x27;s job via
 <code>ignore</code> or by reviewing the file. This is best effort.</p>
+<p>The debug-log masking is separate from the backup itself: the SAVED CONFIG
+contains the device&#x27;s credentials, and not always hashed - SNMP communities and
+routing/VPN keys (BGP, OSPF, RADIUS/TACACS, IPsec pre-shared keys) are often
+cleartext, and Cisco &quot;type 7&quot; passwords are reversible. A backup is sensitive
+whether or not debug was on; restrict the repository directory.</p>
 <h2 id="6-writing-a-template">6. Writing a template</h2>
 <ol><li>Capture a real session with <code>tools/record-session.pl</code> - it produces a byte-accurate <code>.hex</code> and a readable <code>.txt</code> (see <code>README.record-session</code>).</li><li>Either write the template by hand from the <code>.txt</code>/<code>.hex</code>, or scaffold a draft with <code>generate_template.pl</code> (below) and edit it.</li><li>Set <code>transport</code>, the login states, the prompt (<code>prompt_head</code>/<code>prompt_tail</code>), the show command, and the capture markers.</li><li>Add <code>capture_from</code> (or <code>skip_first</code>) so the saved file starts at the real config.</li><li>Add <code>interrupt</code> lines for any menu/banner/confirmation screens, and <code>ignore</code> lines for genuinely volatile config lines (needs two captures minutes apart to identify).</li><li>Test against the device with the generic model; check the saved file and the <code>dropped</code>/<code>fetched</code> log lines.</li></ol>
 <p>See <code>templates/cisco-ios.tmpl</code> (telnet + SSH, clean CLI) and

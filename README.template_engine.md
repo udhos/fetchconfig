@@ -95,8 +95,8 @@ configuration...", "Running configuration:"). Trim it with one of:
 
 | Directive | Meaning |
 |---|---|
-| `capture_from /regex/` | start the saved file at the first line matching the regex (keeps that line). Self-adjusting. |
-| `skip_first N` | drop exactly the first N captured lines (fixed count). |
+| `capture_from /regex/` | start the config at the first matching line |
+| `skip_first N` | drop the first N captured lines |
 
 If both are given, `skip_first` is applied first, then `capture_from`. The
 engine logs `dropped N leading noise line(s)...` and `fetched: N lines` (the
@@ -212,6 +212,12 @@ file.
 disables logging around the send and writes a marker). Masking of secrets the
 *device* prints (config hashes, SNMP communities) is the operator's job via
 `ignore` or by reviewing the file. This is best effort.
+
+The debug-log masking is separate from the backup itself: the SAVED CONFIG
+contains the device's credentials, and not always hashed - SNMP communities and
+routing/VPN keys (BGP, OSPF, RADIUS/TACACS, IPsec pre-shared keys) are often
+cleartext, and Cisco "type 7" passwords are reversible. A backup is sensitive
+whether or not debug was on; restrict the repository directory.
 
 ## 6. Writing a template
 

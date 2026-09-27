@@ -2,6 +2,68 @@
 # fetchconfig.pl - CHANGES
 #
 
+9.64
+====
+
++ README/HTML/device_table.example: clarified that the generic model's
+  model= (template selection) may be set on a "default: generic" line and is
+  inherited by all generic devices, with per-device override.
+
++ README: renamed the "OPTIONS" section to "DEVICE OPTIONS" and restored the
+  blank line before "PROCURVE SNMP BACKUPS".
+
++ README/HTML: the generic model is now the first entry in the per-model
+  options list (README OPTIONS section) and the first row of the HTML
+  per-model option matrix (was missing from the matrix, and listed last in
+  the README).
+
++ README/HTML: the command-line options are now grouped by purpose
+  (retrieval, housekeeping, template, fetching, output, generic) instead of
+  one flat list under "retrieving a config"; -t/--list-template and
+  --check-template are included in the reference. No behaviour change.
+
++ -v / --version now prints just the program version to stdout and exits 0
+  (previously -v exited after the startup banner without a clean version
+  line).
+
++ New -t / --list-template option: list the templates found in the default
+  templates/ directory (always scanned) and in every template_dir= a loaded
+  device configures, numbered, unique names; exit 0 if any found, 1 if none.
+  It reads template_dir from the generic model's "default: generic
+  template_dir=..." line as well as from individual devices, and logs each
+  scanned directory as "N. template dir: <path>".
+
++ Makefile.PL: new "make doc" target regenerates the .md-derived docs
+  (README.*, How-To-add-a-model) via tools/md2html.py.
+
++ New --check-template PATH option: structurally validate a generic-model
+  template (grammar plus the load-time validator) without a device, and
+  exit 0 (ok), 1 (errors) or 2 (file problem). PATH is the full path to the
+  .tmpl file (a bare name is not resolved, as the same name can exist in
+  different template_dir directories). It is a structural check only; it
+  does not verify the template against a real device.
+
++ make test now validates every shipped templates/*.tmpl
+  (t/41-shipped-templates.t), so a structurally broken template cannot be
+  released.
+
++ Orphaned-backup cleanup (-o) now also finds a removed device's
+  <dev_id>.status and <dev_id>.debug files at the repository root, not only
+  its dated backup directories. They are listed by -o and, with -D, deleted
+  with the orphaned backups (exact-name match, each file individually). This
+  clears a decommissioned device's debug log, which can contain credentials.
+
++ Documentation: clarified in the generic-model and template-engine notes
+  that the SAVED CONFIG itself contains credentials (encrypted or not),
+  independent of the debug-log password masking, so a backup is sensitive
+  even though the debug log masks the passwords sent during login.
+
++ Documentation: reworded the SECURITY NOTES in README and the HTML manual
+  to note that config secrets are not always hashed - SNMP communities and
+  some routing/VPN keys are cleartext, and Cisco type-7 passwords are
+  reversible - rather than implying everything is a one-way hash.
+
+
 9.63
 ====
 

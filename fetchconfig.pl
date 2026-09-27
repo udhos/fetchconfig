@@ -52,6 +52,21 @@ my $me = basename($0);
 
 my $log = fetchconfig::Logger->new({ prefix => $me });
 
+# -v/--version (print the version only) and -h/-?/--help are handled before
+# the startup banner and before Getopt::Long, so -v/--version emits ONLY the
+# program version to STDOUT (nothing on STDERR) for scripts to parse, and
+# -h/-?/--help prints only the help.
+for my $a (@ARGV) {
+    if ($a eq '-v' || $a eq '--version') {
+        print fetchconfig::Constants::version, "\n";
+        exit 0;
+    }
+    if ($a eq '-h' || $a eq '-?' || $a eq '--help') {
+        &usage_stdout;
+        exit 0;
+    }
+}
+
 $log->info('-----[fetchconfig]--------------------------------------------------------------------------------');
 $log->info('version ' . fetchconfig::Constants::version);
 
@@ -70,6 +85,8 @@ my $orphan_check;       # set by -o: enables orphaned backup check mode
 my $empty_check;        # set by -e: enables empty-directory check mode
 my $orphan_delete;      # set by -D: also delete what -o (orphaned backups) or -e (empty directories) found (requires -o or -e)
 my $orphan_test;        # set by -T: with -D, only show what would be deleted, don't delete (requires -D)
+my $check_template;     # set by --check-template FILE: structural check of one template, then exit
+my $list_template;      # set by -t/--list-template: list available templates from all template_dir=
 my $retrieve_out_file;  # set by -f: optional output file (default: stdout)
 my $parallel = 1;       # set by -P N: number of concurrent fetch workers (1 = sequential, the default)
 
@@ -86,16 +103,6 @@ my $parallel = 1;       # set by -P N: number of concurrent fetch workers (1 = s
 # -devices= and -line= accumulate (repeatable); -g/-l/-z/-s/-f/-n/-m/-P take
 # a value. Getopt::Long accepts both "-g dev" and "-g=dev"; the old loop
 # accepted only "-g dev", but "-g=dev" is a harmless superset.
-#
-# -v (version only) and -h/-?/--help are handled before Getopt::Long so
-# their historical behaviour (exit 0, help to STDOUT) is untouched.
-for my $a (@ARGV) {
-    if ($a eq '-v') { exit 0; }                       # version banner only
-    if ($a eq '-h' || $a eq '-?' || $a eq '--help') {
-        &usage_stdout;
-        exit 0;
-    }
-}
 
 # A parse or validation failure follows the historical path: log the error,
 # print usage to STDERR, and die (which exits 255). Kept in one place.
@@ -121,6 +128,8 @@ my $got = GetOptions(
     'e'         => \$empty_check,
     'D'         => \$orphan_delete,
     'T'         => \$orphan_test,
+    'check-template=s' => \$check_template,
+    't|list-template'  => \$list_template,
     'n=s'       => \$retrieve_index,   # validated as a positive integer below
     'm=s'       => \$compare_index,
     'P=s'       => \$parallel,
@@ -194,6 +203,16 @@ if ($parallel !~ /^\d+$/ || $parallel < 1) {
     $opt_fail->("-P requires a positive number of parallel workers");
 }
 
+# --check-template FILE: structurally validate one template and exit. This
+# needs neither a device table nor a repository, so it dispatches before the
+# "-devices required" check. It is a STRUCTURAL check only (grammar + the
+# load-time validator: self-loops, goto targets, capture markers,
+# reachability, transport entry); it does NOT verify the template against a
+# real device.
+if (defined($check_template)) {
+    exit(check_template_file($check_template));
+}
+
 if ((@device_file_list < 1) && (@line_list < 1)) {
     $log->error("at least one -devices=filename or one -line=string is required");
     &usage;
@@ -233,8 +252,7 @@ if (defined($orphan_test) && !defined($orphan_delete)) {
 
 fetchconfig::model::Detector->init($log);
 
-my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all);
-
+my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template);
 if ($parallel > 1 && $lookup_only) {
     $log->error("-P applies to fetching only and cannot be combined with -g/-l/-z/-Z/-o/-e/-s/-S");
     &usage;
@@ -298,6 +316,11 @@ if (defined($orphan_check)) {
     exit;
 }
 
+if (defined($list_template)) {
+    fetchconfig::Tools::list_templates($retrieve_out_file);
+    exit;
+}
+
 # Phase 2: fetch every registered device - sequentially (the default,
 # device-table order, live output exactly as before), or with -P N
 # concurrent worker processes.
@@ -314,6 +337,36 @@ exit;
 # die); usage_stdout() prints it to STDOUT and is used for a deliberate
 # help request (-?, -h, --help), which exits 0.
 #
+sub check_template_file {
+    my ($path) = @_;
+    if (!defined($path) || $path eq '') {
+        $log->error("--check-template requires a template file argument");
+        return 2;
+    }
+    if (! -f $path) {
+        $log->error("--check-template: file not found: $path");
+        return 2;
+    }
+    if (!open(my $fh, '<', $path)) {
+        $log->error("--check-template: cannot read $path: $!");
+        return 2;
+    } else {
+        local $/;
+        my $text = <$fh>;
+        close $fh;
+        require fetchconfig::model::GenericTemplateParser;
+        my $t = fetchconfig::model::GenericTemplateParser->parse($text);
+        my @errs = @{ $t->{errors} || [] };
+        if (@errs) {
+            $log->error("$path: NOT ok - " . scalar(@errs) . " error(s):");
+            $log->error("  $_") for @errs;
+            return 1;
+        }
+        $log->info("$path: ok (structural check only - verify against the real device)");
+        return 0;
+    }
+}
+
 sub usage_text {
     my $t = '';
     $t .= "usage: $me [-v] [-devices=file] [-line=string] [-P N]\n";
@@ -353,9 +406,11 @@ sub usage_text {
     $t .= "                      exits 1 if any device is inconsistent, 0 otherwise\n";
     $t .= "       -o             list backed up configs on disk that have no matching device in the currently\n";
     $t .= "                      loaded -devices=/-line= (mutually exclusive with -g/-l/-z/-Z); scans every\n";
-    $t .= "                      repository= path configured by a currently loaded device; exits 1 if any\n";
-    $t .= "                      orphaned backups are found, 0 otherwise\n";
-    $t .= "       -D             with -o: also DELETE the orphaned backup directories found; with -e: also DELETE\n";
+    $t .= "                      repository= path configured by a currently loaded device; also lists an\n";
+    $t .= "                      orphaned device's <dev_id>.status and <dev_id>.debug files at the repository\n";
+    $t .= "                      root; exits 1 if any orphaned backups or status/debug files are found, 0 otherwise\n";
+    $t .= "       -D             with -o: also DELETE the orphaned backup directories found, and the orphaned\n";
+    $t .= "                      <dev_id>.status/<dev_id>.debug files; with -e: also DELETE\n";
     $t .= "                      the empty directories found (requires -o or -e)\n";
     $t .= "       -T             with -o -D or -e -D: only show the delete commands, don't actually delete anything\n";
     $t .= "                      (requires -D) - use this first to preview what -D would remove; exit status is that\n";
@@ -365,9 +420,22 @@ sub usage_text {
     $t .= "                      exits 1 if any are found, 0 otherwise. With -D they are removed bottom-up - device\n";
     $t .= "                      dirs, then day dirs, then month dirs - each by one plain rmdir on its exact path, every\n";
     $t .= "                      command reported; -T with -e -D shows the commands without deleting\n";
+    $t .= "       -t, --list-template   list the templates available in every template_dir= a loaded\n";
+    $t .= "                      device configures (and the default dir); numbered, one per line; exits 0 if\n";
+    $t .= "                      any template is found, 1 if none\n";
+    $t .= "       --check-template PATH  structurally check the generic-model template at PATH\n";
+    $t .= "                      (grammar + the load-time validator: self-loops, goto targets, capture\n";
+    $t .= "                      markers, reachability, transport entry) and exit. PATH must be the full\n";
+    $t .= "                      path to the .tmpl file (a bare template name is not resolved, since the\n";
+    $t .= "                      same name can exist in different template_dir directories). Needs no\n";
+    $t .= "                      device table. Prints ok or the errors; exits 0 ok, 1 errors, 2 file\n";
+    $t .= "                      problem. This is a STRUCTURAL check only - it does not verify the\n";
+    $t .= "                      template against a real device.\n";
     $t .= "       -f file        write the result data (config/diff/listing rows) to file instead of stdout; log\n";
     $t .= "                      messages still go to stderr. A check that finds nothing writes an EMPTY file -\n";
-    $t .= "                      that is the expected result; the outcome is in the exit status\n";
+    $t .= "                      that is the expected result; the outcome is in the exit status. Does NOT apply\n";
+    $t .= "                      to --check-template, whose ok/error result is written to the log only\n";
+    $t .= "       -v, --version  print the program version and exit\n";
     $t .= "       -?, -h, --help display this help and exit\n";
     $t;
 }

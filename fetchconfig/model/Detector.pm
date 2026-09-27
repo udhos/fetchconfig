@@ -419,6 +419,12 @@ sub register {
     $model_table{$mod->label} = $mod;
 }
 
+# Return the registered model object for a label (e.g. "generic"), or undef.
+sub model_by_label {
+    my ($class, $label) = @_;
+    return $model_table{$label};
+}
+
 sub init {
     my ($class, $log) = @_;
 

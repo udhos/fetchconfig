@@ -944,44 +944,53 @@ sub list_templates {
     $log->debug("list templates");
     my @dev_ids = fetchconfig::model::Detector->device_ids;
 
-    # Collect the template directories to scan. Always include the default
-    # templates/ directory shipped beside fetchconfig.pl (via FindBin), so
-    # -t works on any device table - even one with no generic devices. Then
-    # add every distinct template_dir a loaded device configures.
-    my %dir_seen;
+    # Collect the template directories to scan. CONFIGURED directories come
+    # first (a "default: generic template_dir=..." line, then each device's
+    # template_dir=), so a configured path is what gets displayed; the
+    # default templates/ directory shipped beside fetchconfig.pl (via
+    # FindBin) is added LAST as a fallback, so -t still works on a device
+    # table that configures no template_dir at all.
+    #
+    # Deduplication is by the REAL (canonicalized) path, not the raw string,
+    # so the same physical directory reached through different paths - e.g. a
+    # version symlink like /usr/local/fetchconfig -> /usr/local/fetchconfig-
+    # 9.56 - is scanned once, not twice. The first candidate mapping to a
+    # given real path wins (hence configured-before-default for display).
+    require Cwd;
+    my %real_seen;
     my @dirs;
+    my $add_dir = sub {
+	my ($dir) = @_;
+	return unless defined($dir) && $dir ne '';
+	my $real = Cwd::abs_path($dir);
+	# abs_path returns undef for a non-existent path; fall back to the raw
+	# string so a missing dir is still reported once rather than dropped.
+	my $key = defined($real) ? $real : $dir;
+	return if $real_seen{$key}++;
+	push @dirs, $dir;
+    };
 
-    require FindBin;
-    my $default_dir = "$FindBin::Bin/templates";
-    if (!$dir_seen{$default_dir}++) { push @dirs, $default_dir; }
-
-    # A "default: generic template_dir=..." line sets template_dir on the
-    # generic MODEL's defaults (not on a device), so read it from the model
-    # itself. This is the common case: template_dir configured once via a
-    # default: line, with the actual generic devices inheriting it.
+    # 1. configured: "default: generic template_dir=..." (on the model defaults)
     my $generic = fetchconfig::model::Detector->model_by_label('generic');
     if (defined($generic)) {
-        my $dopt = $generic->{default_options};
-        if (ref($dopt) eq 'HASH') {
-            my $dir = $dopt->{template_dir};
-            if (defined($dir) && $dir ne '' && !$dir_seen{$dir}++) {
-                push @dirs, $dir;
-            }
-        }
+	my $dopt = $generic->{default_options};
+	if (ref($dopt) eq 'HASH') {
+	    $add_dir->($dopt->{template_dir});
+	}
     }
 
+    # 2. configured: each device's template_dir=
     foreach my $dev_id (@dev_ids) {
 	my $info = fetchconfig::model::Detector->device_info($dev_id);
 	next unless defined($info);
 	my $mod         = $info->{model};
 	my $dev_opt_tab = $info->{dev_opt_tab};
-	# an explicit template_dir= on the device line; the generic model's
-	# default is already covered by $default_dir above.
-	my $dir = $mod->dev_option($dev_opt_tab, "template_dir");
-	next unless defined($dir) && $dir ne '';
-	next if $dir_seen{$dir}++;
-	push @dirs, $dir;
+	$add_dir->($mod->dev_option($dev_opt_tab, "template_dir"));
     }
+
+    # 3. fallback: the default templates/ dir beside fetchconfig.pl
+    require FindBin;
+    $add_dir->("$FindBin::Bin/templates");
 
     # Report the directories being scanned (numbered), for diagnosis.
     {

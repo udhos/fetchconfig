@@ -1,6 +1,6 @@
 ########################################################################
 # We are looking for testers of this improved version.                 #
-# This version should be config compatible                             # 
+# This version should be config compatible                             #
 ########################################################################
 #
 # fetchconfig.pl - README
@@ -778,11 +778,18 @@ RETRIEVING A STORED CONFIG, AND COMMAND-LINE OPTIONS
 	--------------------------------
 	-t, --list-template
                         Lists the generic-model templates available to
-                        the loaded devices: scans the default templates/
-                        directory and every template_dir= a loaded device
-                        (or a "default: generic" line) configures, and
-                        prints the unique template names, numbered, one
-                        per line. Each scanned directory is logged as
+                        the loaded devices: scans every template_dir= a
+                        loaded device (or a "default: generic" line)
+                        configures, and the default templates/ directory
+                        beside fetchconfig.pl as a fallback, then prints
+                        the unique template names, numbered, one per line.
+                        Directories are deduplicated by their real
+                        (symlink-resolved) path, so the same physical
+                        directory reached through different paths - e.g. a
+                        version symlink like /usr/local/fetchconfig ->
+                        /usr/local/fetchconfig-9.56 - is scanned once;
+                        configured paths are listed before the fallback.
+                        Each scanned directory is logged as
                         "N. template dir: <path>". Exit status is 0 if any
                         template is found, 1 if none. Honours "-f".
                         (See TEMPLATE-DRIVEN MODEL above.)

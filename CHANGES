@@ -5,6 +5,12 @@
 9.64
 ====
 
++ Fix -t/--list-template: template directories are now deduplicated by their
+  real (symlink-resolved) path, so the same physical templates directory
+  reached through different paths (e.g. an install-dir version symlink) is
+  scanned and listed once, not twice. Configured template_dir= paths are
+  listed before the default templates/ fallback.
+
 + README/HTML/device_table.example: clarified that the generic model's
   model= (template selection) may be set on a "default: generic" line and is
   inherited by all generic devices, with per-device override.

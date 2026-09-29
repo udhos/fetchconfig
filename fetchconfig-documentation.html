@@ -887,7 +887,7 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
 
         <div class="flag-card">
           <div class="flag-head"><span class="flag-tag">-t, --list-template</span><span class="flag-req">honours -f</span></div>
-          <p>Lists the generic-model templates available to the loaded devices: scans the default <code>templates/</code> directory and every <code>template_dir=</code> a loaded device (or a <code>default: generic</code> line) configures, and prints the unique template names, numbered. Each scanned directory is logged as <code>N. template dir: &lt;path&gt;</code>. Exit <code>0</code> if any found, <code>1</code> if none. See <a href="#template-model">Template-driven model</a>.</p>
+          <p>Lists the generic-model templates available to the loaded devices: scans every <code>template_dir=</code> a loaded device (or a <code>default: generic</code> line) configures, and the default <code>templates/</code> directory beside fetchconfig.pl as a fallback, then prints the unique template names, numbered. Directories are deduplicated by their real (symlink-resolved) path, so the same physical directory reached through different paths &mdash; e.g. a version symlink &mdash; is scanned once; configured paths are listed before the fallback. Each scanned directory is logged as <code>N. template dir: &lt;path&gt;</code>. Exit <code>0</code> if any found, <code>1</code> if none. See <a href="#template-model">Template-driven model</a>.</p>
         </div>
 
         <div class="flag-card">

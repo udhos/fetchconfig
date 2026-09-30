@@ -53,10 +53,11 @@ sub parse {
         $line =~ s/^\s+//; $line =~ s/\s+$//;
         next if $line eq '';
 
-        # state block: "state <name> [max_visits N]" or a reserved
-        # per-transport entry header "state_login_ssh" etc.
-        if ($line =~ /^(state_(?:login|password)_(?:ssh|telnet))$/
-            || $line =~ /^state\s+(\S+)(?:\s+max_visits\s+(\d+))?$/) {
+        # state block: "state <name> [max_visits N]". Every state - including
+        # the reserved per-transport entry states (state_login_ssh, ...) - is
+        # declared the same way, with the "state" keyword, so a reader can
+        # always tell a state header from its first token.
+        if ($line =~ /^state\s+(\S+)(?:\s+max_visits\s+(\d+))?$/) {
             my ($name, $mv) = ($1, $2);
             if ($t{state_by}{$name}) {
                 push @{$t{errors}}, "line $lineno: duplicate state '$name'";
@@ -138,9 +139,10 @@ sub parse {
                             : do { (my $r = $pat_raw) =~ s{^/}{}; $r =~ s{/$}{}; { kind => 'regex', regex => $r } };
                 # split trailing "-> goto X" or "-> done"
                 my ($next, $next_kind);
-                if ($rest =~ /^(.*?)\s*->\s*goto\s+(\S+)$/) { ($rest, $next_kind, $next) = ($1, 'goto', $2); }
-                elsif ($rest =~ /^(.*?)\s*->\s*done$/)      { ($rest, $next_kind)        = ($1, 'done'); }
-                else { $next_kind = 'stay'; }   # no explicit transition -> re-enter same state
+                if    ($rest =~ /^(.*?)\s*->\s*goto\s+(\S+)$/) { ($rest, $next_kind, $next) = ($1, 'goto', $2); }
+                elsif ($rest =~ /^(.*?)\s*->\s*done$/)         { ($rest, $next_kind)        = ($1, 'done'); }
+                elsif ($rest =~ /^(.*?)\s*->\s*stay$/)         { ($rest, $next_kind)        = ($1, 'stay'); }
+                else { $next_kind = 'stay'; }   # no explicit transition -> re-enter same state (bounded by max_visits)
                 my ($action, $aerr) = _parse_action($rest);
                 push @{$t{errors}}, "line $lineno: $aerr" if $aerr;
                 push @{$cur->{steps}}, {

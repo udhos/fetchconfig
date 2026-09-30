@@ -44,7 +44,7 @@ footer { color: var(--muted); font-size: .85em; border-top: 1px solid var(--line
 </head>
 <body>
 <main>
-<nav class="toc"><strong>Contents</strong><ul><li><a href="#1-why-it-exists">1. Why it exists</a></li><li><a href="#2-architecture">2. Architecture</a></li><li><a href="#3-selecting-the-model">3. Selecting the model</a></li><li><a href="#4-template-grammar">4. Template grammar</a></li><ul><li><a href="#41-directives-top-of-file">4.1 Directives (top of file)</a></li><li><a href="#42-trimming-the-saved-config">4.2 Trimming the saved config</a></li><li><a href="#43-global-lists">4.3 Global lists</a></li><li><a href="#44-states">4.4 States</a></li><li><a href="#45-validation">4.5 Validation</a></li></ul><li><a href="#5-execution-semantics">5. Execution semantics</a></li><li><a href="#6-writing-a-template">6. Writing a template</a></li><li><a href="#7-generating-a-template">7. Generating a template</a></li><li><a href="#8-limitations">8. Limitations</a></li></ul></nav>
+<nav class="toc"><strong>Contents</strong><ul><li><a href="#1-why-it-exists">1. Why it exists</a></li><li><a href="#2-architecture">2. Architecture</a></li><li><a href="#3-selecting-the-model">3. Selecting the model</a></li><li><a href="#4-template-grammar">4. Template grammar</a></li><ul><li><a href="#41-directives-top-of-file">4.1 Directives (top of file)</a></li><li><a href="#42-trimming-the-saved-config">4.2 Trimming the saved config</a></li><li><a href="#43-global-lists">4.3 Global lists</a></li><li><a href="#44-states">4.4 States</a></li><li><a href="#45-validation">4.5 Validation</a></li></ul><li><a href="#5-execution-semantics">5. Execution semantics</a></li><li><a href="#6-writing-a-template">6. Writing a template</a></li><li><a href="#7-generating-a-template">7. Generating a template</a></li><li><a href="#8-limitations">8. Limitations</a></li><li><a href="#upgrading-from-964">Upgrading from 9.64</a></li></ul></nav>
 <h1 id="fetchconfig-generic-template-engine">fetchconfig Generic Template Engine</h1>
 <p>This document describes the template-driven <strong>generic model</strong> for fetchconfig:
 its architecture, the template grammar, the execution semantics, and how to
@@ -101,12 +101,13 @@ count actually saved).</p>
 <ul><li><code>interrupt /REGEX/ -&gt; ACTION</code> - a screen that may appear at any prompt wait (a menu, &quot;Press any key&quot;, a &quot;[y/n]?&quot; confirmation). Handled by <code>wait_for_command_prompt</code>.</li><li><code>ignore /REGEX/</code> - a line the device rewrites on its own every read (a timestamp, a re-salted hash). It is removed from <strong>both</strong> files before a <code>changes_only</code> comparison, so it does not cause a spurious backup. Do <strong>not</strong> ignore a line that reflects a real change (e.g. a firmware-version header that changes only on upgrade).</li></ul>
 <h3 id="44-states">4.4 States</h3>
 <p>The engine starts at the reserved entry state for the chosen transport:</p>
-<ul><li><code>state_login_ssh</code> / <code>state_password_ssh</code></li><li><code>state_login_telnet</code> / <code>state_password_telnet</code></li></ul>
+<ul><li><code>state state_login_ssh</code> / <code>state state_password_ssh</code></li><li><code>state state_login_telnet</code> / <code>state state_password_telnet</code></li></ul>
 <p>At least one of <code>state_login_ssh</code> / <code>state_login_telnet</code> must exist. SSH is
 already authenticated when the session opens, so its entry state typically just
 matches the prompt; telnet does interactive login. The two paths converge (via
 <code>goto</code>) on the shared states.</p>
-<p>Other states: <code>state &lt;name&gt; [max_visits N]</code>.</p>
+<p>Every state is declared with the <code>state</code> keyword, including the reserved
+entry states above: <code>state &lt;name&gt; [max_visits N]</code>.</p>
 <p>Inside a state:</p>
 <pre><code>expect PATTERN -&gt; ACTION [-&gt; goto STATE | -&gt; done]
 send &quot;text&quot; | send user|pass|enable [-&gt; goto STATE | -&gt; done]
@@ -117,8 +118,16 @@ nop
 capture_start
 capture_stop</code></pre>
 <ul><li><code>expect PATTERN</code> waits for <code>PATTERN</code> (a <code>/regex/</code> or the bareword <code>prompt</code>) then performs <code>ACTION</code>. **Multiple <code>expect</code>s in one state are tried in order, first match wins** - order the most specific first.</li><li><code>PATTERN = prompt</code> is the learned prompt: <code>prompt_head</code> + the byte-quoted hostname + <code>prompt_tail</code>, tolerating trailing VT100 escapes. The hostname is learned the first time a <code>prompt</code> expect matches, using a generic <code>(\S+)</code> capture.</li><li>A <strong>standalone <code>send</code></strong> (no preceding <code>expect</code>) sends immediately without waiting for a prompt - used after capture to send <code>exit</code> (the device is already at the prompt).</li><li><code>send_secret</code> sends a password, masked in the debug log (<code>print_secret</code>).</li><li><code>send_nolf</code> sends without a trailing newline (a pager space, a menu key).</li><li><code>send_match</code> sends the captured group <code>$1</code> from the state&#x27;s matching <code>expect</code> regex, as a keystroke - e.g. pick a menu item by its shown number: <code>expect /(\d+)\. Command Line \(CLI\)/ -&gt; send_match</code>. This survives a menu that renumbers its items.</li><li><code>capture_start</code> / <code>capture_stop</code> bracket the config: the saved config is the text captured between the show-command send and the closing prompt.</li></ul>
-<p>A transition is <code>-&gt; goto STATE</code>, <code>-&gt; done</code>, or (for a plain <code>expect</code> with no
-arrow) an implicit re-entry of the same state (&quot;stay&quot;). A state that can
+<p>A transition is <code>-&gt; goto STATE</code>, <code>-&gt; done</code>, or <code>-&gt; stay</code> (re-enter the same
+state). A plain <code>expect</code> with no arrow defaults to <code>stay</code>. Self-loops are
+bounded by <code>max_visits</code>. A state that can</p>
+<p>A <code>-&gt; stay</code> loop repeats a state until something changes - typically draining
+a pager on a device that cannot disable it (the shipped templates disable the
+pager with <code>term len 0</code> / <code>no page</code>, so they do not need it):</p>
+<pre><code>state drain_pager
+    expect /--More--/  -&gt; send_nolf &quot; &quot;  -&gt; stay   # space per page, repeat
+    expect prompt      -&gt; nop             -&gt; goto show</code></pre>
+<p><code>max_visits</code> bounds the loop.
 re-enter itself must be bounded by <code>max_visits</code>.</p>
 <h3 id="45-validation">4.5 Validation</h3>
 <p>The parser rejects a template that could hang or misbehave, at load time:</p>
@@ -159,6 +168,17 @@ pager command, menu handling. **The output is a draft to review and test, not
 a finished template.**</p>
 <h2 id="8-limitations">8. Limitations</h2>
 <ul><li><code>transport=auto</code> is not implemented.</li><li>There is no escape-hatch to a named Perl helper: a device whose behaviour the state machine cannot express still needs a Perl model.</li><li>The prompt learner assumes the prompt is a hostname token followed by <code>prompt_tail</code>; a device with a radically different prompt needs custom <code>prompt_head</code>/<code>prompt_tail</code>.</li><li><code>skip_first</code> is a fixed count; prefer <code>capture_from</code> when the preamble length varies between firmware versions.</li><li>Everything device-facing must be verified on real hardware; a capture shows one session, not every path a device can take.</li></ul>
+<h2 id="upgrading-from-964">Upgrading from 9.64</h2>
+<p>The state-declaration syntax changed in 9.65: every state, including the
+per-transport entry states, is now declared with the <code>state</code> keyword. A
+template written for 9.64 or earlier must be migrated by prefixing each bare
+entry-state header with <code>state</code>:</p>
+<pre><code>state_login_ssh        -&gt;  state state_login_ssh
+state_password_ssh     -&gt;  state state_password_ssh
+state_login_telnet     -&gt;  state state_login_telnet
+state_password_telnet  -&gt;  state state_password_telnet</code></pre>
+<p><code>goto</code> targets and other states are unchanged. Verify with
+<code>fetchconfig.pl --check-template PATH</code>.</p>
 <footer>Generated from <code>README.template_engine.md</code> by <code>md2html.py</code>.</footer>
 </main>
 </body>

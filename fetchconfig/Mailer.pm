@@ -613,7 +613,7 @@ sub send_mail {
 
     if ($tls eq 'starttls') {
 	if (!$smtp->starttls()) {
-	    $log->error("fetchconfig::Mailer: STARTTLS to $host:$port failed - skipping mail (not falling back to plaintext): " . ($smtp->message || $IO::Socket::SSL::SSL_ERROR || ''));
+	    $log->error("fetchconfig::Mailer: STARTTLS to $host:$port failed - skipping mail (not falling back to plaintext): " . ($smtp->message || (do { no warnings 'once'; $IO::Socket::SSL::SSL_ERROR }) || ''));
 	    $smtp->quit;
 	    return;
 	}

@@ -62,16 +62,16 @@ Global (checked in every state):
   "Press any key", "[y/n]?").
 - `ignore /REGEX/` - a volatile config line to ignore when comparing backups.
 
-States. The engine starts at the reserved entry state for the chosen transport:
+States. Every state is declared with the `state` keyword:
+`state <name> [max_visits N]`. The engine starts at the reserved entry state
+for the chosen transport:
 
-- `state_login_ssh` / `state_password_ssh` - SSH is already authenticated, so
-  these usually just match the prompt.
-- `state_login_telnet` / `state_password_telnet` - telnet does interactive
-  login here.
+- `state state_login_ssh` / `state state_password_ssh` - SSH is already
+  authenticated, so these usually just match the prompt.
+- `state state_login_telnet` / `state state_password_telnet` - telnet does
+  interactive login here.
 
 At least one of `state_login_ssh` / `state_login_telnet` must be present.
-
-Other states: `state <name> [max_visits N]`.
 
 Inside a state:
 
@@ -90,6 +90,29 @@ Inside a state:
 - `nop` - do nothing.
 - `capture_start` / `capture_stop` - bracket the config; capture is the text
   between the show-command send and the next prompt.
+
+A transition is `-> goto <state>`, `-> done`, or `-> stay` (re-enter the same
+state, bounded by `max_visits`). An `expect` with no explicit transition
+defaults to `stay`.
+
+`-> stay` is for a state that must repeat until something changes - e.g.
+draining a pager on a device that cannot disable it. The state loops on
+itself sending a keystroke for each page, and leaves when the prompt appears
+instead (the shipped templates do not need this because they disable the
+pager with `term len 0` / `no page`):
+
+```
+state drain_pager
+    expect /--More--/  -> send_nolf " "  -> stay   # space for each page, repeat
+    expect prompt      -> nop             -> goto show
+```
+
+`max_visits` caps the loop so a device stuck on `--More--` cannot loop
+forever.
+
+Lexical conventions: `/regex/` is a regular expression (in `expect`,
+`ignore`, `interrupt`); `"text"` is a literal string to send; a directive
+value is bare or single-quoted (e.g. `strip_ansi no`, `prompt_tail '#'`).
 
 A template must contain exactly one `capture_start` and one `capture_stop`. The
 validator (run at load time) rejects: an unbounded self-loop, a goto to an
@@ -123,3 +146,21 @@ repository directory, regardless of the debug setting.
   the state machine cannot express still needs a Perl model.
 - `generate_template.pl` scaffolds a template from a captured `.hex` but its
   output is a DRAFT to review, not a finished model.
+
+
+## Upgrading from 9.64
+
+The state-declaration syntax changed in 9.65: every state, including the
+per-transport entry states, is now declared with the `state` keyword. A
+template written for 9.64 or earlier must be migrated by prefixing each bare
+entry-state header with `state`:
+
+```
+state_login_ssh        ->  state state_login_ssh
+state_password_ssh     ->  state state_password_ssh
+state_login_telnet     ->  state state_login_telnet
+state_password_telnet  ->  state state_password_telnet
+```
+
+`goto` targets and other states are unchanged. Verify with
+`fetchconfig.pl --check-template PATH`.

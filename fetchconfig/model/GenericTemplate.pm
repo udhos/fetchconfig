@@ -69,6 +69,7 @@ sub template_dir {
     my $dir = $self->dev_option($dev_opt_tab, 'template_dir');
     return $dir if defined $dir;
     require FindBin;
+    no warnings 'once';
     return "$FindBin::Bin/templates";
 }
 

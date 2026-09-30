@@ -939,96 +939,199 @@ sub check_empty_dirs {
     exit($rc);
 }
 
+sub list_allowed_dirs {
+    my ($out_file) = @_;
+    $log->debug("list allowed directories");
+    if (!fetchconfig::model::Detector->dir_allowlist_present) {
+	$log->info("no directory: allowlist configured");
+	emit_content('ALL', '', $out_file,
+		     "no directory: allowlist configured",
+		     "no directory: allowlist configured");
+	exit(1);
+    }
+    my @rows = fetchconfig::model::Detector->dir_allowlist_rows;
+    # rows are [type, tag, path]; sort repository first, then by tag
+    my %rank = ( repository => 0, template => 1, fetch_run => 2 );
+    @rows = sort {
+	   ($rank{$a->[0]} // 9) <=> ($rank{$b->[0]} // 9)
+	|| $a->[1] cmp $b->[1]
+    } @rows;
+
+    # Lint. --list-allowed-dirs is a check as well as a listing: it fails
+    # (exit 2) if any directory: line was malformed (bad type, duplicate
+    # tag, illegal path content - recorded at parse time) OR if a listed
+    # directory does not exist on disk. Valid entries are still listed so
+    # the whole picture is visible.
+    my $lint_fail = 0;
+    my @parse_errs = fetchconfig::model::Detector->dir_allowlist_errors;
+    if (@parse_errs) {
+	$lint_fail += scalar(@parse_errs);   # already logged at parse time
+    }
+    for my $r (@rows) {
+	next if $r->[0] eq 'fetch_run' && $r->[2] eq 'none';   # the none form has no dir
+	my $path = $r->[2];
+	if (! -d $path) {
+	    $log->error("directory: $r->[1] ($r->[0]) does not exist on disk: $path");
+	    ++$lint_fail;
+	}
+    }
+    # all required types must be present
+    for my $miss (fetchconfig::model::Detector->dir_allow_missing_types) {
+	$log->error($miss);
+	++$lint_fail;
+    }
+
+    my $out = '';
+    my $id = 0;
+    for my $r (@rows) {
+	++$id;
+	# ID <tab> type <tab> tag <tab> path
+	$out .= join("\t", $id, $r->[0], $r->[1], $r->[2]) . "\n";
+    }
+    my $n_repo = grep { $_->[0] eq 'repository' } @rows;
+    my $n_tmpl = grep { $_->[0] eq 'template' }   @rows;
+    my $n_run  = grep { $_->[0] eq 'fetch_run' }  @rows;
+    my $summary = "found " . scalar(@rows) . " allowed director(y/ies): $n_repo repository, $n_tmpl template, $n_run fetch_run"
+	. ($lint_fail ? " - $lint_fail problem(s) found" : "");
+    if ($lint_fail) { $log->error($summary); } else { $log->debug($summary); }
+    emit_content('ALL', $out, $out_file,
+		 "listing of " . scalar(@rows) . " allowed director(y/ies)", $summary);
+    exit($lint_fail ? 2 : 0);
+}
+
+# Expand a template_dir value: if it is a directory: allowlist $TAG of the
+# template type, return its path; otherwise return it unchanged. This lets
+# -t work when a device table uses template_dir=$TPL1 (the same tags the
+# fetch path expands). If the allowlist is absent, resolve_allowed_dir
+# returns the value unchanged.
+sub _expand_template_dir {
+    my ($val) = @_;
+    return $val unless defined($val) && length($val);
+    my ($ok, $resolved) = fetchconfig::model::Detector->resolve_allowed_dir('template', $val);
+    return ($ok && defined($resolved)) ? $resolved : $val;
+}
+
 sub list_templates {
     my ($out_file) = @_;
     $log->debug("list templates");
     my @dev_ids = fetchconfig::model::Detector->device_ids;
 
-    # Collect the template directories to scan. CONFIGURED directories come
-    # first (a "default: generic template_dir=..." line, then each device's
-    # template_dir=), so a configured path is what gets displayed; the
-    # default templates/ directory shipped beside fetchconfig.pl (via
-    # FindBin) is added LAST as a fallback, so -t still works on a device
-    # table that configures no template_dir at all.
-    #
-    # Deduplication is by the REAL (canonicalized) path, not the raw string,
-    # so the same physical directory reached through different paths - e.g. a
-    # version symlink like /usr/local/fetchconfig -> /usr/local/fetchconfig-
-    # 9.56 - is scanned once, not twice. The first candidate mapping to a
-    # given real path wins (hence configured-before-default for display).
-    require Cwd;
-    my %real_seen;
-    my @dirs;
-    my $add_dir = sub {
-	my ($dir) = @_;
-	return unless defined($dir) && $dir ne '';
-	my $real = Cwd::abs_path($dir);
-	# abs_path returns undef for a non-existent path; fall back to the raw
-	# string so a missing dir is still reported once rather than dropped.
-	my $key = defined($real) ? $real : $dir;
-	return if $real_seen{$key}++;
-	push @dirs, $dir;
-    };
+    require FindBin;
 
-    # 1. configured: "default: generic template_dir=..." (on the model defaults)
+    # Determine the directory the "default:" scope resolves to: the
+    # "default: generic template_dir=..." if set, else the program default
+    # (templates/ beside fetchconfig.pl). Both feed the defaults config page,
+    # so both are tagged "default" - fetchconfig-web does not distinguish
+    # them. When nothing is configured, -t still reports the program default.
+    my ($default_cfg, $default_dir);
     my $generic = fetchconfig::model::Detector->model_by_label('generic');
     if (defined($generic)) {
 	my $dopt = $generic->{default_options};
-	if (ref($dopt) eq 'HASH') {
-	    $add_dir->($dopt->{template_dir});
+	if (ref($dopt) eq 'HASH' && defined($dopt->{template_dir})
+		&& $dopt->{template_dir} ne '') {
+	    $default_cfg = $dopt->{template_dir};              # as configured ($TAG or path)
+	    $default_dir = _expand_template_dir($default_cfg); # real path
 	}
     }
+    if (!defined($default_dir)) {
+	$default_cfg = $default_dir = "$FindBin::Bin/templates";
+    }
 
-    # 2. configured: each device's template_dir=
+    # Collect the device-specific template_dir= values (as configured
+    # strings). Read the device's OWN value straight from its option table -
+    # NOT via dev_option(), which would fall back to the "default: generic
+    # template_dir=" and wrongly report a device that merely inherits the
+    # default as a "device" entry. A device with no own template_dir uses
+    # the default scope and contributes nothing here. A device that
+    # configures the same path as the default is still a "device" entry (it
+    # names the path explicitly). Deduplicated by the configured string.
+    my %dev_dir_seen;
+    my @dev_dirs;   # each: [configured, resolved]
     foreach my $dev_id (@dev_ids) {
 	my $info = fetchconfig::model::Detector->device_info($dev_id);
 	next unless defined($info);
-	my $mod         = $info->{model};
 	my $dev_opt_tab = $info->{dev_opt_tab};
-	$add_dir->($mod->dev_option($dev_opt_tab, "template_dir"));
+	my $cfg = $dev_opt_tab->{template_dir};   # the device's OWN value only
+	next unless defined($cfg) && $cfg ne '';
+	next if $dev_dir_seen{$cfg}++;            # dedup by the configured string
+	push @dev_dirs, [ $cfg, _expand_template_dir($cfg) ];
     }
 
-    # 3. fallback: the default templates/ dir beside fetchconfig.pl
-    require FindBin;
-    $add_dir->("$FindBin::Bin/templates");
+    # The scan order: the default scope first, then the device dirs. Each
+    # entry is [section, dir].
+    my @scan = ([ 'default', $default_cfg, $default_dir ]);
+    push @scan, [ 'device', $_->[0], $_->[1] ] for @dev_dirs;
 
-    # Report the directories being scanned (numbered), for diagnosis.
+    # Report the directories (numbered), for diagnosis.
     {
 	my $i = 0;
-	for my $dir (@dirs) { ++$i; $log->debug("$i. template dir: $dir"); }
+	for my $e (@scan) { ++$i; my $shown = $e->[1]; $shown .= " -> $e->[2]" if $e->[1] ne $e->[2]; $log->debug("$i. template dir: $shown ($e->[0])"); }
     }
 
-    # Scan the directories for *.tmpl, collect unique template names.
-    my %tmpl_seen;
-    my @names;
-    foreach my $dir (@dirs) {
-	next unless -d $dir;
+    # Every directory that is going to be scanned MUST exist on disk - the
+    # program default included. A configured path that does not exist is an
+    # operator error: report it and exit 2, regardless of what else is found.
+    my $missing = 0;
+    for my $e (@scan) {
+	my ($section, $cfg, $dir) = @$e;
+	if (! -d $dir) {
+	    my $shown = ($cfg ne $dir) ? "$cfg ($dir)" : $dir;
+	    $log->error("template dir does not exist ($section): $shown");
+	    ++$missing;
+	}
+    }
+    if ($missing) {
+	$log->error("$missing template director(y/ies) missing - aborting");
+	exit(2);
+    }
+
+    # Scan each directory for *.tmpl and build the rows. Dedup is per
+    # (section, dir, model): within the default section by model; within the
+    # device section by (dir, model). The same model may appear under both
+    # "default" and "device" - that is intended and not deduped across
+    # sections. Rows are sorted: default first, then device; within a
+    # section by dir, then model.
+    my @rows;   # each: { section, cfg (configured, for the template_dir column), model, full (real path) }
+    for my $e (@scan) {
+	my ($section, $cfg, $dir) = @$e;
 	local *TDIR;
 	next unless opendir(TDIR, $dir);
 	my @files = readdir(TDIR);
 	closedir(TDIR);
-	foreach my $f (@files) {
+	my %seen;
+	foreach my $f (sort @files) {
 	    next unless $f =~ /^(.+)\.tmpl$/;
-	    my $name = $1;
-	    next if $tmpl_seen{$name}++;
-	    push @names, $name;
+	    my $model = $1;
+	    next if $seen{$model}++;
+	    push @rows, { section => $section, cfg => $cfg, model => $model, full => "$dir/$f" };
 	}
     }
-    @names = sort @names;
+
+    # Sort: default section before device; then by dir; then by model.
+    my %sec_rank = ( default => 0, device => 1 );
+    @rows = sort {
+	   $sec_rank{$a->{section}} <=> $sec_rank{$b->{section}}
+	|| $a->{cfg}   cmp $b->{cfg}
+	|| $a->{model} cmp $b->{model}
+    } @rows;
 
     my $out = '';
-    my $i = 0;
-    foreach my $name (@names) {
-	++$i;
-	$out .= "$i $name\n";
+    my $id = 0;
+    for my $r (@rows) {
+	++$id;
+	# ID <tab> section <tab> full_path <tab> model <tab> template_dir
+	$out .= join("\t", $id, $r->{section}, $r->{full}, $r->{model}, $r->{cfg}) . "\n";
     }
-    my $summary = @names
-	? "found " . scalar(@names) . " template(s) in " . scalar(@dirs) . " directory/directories"
-	: "no templates found in " . scalar(@dirs) . " directory/directories";
-    if (@names) { $log->debug($summary); } else { $log->info($summary); }
+
+    my $n_default = grep { $_->{section} eq 'default' } @rows;
+    my $n_device  = grep { $_->{section} eq 'device'  } @rows;
+    my $summary = @rows
+	? "found " . scalar(@rows) . " template(s): $n_default default, $n_device device"
+	: "no templates found";
+    if (@rows) { $log->debug($summary); } else { $log->info($summary); }
     emit_content('ALL', $out, $out_file,
-		 "listing of " . scalar(@names) . " template(s)", $summary);
-    exit(@names ? 0 : 1);
+		 "listing of " . scalar(@rows) . " template(s)", $summary);
+    exit(@rows ? 0 : 1);
 }
 
 sub check_orphaned_backups {

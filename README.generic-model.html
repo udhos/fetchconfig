@@ -44,7 +44,7 @@ footer { color: var(--muted); font-size: .85em; border-top: 1px solid var(--line
 </head>
 <body>
 <main>
-<nav class="toc"><strong>Contents</strong><ul><li><a href="#what-it-is">What it is</a></li><li><a href="#selecting-it-in-the-device-table">Selecting it in the device table</a></li><li><a href="#template-grammar">Template grammar</a></li><li><a href="#example">Example</a></li><li><a href="#security">Security</a></li><li><a href="#limitations">Limitations</a></li></ul></nav>
+<nav class="toc"><strong>Contents</strong><ul><li><a href="#what-it-is">What it is</a></li><li><a href="#selecting-it-in-the-device-table">Selecting it in the device table</a></li><li><a href="#template-grammar">Template grammar</a></li><li><a href="#example">Example</a></li><li><a href="#security">Security</a></li><li><a href="#limitations">Limitations</a></li><li><a href="#upgrading-from-964">Upgrading from 9.64</a></li></ul></nav>
 <h1 id="the-template-driven-generic-model">The template-driven &quot;generic&quot; model</h1>
 <h2 id="what-it-is">What it is</h2>
 <p>The &quot;generic&quot; model lets a device be backed up from a TEMPLATE file instead of a
@@ -73,12 +73,29 @@ reference.</p>
 <table><thead><tr><th style="text-align:left">Directive</th><th style="text-align:left">Meaning</th></tr></thead><tbody><tr><td style="text-align:left"><code>transport ssh telnet</code></td><td style="text-align:left">allowed transports, in preference order</td></tr><tr><td style="text-align:left"><code>banner_timeout N</code></td><td style="text-align:left">wait for the first prompt, seconds (30)</td></tr><tr><td style="text-align:left"><code>fetch_timeout N</code></td><td style="text-align:left">wait for the show output, seconds (base)</td></tr><tr><td style="text-align:left"><code>fetch_delay N</code></td><td style="text-align:left">pause after connect, seconds (0)</td></tr><tr><td style="text-align:left"><code>prompt_settle N</code></td><td style="text-align:left">prompt settle time, ms (Abstract default)</td></tr><tr><td style="text-align:left"><code>max_visits N</code></td><td style="text-align:left">global self-loop cap (8)</td></tr><tr><td style="text-align:left"><code>strip_ansi yes|no</code></td><td style="text-align:left">strip VT100 escapes from output (no)</td></tr><tr><td style="text-align:left"><code>prompt_head &#x27;REGEX&#x27;</code></td><td style="text-align:left">matched before the learned hostname (empty)</td></tr><tr><td style="text-align:left"><code>prompt_tail &#x27;REGEX&#x27;</code></td><td style="text-align:left">matched after it (<code>#</code>)</td></tr><tr><td style="text-align:left"><code>ssh_extra_opts &#x27;STRING&#x27;</code></td><td style="text-align:left">extra ssh options (legacy crypto)</td></tr><tr><td style="text-align:left"><code>capture_from /REGEX/</code></td><td style="text-align:left">start the saved config at the first matching line</td></tr><tr><td style="text-align:left"><code>skip_first N</code></td><td style="text-align:left">drop the first N captured lines</td></tr></tbody></table>
 <p>Global (checked in every state):</p>
 <ul><li><code>interrupt /REGEX/ -&gt; &lt;action&gt;</code> - a screen that can appear anywhere (menu, &quot;Press any key&quot;, &quot;[y/n]?&quot;).</li><li><code>ignore /REGEX/</code> - a volatile config line to ignore when comparing backups.</li></ul>
-<p>States. The engine starts at the reserved entry state for the chosen transport:</p>
-<ul><li><code>state_login_ssh</code> / <code>state_password_ssh</code> - SSH is already authenticated, so these usually just match the prompt.</li><li><code>state_login_telnet</code> / <code>state_password_telnet</code> - telnet does interactive login here.</li></ul>
+<p>States. Every state is declared with the <code>state</code> keyword:
+<code>state &lt;name&gt; [max_visits N]</code>. The engine starts at the reserved entry state
+for the chosen transport:</p>
+<ul><li><code>state state_login_ssh</code> / <code>state state_password_ssh</code> - SSH is already authenticated, so these usually just match the prompt.</li><li><code>state state_login_telnet</code> / <code>state state_password_telnet</code> - telnet does interactive login here.</li></ul>
 <p>At least one of <code>state_login_ssh</code> / <code>state_login_telnet</code> must be present.</p>
-<p>Other states: <code>state &lt;name&gt; [max_visits N]</code>.</p>
 <p>Inside a state:</p>
 <ul><li><code>expect PATTERN -&gt; ACTION [-&gt; goto STATE | -&gt; done]</code> - <code>PATTERN</code> is <code>/regex/</code> or the bareword <code>prompt</code> (the learned prompt: <code>prompt_head</code> + quoted hostname + <code>prompt_tail</code>). Multiple expects in one state are tried in order, FIRST MATCH WINS - order the most specific first. A self-loop (goto the same state) must be bounded by <code>max_visits</code>.</li><li><code>send &quot;text&quot;</code> | <code>send user|pass|enable</code> - send WITH newline. As a standalone step (no preceding expect) it sends immediately, without waiting for a prompt<ul><li>used after capture to send <code>exit</code>.</li></ul></li><li><code>send_secret pass|enable</code> - send, masked in the debug log.</li><li><code>send_nolf &quot;text&quot;</code> - send WITHOUT newline (pager space, menu key).</li><li><code>send_match</code> - send the captured group <code>$1</code> from the expect regex, as a keystroke (pick a menu item by its shown number).</li><li><code>nop</code> - do nothing.</li><li><code>capture_start</code> / <code>capture_stop</code> - bracket the config; capture is the text between the show-command send and the next prompt.</li></ul>
+<p>A transition is <code>-&gt; goto &lt;state&gt;</code>, <code>-&gt; done</code>, or <code>-&gt; stay</code> (re-enter the same
+state, bounded by <code>max_visits</code>). An <code>expect</code> with no explicit transition
+defaults to <code>stay</code>.</p>
+<p><code>-&gt; stay</code> is for a state that must repeat until something changes - e.g.
+draining a pager on a device that cannot disable it. The state loops on
+itself sending a keystroke for each page, and leaves when the prompt appears
+instead (the shipped templates do not need this because they disable the
+pager with <code>term len 0</code> / <code>no page</code>):</p>
+<pre><code>state drain_pager
+    expect /--More--/  -&gt; send_nolf &quot; &quot;  -&gt; stay   # space for each page, repeat
+    expect prompt      -&gt; nop             -&gt; goto show</code></pre>
+<p><code>max_visits</code> caps the loop so a device stuck on <code>--More--</code> cannot loop
+forever.</p>
+<p>Lexical conventions: <code>/regex/</code> is a regular expression (in <code>expect</code>,
+<code>ignore</code>, <code>interrupt</code>); <code>&quot;text&quot;</code> is a literal string to send; a directive
+value is bare or single-quoted (e.g. <code>strip_ansi no</code>, <code>prompt_tail &#x27;#&#x27;</code>).</p>
 <p>A template must contain exactly one <code>capture_start</code> and one <code>capture_stop</code>. The
 validator (run at load time) rejects: an unbounded self-loop, a goto to an
 unknown state, a missing/duplicate capture marker, an unreachable state, a
@@ -100,6 +117,17 @@ trivially reversible. Treat every backup as sensitive and restrict the
 repository directory, regardless of the debug setting.</p>
 <h2 id="limitations">Limitations</h2>
 <ul><li><code>transport=auto</code> is not implemented (use ssh or telnet).</li><li>There is no escape-hatch to a named Perl helper yet: a device whose behaviour the state machine cannot express still needs a Perl model.</li><li><code>generate_template.pl</code> scaffolds a template from a captured <code>.hex</code> but its output is a DRAFT to review, not a finished model.</li></ul>
+<h2 id="upgrading-from-964">Upgrading from 9.64</h2>
+<p>The state-declaration syntax changed in 9.65: every state, including the
+per-transport entry states, is now declared with the <code>state</code> keyword. A
+template written for 9.64 or earlier must be migrated by prefixing each bare
+entry-state header with <code>state</code>:</p>
+<pre><code>state_login_ssh        -&gt;  state state_login_ssh
+state_password_ssh     -&gt;  state state_password_ssh
+state_login_telnet     -&gt;  state state_login_telnet
+state_password_telnet  -&gt;  state state_password_telnet</code></pre>
+<p><code>goto</code> targets and other states are unchanged. Verify with
+<code>fetchconfig.pl --check-template PATH</code>.</p>
 <footer>Generated from <code>README.generic-model.md</code> by <code>md2html.py</code>.</footer>
 </main>
 </body>

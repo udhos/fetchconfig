@@ -130,15 +130,16 @@ Checked/applied regardless of state:
 
 The engine starts at the reserved entry state for the chosen transport:
 
-- state_login_ssh / state_password_ssh
-- state_login_telnet / state_password_telnet
+- state state_login_ssh / state state_password_ssh
+- state state_login_telnet / state state_password_telnet
 
 At least one of state_login_ssh / state_login_telnet must exist. SSH is
 already authenticated when the session opens, so its entry state typically just
 matches the prompt; telnet does interactive login. The two paths converge (via
 goto) on the shared states.
 
-Other states: state <name> [max_visits N].
+Every state is declared with the state keyword, including the reserved
+entry states above: state <name> [max_visits N].
 
 Inside a state:
 
@@ -170,8 +171,19 @@ Inside a state:
 - capture_start / capture_stop bracket the config: the saved config is the
   text captured between the show-command send and the closing prompt.
 
-A transition is -> goto STATE, -> done, or (for a plain expect with no
-arrow) an implicit re-entry of the same state ("stay"). A state that can
+A transition is -> goto STATE, -> done, or -> stay (re-enter the same
+state). A plain expect with no arrow defaults to stay. Self-loops are
+bounded by max_visits. A state that can
+
+A -> stay loop repeats a state until something changes - typically draining
+a pager on a device that cannot disable it (the shipped templates disable the
+pager with term len 0 / no page, so they do not need it):
+
+    state drain_pager
+        expect /--More--/  -> send_nolf " "  -> stay   # space per page, repeat
+        expect prompt      -> nop             -> goto show
+
+max_visits bounds the loop.
 re-enter itself must be bounded by max_visits.
 
 4.5 Validation
@@ -271,4 +283,20 @@ a finished template.**
   length varies between firmware versions.
 - Everything device-facing must be verified on real hardware; a capture shows
   one session, not every path a device can take.
+
+Upgrading from 9.64
+===================
+
+The state-declaration syntax changed in 9.65: every state, including the
+per-transport entry states, is now declared with the state keyword. A
+template written for 9.64 or earlier must be migrated by prefixing each bare
+entry-state header with state:
+
+    state_login_ssh        ->  state state_login_ssh
+    state_password_ssh     ->  state state_password_ssh
+    state_login_telnet     ->  state state_login_telnet
+    state_password_telnet  ->  state state_password_telnet
+
+goto targets and other states are unchanged. Verify with
+fetchconfig.pl --check-template PATH.
 

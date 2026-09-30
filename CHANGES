@@ -2,8 +2,92 @@
 # fetchconfig.pl - CHANGES
 #
 
+9.65
+====
+
++ procurve.tmpl: dropped the trailing space in the /Username:/ and
+  /Password:/ expects - on a VT100/telnet device the space can arrive in a
+  separate read, causing an intermittent login timeout. Validated over
+  telnet on R.11 (menu) and K.15 (direct-to-CLI) firmware.
+
++ SECURITY FIX: the directory: allowlist was bypassed when repository=,
+  template_dir= or on_fetch_run= was set only on a default: line - the
+  check read the device line only. Enforcement now validates the effective
+  value (default + device) via a new dev_option_raw accessor.
+
++ Template grammar: every state is now declared with the "state" keyword,
+  including the per-transport entry states (e.g. "state state_login_ssh"),
+  so a state header is always recognisable. An explicit "-> stay" transition
+  is accepted (a plain expect with no arrow still defaults to stay). The two
+  shipped templates and generate_template.pl were updated accordingly.
+
+  INCOMPATIBLE grammar change - a template written for 9.64 or earlier will
+  no longer parse. To migrate, add the "state" keyword before each bare
+  entry-state header:
+      state_login_ssh        ->  state state_login_ssh
+      state_password_ssh     ->  state state_password_ssh
+      state_login_telnet     ->  state state_login_telnet
+      state_password_telnet  ->  state state_password_telnet
+  (goto targets and other states are unchanged.) Verify with
+  "fetchconfig.pl --check-template PATH".
+
++ generate_template.pl no longer emits the removed
+  first_config_line_starts_with directive (it emits capture_from), and uses
+  the new state syntax.
+
++ Directory allowlist state is reset at each device-table load (safe for a
+  future long-lived process).
+
++ Documentation: reorganised the HTML manual into a clearer flow (front
+  matter, getting started, configuration, supported devices, features,
+  reference), added a Key concepts intro and a Security cross-reference to
+  the allowlist, and documented the template lexical conventions and the
+  stay transition. Silenced two harmless "used only once" compile warnings.
+
 9.64
 ====
+
++ directory: $TAG aliases are now expanded centrally in dev_option, so ALL
+  commands that read repository=/template_dir=/on_fetch_run= (fetch, -g, -l,
+  -z, -Z, -e, -o, -s, -S, -t, --list-allowed-dirs) resolve a $TAG to its
+  real path - previously only fetch and -t did, so e.g. -l reported "no
+  backups" when the table used repository=$REPO1. -t still shows the
+  configured value (the $TAG) in its template_dir column.
+
++ Fix -t/--list-template: a generic device that inherits template_dir from
+  the "default: generic" line was wrongly reported as a "device" entry
+  (duplicating the default directory). It is now correctly counted under the
+  default scope; only a device's OWN template_dir= makes a "device" entry.
+
++ Fix -t/--list-template with directory: $TAG aliases: a template_dir set to
+  a $TAG (as fetchconfig-web writes it) is now expanded to scan the real
+  directory instead of failing. The template_dir column shows the configured
+  value (the $TAG or literal path) so a consumer can match the device table;
+  full_path is always the real resolved path.
+
++ directory: allowlist extended with a third type, fetch_run, constraining
+  on_fetch_run= to programs in allowed directories ($TAG expanded in place;
+  "directory: fetch_run none" forbids on_fetch_run). A directory: section
+  must now cover all three types (repository, template, fetch_run).
+
++ New optional directory: allowlist in the device table. When present, a
+  device's repository= and template_dir= must name a listed directory (by
+  $TAG or exact path, trailing slash ignored, paths checked for /../, /./
+  and illegal characters, typed repository/template); an off-list value is
+  rejected at fetch time and the device skipped. Absent section = no
+  enforcement. New --list-allowed-dirs prints AND lints the allowlist (exit 2 if an
+  entry is malformed or its directory is missing). Intended to let
+  a less-trusted editor (fetchconfig-web) change devices without widening
+  the set of usable directories.
+
++ -t/--list-template output changed to one TAB-separated row per template:
+  <id> <section> <full_path> <model> <template_dir>, where <section> is
+  "default" (the default: scope's directory, or the program default) or
+  "device" (a device-specific template_dir=), so a consumer can populate the
+  defaults editor and the device editor from one cached query. Device
+  directories are deduplicated by configured path; a model may appear under
+  both sections. Every directory to be scanned must exist - a missing
+  configured path now exits 2.
 
 + Fix -t/--list-template: template directories are now deduplicated by their
   real (symlink-resolved) path, so the same physical templates directory

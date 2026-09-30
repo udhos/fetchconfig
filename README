@@ -254,6 +254,63 @@ DEVICE TABLE
 	a) an unique identifier across all devices;
 	b) a valid filesystem's directory name.
 
+
+DIRECTORY ALLOWLIST
+
+	Optionally, the device table may restrict which directories a
+	repository= or template_dir= option is allowed to name. This is
+	useful when the device table is edited through a less-trusted
+	front end (e.g. a web UI): the allowlist lives only in the real
+	config file and cannot be widened from the UI, so an edit can
+	never point a device at an arbitrary path.
+
+	The allowlist is written with "directory:" lines:
+
+	  directory: repository $REPO1     /usr/local/fetchconfig/config
+	  directory: template   $TEMPLATE1 /usr/local/fetchconfig/templates
+	  directory: fetch_run  $CMD1      /var/fetchconfig/fetch_run
+
+	Each line is: "directory:" <type> <$TAG> <path>, where <type> is
+	"repository", "template" or "fetch_run", <$TAG> is a unique
+	$NAME symbol, and <path> is the allowed directory.
+
+	If a "directory:" section is present it must cover ALL THREE
+	types (repository, template and fetch_run). The fetch_run type
+	constrains on_fetch_run= (an external command): the directory of
+	the command's program must be an allowed fetch_run directory. If
+	on_fetch_run is not wanted at all, write "directory: fetch_run
+	none", which satisfies the type and forbids any on_fetch_run.
+
+	Enforcement is OPT-IN: if the device table contains no
+	"directory:" line, nothing is restricted (existing device tables
+	are unaffected). If at least one "directory:" line is present,
+	then every repository= and template_dir= used by a device (or
+	inherited from a "default:" line) must be allowed:
+
+	- repository= must name a "repository" entry; template_dir= a
+	  "template" entry; and on_fetch_run= must run a program whose
+	  directory is a "fetch_run" entry (the types are not
+	  interchangeable).
+	- The value may be either the $TAG or the literal path (for
+	  on_fetch_run, "$CMD1/prog args" or "/dir/prog args"). A $TAG is
+	  expanded to its path internally.
+	- Matching is exact, ignoring a single trailing slash. Paths are
+	  NOT canonicalized, so a symlinked, version-free path such as
+	  /usr/local/fetchconfig (a symlink to /usr/local/fetchconfig-
+	  9.64) is compared as written and the version stays hidden.
+	- Every path - in a "directory:" line and in a device value - is
+	  checked for illegal content: no "/../" or "/./" components, an
+	  absolute path, and only characters valid for the host OS; a bad
+	  path is rejected.
+
+	A value that is off the list, of the wrong type, an undefined
+	tag, or has illegal content is rejected at fetch time with a
+	clear error, and that device is skipped; a bad value inherited
+	from a "default:" line rejects every device that inherits it.
+	The "--list-allowed-dirs" option prints the parsed allowlist (see
+	the command-line options reference).
+
+
 EMAIL NOTIFICATIONS
 
 	fetchconfig.pl can e-mail a summary of a run's backup results
@@ -777,22 +834,54 @@ RETRIEVING A STORED CONFIG, AND COMMAND-LINE OPTIONS
 	Template options (generic model)
 	--------------------------------
 	-t, --list-template
-                        Lists the generic-model templates available to
-                        the loaded devices: scans every template_dir= a
-                        loaded device (or a "default: generic" line)
-                        configures, and the default templates/ directory
-                        beside fetchconfig.pl as a fallback, then prints
-                        the unique template names, numbered, one per line.
-                        Directories are deduplicated by their real
-                        (symlink-resolved) path, so the same physical
-                        directory reached through different paths - e.g. a
-                        version symlink like /usr/local/fetchconfig ->
-                        /usr/local/fetchconfig-9.56 - is scanned once;
-                        configured paths are listed before the fallback.
-                        Each scanned directory is logged as
-                        "N. template dir: <path>". Exit status is 0 if any
-                        template is found, 1 if none. Honours "-f".
+                        Lists the generic-model templates available to the
+                        loaded devices, one TAB-separated row per template:
+
+                          <id> <section> <full_path> <model> <template_dir>
+
+                        <section> is "default" or "device":
+                          default  a template in the directory the
+                                   "default:" scope uses - the "default:
+                                   generic template_dir=" if set, else the
+                                   program default (templates/ beside
+                                   fetchconfig.pl). Feeds the defaults
+                                   editor.
+                          device   a template in a device-specific
+                                   template_dir=. Feeds the device editor.
+                        <template_dir> is the CONFIGURED value as written
+                        in the device table - a directory: $TAG (e.g.
+                        $TPL1) or a literal path - so a consumer can filter
+                        by exactly what the table holds. <full_path> is
+                        always the real, resolved path (a $TAG is expanded),
+                        so the file is identifiable regardless of the form
+                        the table uses.
+
+                        A device that configures the same path as the
+                        default still produces "device" rows (it never uses
+                        the default), so a model may appear under both
+                        sections. Device directories are deduplicated by
+                        their configured path (many devices sharing one path
+                        list it once); the output carries no device id.
+                        Rows are sorted default first, then device; within a
+                        section by directory, then model.
+
+                        Every directory to be scanned - the default included
+                        - must exist on disk; a configured path that does
+                        not exist is reported and the exit status is 2,
+                        regardless of what else was found. Otherwise exit 0
+                        if any template was found, 1 if none. Honours "-f".
                         (See TEMPLATE-DRIVEN MODEL above.)
+
+	--list-allowed-dirs
+                        Lists the directory: allowlist configured in
+                        the device table (see DIRECTORY ALLOWLIST
+                        above), one TAB-separated row per entry:
+                        <id> <type> <tag> <path>. It also LINTS the
+                        section: exit 0 if a directory: section exists and
+                        every entry is valid (well-formed and its path
+                        exists on disk), 1 if no section, 2 if any entry is
+                        invalid (bad line, type, duplicate tag, illegal path
+                        content, or a missing directory). Honours "-f".
 
 	--check-template PATH
                         Structurally checks the generic-model template at

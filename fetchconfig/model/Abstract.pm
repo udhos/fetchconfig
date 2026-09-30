@@ -709,16 +709,70 @@ sub default_options {
 #
 my $DEFAULT_TIMEOUT_SEC = 30;
 
+# Options whose value is a directory (or, for on_fetch_run, a command whose
+# program is under a directory) and may therefore be written as a
+# directory: allowlist $TAG. dev_option expands such a $TAG to its real path
+# so EVERY consumer (fetch, -l, -g, -z, -e, -o, -s, -t, --list-allowed-dirs)
+# sees a real path, regardless of the option. Expansion only happens when a
+# directory: allowlist is configured; otherwise values pass through
+# unchanged. This is the single place aliases are resolved for reads.
+my %DIR_VALUED_OPTION = (
+    repository   => 'repository',
+    template_dir => 'template',
+    on_fetch_run => 'fetch_run',
+);
+
+sub _expand_dir_alias {
+    my ($self, $opt_name, $value) = @_;
+    return $value unless defined($value) && length($value);
+    my $type = $DIR_VALUED_OPTION{$opt_name};
+    return $value unless defined($type);
+    # Abstract must not hard-depend on Detector being loaded (some unit tests
+    # exercise a model in isolation). If Detector's allowlist API is not
+    # available, there is no allowlist, so pass the value through unchanged.
+    return $value unless fetchconfig::model::Detector->can('dir_allowlist_present');
+    return $value unless fetchconfig::model::Detector->dir_allowlist_present;
+    my ($ok, $resolved);
+    if ($opt_name eq 'on_fetch_run') {
+	($ok, $resolved) = fetchconfig::model::Detector->resolve_allowed_fetch_run($value);
+    } else {
+	($ok, $resolved) = fetchconfig::model::Detector->resolve_allowed_dir($type, $value);
+    }
+    return ($ok && defined($resolved)) ? $resolved : $value;
+}
+
+# The EFFECTIVE value of an option (device line first, then this model's
+# default_options), WITHOUT directory-alias expansion. dev_option resolves a
+# directory: $TAG for consumers; the allowlist enforcement needs the raw,
+# unexpanded effective value so it can validate it (and so a value inherited
+# from a default: line is checked, not silently skipped). Returns undef if
+# the option is set nowhere.
+sub dev_option_raw {
+    my ($self, $dev_opt_tab, $opt_name) = @_;
+    my $value = $dev_opt_tab->{$opt_name};
+    return $value if defined($value);
+    return $self->{default_options}->{$opt_name};
+}
+
+# dev_option returns the option value for CONSUMERS: the effective value with
+# a directory: $TAG expanded to its real path. NOTE: reads are not gated by
+# the allowlist here - an off-list value is returned unchanged (a read
+# command then simply looks in that path). The allowlist is ENFORCED at fetch
+# time in Detector::fetch_device, on the raw effective value (dev_option_raw).
 sub dev_option {
     my ($self, $dev_opt_tab, $opt_name) = @_;
 
     my $value = $dev_opt_tab->{$opt_name};
 
-    return $value if defined($value);
+    if (defined($value)) {
+	return $self->_expand_dir_alias($opt_name, $value);
+    }
 
     $value = $self->{default_options}->{$opt_name};
 
-    return $value if defined($value);
+    if (defined($value)) {
+	return $self->_expand_dir_alias($opt_name, $value);
+    }
 
     # "timeout" always has a value: fall back to the documented default
     # and say so, so a missing timeout in the device table is visible

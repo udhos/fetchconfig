@@ -87,6 +87,7 @@ my $orphan_delete;      # set by -D: also delete what -o (orphaned backups) or -
 my $orphan_test;        # set by -T: with -D, only show what would be deleted, don't delete (requires -D)
 my $check_template;     # set by --check-template FILE: structural check of one template, then exit
 my $list_template;      # set by -t/--list-template: list available templates from all template_dir=
+my $list_allowed_dirs;  # set by --list-allowed-dirs: list the directory: allowlist
 my $retrieve_out_file;  # set by -f: optional output file (default: stdout)
 my $parallel = 1;       # set by -P N: number of concurrent fetch workers (1 = sequential, the default)
 
@@ -130,6 +131,7 @@ my $got = GetOptions(
     'T'         => \$orphan_test,
     'check-template=s' => \$check_template,
     't|list-template'  => \$list_template,
+    'list-allowed-dirs' => \$list_allowed_dirs,
     'n=s'       => \$retrieve_index,   # validated as a positive integer below
     'm=s'       => \$compare_index,
     'P=s'       => \$parallel,
@@ -252,7 +254,7 @@ if (defined($orphan_test) && !defined($orphan_delete)) {
 
 fetchconfig::model::Detector->init($log);
 
-my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template);
+my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs);
 if ($parallel > 1 && $lookup_only) {
     $log->error("-P applies to fetching only and cannot be combined with -g/-l/-z/-Z/-o/-e/-s/-S");
     &usage;
@@ -318,6 +320,11 @@ if (defined($orphan_check)) {
 
 if (defined($list_template)) {
     fetchconfig::Tools::list_templates($retrieve_out_file);
+    exit;
+}
+
+if (defined($list_allowed_dirs)) {
+    fetchconfig::Tools::list_allowed_dirs($retrieve_out_file);
     exit;
 }
 
@@ -423,6 +430,14 @@ sub usage_text {
     $t .= "       -t, --list-template   list the templates available in every template_dir= a loaded\n";
     $t .= "                      device configures (and the default dir); numbered, one per line; exits 0 if\n";
     $t .= "                      any template is found, 1 if none\n";
+    $t .= "       --list-allowed-dirs   list the directory: allowlist from the device table (the\n";
+    $t .= "                      repository/template directories that may be used), one TAB-separated\n";
+    $t .= "                      row per entry: id, type, tag, path. Also lints: exits 0 if a\n";
+    $t .= "                      directory: section exists and every entry is valid (well-formed and\n";
+    $t .= "                      its path exists on disk), 1 if no section, 2 if an entry is invalid.\n";
+    $t .= "                      A directory: section must cover all three types (repository, template,\n";
+    $t .= "                      fetch_run); use \"directory: fetch_run none\" to forbid on_fetch_run.\n";
+    $t .= "                      Honours -f.\n";
     $t .= "       --check-template PATH  structurally check the generic-model template at PATH\n";
     $t .= "                      (grammar + the load-time validator: self-loops, goto targets, capture\n";
     $t .= "                      markers, reachability, transport entry) and exit. PATH must be the full\n";

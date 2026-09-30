@@ -486,7 +486,7 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.64</span>
+      <span class="pill">v9.65</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
@@ -495,27 +495,34 @@
         <div class="nav-group-label">Overview</div>
         <a href="#introduction">Introduction</a>
         <a href="#license">License</a>
+        <a href="#installation">Installation</a>
+        <a href="#modules">Perl module requirements</a>
       </div>
       <div class="nav-group">
         <div class="nav-group-label">Getting started</div>
-        <a href="#installation">Installation</a>
-        <a href="#modules">Perl module requirements</a>
         <a href="#usage">Usage</a>
-        <a href="#parallel">Parallel fetching</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Configuration</div>
         <a href="#device-table">Device table</a>
+        <a href="#embedding">Device table on the CLI</a>
+        <a href="#directory-allowlist">Directory allowlist</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-label">Supported devices</div>
+        <a href="#template-model">Template model</a>
+        <a href="#device-support">Device support</a>
       </div>
       <div class="nav-group">
         <div class="nav-group-label">Features</div>
+        <a href="#parallel">Parallel fetching</a>
         <a href="#email-notifications">E-mail notifications</a>
-        <a href="#embedding">Device table on the CLI</a>
         <a href="#retrieving">Retrieving backups</a>
       </div>
       <div class="nav-group">
         <div class="nav-group-label">Reference</div>
-        <a href="#device-support">Device support</a>
-        <a href="#template-model">Template model</a>
-        <a href="#troubleshooting">Troubleshooting</a>
         <a href="#options">Options reference</a>
+        <a href="#troubleshooting">Troubleshooting</a>
         <a href="#security">Security notes</a>
         <a href="#status-file">Status file</a>
         <a href="#procurve-snmp">ProCurve SNMP backups</a>
@@ -532,7 +539,7 @@
       <p class="lede">A Perl script for retrieving and backing up the configuration of network devices at scale &mdash; over telnet, SSH or a device&rsquo;s web UI, across dozens of vendors, with change tracking, e-mail summaries, and a repository you can script against.</p>
       <div class="hero-stats">
         <div class="hero-stat"><span class="num">34</span><span class="label">device platforms</span></div>
-        <div class="hero-stat"><span class="num">9.64</span><span class="label">version</span></div>
+        <div class="hero-stat"><span class="num">9.65</span><span class="label">version</span></div>
         <div class="hero-stat"><span class="num">Telnet / SSH / HTTP / SNMP</span><span class="label">transports</span></div>
         <div class="hero-stat"><span class="num">Linux / AIX / Windows</span><span class="label">tested platforms</span></div>
       </div>
@@ -544,6 +551,7 @@
         <div class="section-kicker">01</div>
         <h2>Introduction</h2>
         <p>fetchconfig is a Perl script for retrieving the configuration of multiple devices. It has been tested under Linux, AIX and Windows, and currently supports a variety of devices, including Cisco IOS, Cisco Catalyst, Cisco ASA, Cisco PIX, FortiGate Firewalls, ProCurve, Alcatel Ethernet Routers (aka Riverstone), Dell PowerConnect Switches, Terayon 3200/3500 CMTS, Datacom DmSwitch Switches, HP MSR Routers, Mikrotik Routers, Tellabs MSR Routers, Juniper EX Switch JunOS, Oracle Acme Packet, Audiocodes Mediant, Cisco IOS XR, NEC Univerge IX, Hirschmann Railswitch, Zyxel switches, PLANET managed switches, Aruba CX switches, Cisco Nexus switches, TP-Link Easy Smart switches, HP ProCurve 1700 series switches, and HP ProCurve ProVision (incl. 4000M/8000M) over SNMP+TFTP.</p>
+        <p><strong>Key concepts.</strong> A <em>device table</em> lists the devices to back up, one per line, each naming a <em>model</em> (how to talk to that kind of device) and options. fetchconfig connects to each device, retrieves its configuration, and stores it in a <em>repository</em> (a dated directory tree), keeping a configurable history. Reading on: <a href="#device-table">Device table</a> defines the input, <a href="#template-model">Template model</a> covers the flexible generic model, and <a href="#options">Options reference</a> lists every command-line option.</p>
         <div class="callout warn">
           <div class="callout-title">Important change in v9.55 (filename_append_suffix)</div>
           <p>Starting with v9.55, <code>filename_append_suffix</code> must start with a &ldquo;.&rdquo; (e.g. <code>.txt</code>). A device whose suffix lacks the leading dot, or contains <code>/</code> or whitespace, now <strong>fails its backup</strong> with an error and writes nothing. Fix any dotless suffix in your device table before the first v9.55 run. Also: do not add, remove or change a suffix on a device that already has backups; use <code>fetchconfig.pl -S</code> to find devices whose existing backups already mix suffixes.</p>
@@ -633,7 +641,7 @@ cpan install LWP::UserAgent Net::SNMP Net::TFTP</code></pre>
       </section>
 
       <section id="usage">
-        <div class="section-kicker">04</div>
+        <div class="section-kicker">05</div>
         <h2>Usage</h2>
         <ol>
           <li>Edit <code>device_table.example</code> according to your needs, and save it as <code>device_table</code>.</li>
@@ -650,22 +658,8 @@ vi device_table</code></pre>
         <p class="prose-muted">fetchconfig.pl scans the <code>device_table</code> file, tries to retrieve the configuration for every device, and stores the configuration files under the <code>repository</code>.</p>
       </section>
 
-      <section id="parallel">
-        <h2>Parallel fetching</h2>
-        <p>Fetching is sequential unless asked otherwise: one device at a time, in device-table order, every log line shown as it happens. With thousands of devices the run time is dominated by the network sessions (roughly 5&ndash;15&nbsp;s each, plus a full timeout for every unreachable device), and a sequential run no longer fits in a night.</p>
-        <span class="file-label">shell</span>
-        <pre><code>./fetchconfig.pl -devices=device_table -P 20</code></pre>
-        <p><code>-P N</code> fetches with <code>N</code> concurrent worker processes. The parent loads the device table, then hands out one device at a time to whichever worker asks next, so a slow device never holds up the others. Every worker is a copy of the fully loaded parent, so the models run unchanged. With <code>N</code> = 10&ndash;20 a run of several hours typically completes in well under one; the gain is bounded by what the devices and the network tolerate, not by the backup host.</p>
-        <div class="callout note">
-          <div class="callout-title">Output is atomic per device</div>
-          <p>While a worker fetches, everything it writes to stdout and stderr is buffered; when the device finishes, the parent copies that buffer to the real streams in one uninterrupted block. One device&rsquo;s output is therefore <strong>never mixed with another&rsquo;s</strong> &mdash; each block looks exactly as in a sequential run. Two consequences: blocks appear in <em>completion</em> order, not table order; and a device&rsquo;s lines appear when it finishes, not live. At <code>-P 1</code> nothing is buffered and behaviour is unchanged.</p>
-        </div>
-        <p>Everything else is unaffected: each device writes only its own directory, <code>.status</code> and <code>.debug</code>; the summary e-mail, per-device <code>to=</code> bundling and the <code>.status</code> files are produced by the parent from the workers&rsquo; results, exactly as in a sequential run. A worker that dies is detected by the parent; the device it was fetching is recorded as failed and the remaining devices are still fetched by the other workers.</p>
-        <p><strong>Sizing <code>N</code>.</strong> Start at 10 and raise it while watching for devices that refuse or delay logins: the limits are the switches&rsquo; concurrent-session caps, the TACACS+/RADIUS rate, and the links to remote sites &mdash; not the backup host. 10&ndash;25 is typical. <code>-P</code> applies to fetching only and cannot be combined with the lookup/maintenance modes, which stay single-process.</p>
-      </section>
-
       <section id="device-table">
-        <div class="section-kicker">05</div>
+        <div class="section-kicker">06</div>
         <h2>Device table</h2>
         <p>The device table assigned with <code>-devices=</code> is a text file that supports two types of lines.</p>
 
@@ -689,8 +683,132 @@ cisco-ios       vpn-gw          192.168.0.1     keep=10,changes_only=1</code></p
         </div>
       </section>
 
+      <section id="embedding">
+        <div class="section-kicker">07</div>
+        <h2>Device table on the command line</h2>
+        <p>Valid lines for the device table file can also be passed directly through the <code>-line=</code><em>string</em> switch.</p>
+        <pre><code>/path/to/fetchconfig.pl <span class="k">-line=</span><span class="s">"default: tellabs-msr user=backup,pass=s&amp;cr&amp;t,timeout=10,keep=5,changes_only=0,fetch_timeout=1200,filename_append_suffix=.txt,repository=/path/to/repo"</span> <span class="k">-line=</span><span class="s">"tellabs-msr lab-router 10.0.0.1"</span></code></pre>
+      </section>
+
+      <section id="directory-allowlist">
+        <div class="section-kicker">08</div>
+        <h2>Directory allowlist</h2>
+        <p class="prose-muted">Restrict which directories a repository=, template_dir= or on_fetch_run= may name.</p>
+        <p>Optionally, the device table may restrict which directories a <code>repository=</code> or <code>template_dir=</code> option is allowed to name. This is useful when the device table is edited through a less-trusted front end (e.g. a web UI): the allowlist lives only in the real config file and cannot be widened from the UI, so an edit can never point a device at an arbitrary path.</p>
+        <p>With all three directory types allowed:</p>
+        <pre><code>directory: repository $REPO1     /usr/local/fetchconfig/config
+directory: template   $TEMPLATE1 /usr/local/fetchconfig/templates
+directory: fetch_run  $CMD1      /var/fetchconfig/fetch_run</code></pre>
+        <p>With <code>on_fetch_run</code> disabled (<code>fetch_run none</code>):</p>
+        <pre><code>directory: repository $REPO1     /usr/local/fetchconfig/config
+directory: template   $TEMPLATE1 /usr/local/fetchconfig/templates
+directory: fetch_run  none</code></pre>
+        <p>Each line is <code>directory: &lt;type&gt; &lt;$TAG&gt; &lt;path&gt;</code>, where <code>type</code> is <code>repository</code>, <code>template</code> or <code>fetch_run</code>, <code>$TAG</code> is a unique <code>$NAME</code> symbol, and <code>path</code> is the allowed directory. A section must cover <strong>all three</strong> types; <code>fetch_run</code> constrains <code>on_fetch_run=</code> (the directory of the command's program must be an allowed <code>fetch_run</code> directory), and <code>directory: fetch_run none</code> forbids <code>on_fetch_run</code> entirely.</p>
+        <p>Enforcement is <strong>opt-in</strong>: with no <code>directory:</code> line, nothing is restricted (existing device tables are unaffected). With at least one present, every <code>repository=</code> and <code>template_dir=</code> used by a device (or inherited from a <code>default:</code> line) must be allowed:</p>
+        <ul>
+          <li><code>repository=</code> must name a <code>repository</code> entry; <code>template_dir=</code> a <code>template</code> entry; <code>on_fetch_run=</code> must run a program in a <code>fetch_run</code> entry (types are not interchangeable).</li>
+          <li>The value may be the <code>$TAG</code> or the literal path; a <code>$TAG</code> is expanded internally.</li>
+          <li>Matching is exact, ignoring a single trailing slash. Paths are <strong>not</strong> canonicalized, so a symlinked, version-free path (e.g. <code>/usr/local/fetchconfig</code> &rarr; <code>/usr/local/fetchconfig-9.64</code>) is compared as written and the version stays hidden.</li>
+          <li>Every path is checked for illegal content: no <code>/../</code> or <code>/./</code>, must be absolute, and only characters valid for the host OS.</li>
+        </ul>
+        <p>A value off the list, of the wrong type, an undefined tag, or with illegal content is rejected at fetch time with a clear error and that device is skipped; a bad value inherited from a <code>default:</code> line rejects every device that inherits it. <code>--list-allowed-dirs</code> prints the parsed allowlist.</p>
+      </section>
+
+      <section id="template-model">
+        <div class="section-kicker">09</div>
+        <h2>Template-driven model (generic)</h2>
+        <p class="prose-muted">Describe a device with a template instead of a Perl module.</p>
+        <p>Besides the per-device Perl models, fetchconfig has a <code>generic</code> model whose device interaction is described by a <strong>template</strong> file rather than Perl code. A template is a small state machine of expect/send steps, with the transport, prompt, timeouts, interrupt screens and ignore-lines as data. For a clean-CLI device this is a short file rather than a ~200-line module, and similar devices can share or clone one template.</p>
+        <p>A device selects it in the device table with the model <code>generic</code> and a template name:</p>
+        <pre><code>generic  sw1  10.0.0.1  model=cisco-ios,transport=ssh,user=...</code></pre>
+        <p>This loads <code>templates/cisco-ios.tmpl</code>; <code>transport</code> is <code>ssh</code> or <code>telnet</code>. Templates for Cisco IOS/IOS-XE (both transports) and HP ProCurve (menu/VT100) ship as worked examples. Two companion tools support the workflow: <code>tools/record-session.pl</code> captures a real session as a byte-accurate log to build a template from, and <code>tools/generate_template.pl</code> scaffolds a template draft from such a capture.</p>
+        <p>A template can be checked without a device:</p>
+        <pre><code>./fetchconfig.pl <span class="k">--check-template</span> templates/cisco-ios.tmpl</code></pre>
+        <p class="prose-muted">The argument must be the <strong>full path</strong> to the <code>.tmpl</code> file &mdash; a bare template name is not resolved, because the same name can exist in different <code>template_dir</code> directories. This runs the grammar and the load-time validator (self-loops, goto targets, capture markers, reachability, transport entry) and prints <code>ok</code> or the errors; it exits <code>0</code> ok, <code>1</code> errors, <code>2</code> file problem, and needs no device table. It is a <strong>structural</strong> check only &mdash; a template that passes may still need adjusting against the real device.</p>
+        <p>To list the templates available to the loaded devices:</p>
+        <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-t</span></code></pre>
+        <p class="prose-muted"><code>-t</code> (<code>--list-template</code>) scans every <code>template_dir=</code> a loaded device configures, plus the default template directory, and prints the template names it finds, numbered, one per line. Exit <code>0</code> if any template is found, <code>1</code> if none.</p>
+        <div class="callout">
+          <div class="callout-title">Further reading</div>
+          <p>The generic model and its tools are documented separately:</p>
+          <ul>
+            <li><a href="README.generic-model.html">README.generic-model</a> &mdash; the generic model and template grammar (quick reference)</li>
+            <li><a href="README.template_engine.html">README.template_engine</a> &mdash; the full engineering reference: architecture, grammar, execution semantics, writing and generating templates</li>
+            <li><a href="README.record-session.html">README.record-session</a> &mdash; the record-session.pl capture tool</li>
+            <li><a href="How-To-add-a-model.html">How to add a model</a> &mdash; writing a new per-device Perl model (the alternative to a template)</li>
+          </ul>
+        </div>
+        <p class="prose-muted">The template parser is production-ready; the execution engine has been verified on Cisco IOS-XE over telnet and SSH and on an HP ProCurve menu switch. Verify a template against the target device before relying on it.</p>
+      </section>
+
+      <section id="device-support">
+        <div class="section-kicker">10</div>
+        <h2>Device support</h2>
+        <p class="prose-muted">Known to be supported &mdash; not a comprehensive list. Other devices and versions are likely to work but haven't been verified.</p>
+        <div class="table-wrap">
+          <table class="device-grid">
+            <thead><tr><th>Model name</th><th>Devices / OS supported</th></tr></thead>
+            <tbody>
+              <tr><td><code>cisco-cat</code></td><td>CatOS switches</td></tr>
+              <tr><td><code>cisco-ios</code></td><td>IOS routers &mdash; 2500 series, 2600 series, 2800 series, CS&#8209;516 (with <code>show_cmd=wrterm</code>)</td></tr>
+              <tr><td><code>cisco-asa</code></td><td>Cisco ASA firewalls</td></tr>
+              <tr><td><code>cisco-pix</code></td><td>Cisco PIX firewalls</td></tr>
+              <tr><td><code>cisco-iosxr</code></td><td>Cisco IOS XR</td></tr>
+              <tr><td><code>fortigate</code></td><td>FortiOS 3.0</td></tr>
+              <tr><td><code>parks</code></td><td>Parks 209R</td></tr>
+              <tr><td><code>riverstone</code></td><td>Alcatel Ethernet Router 3100 (Riverstone RS3100)</td></tr>
+              <tr><td><code>terayon-os</code></td><td>Terayon 3200/3500 CMTS</td></tr>
+              <tr><td><code>dmswitch</code></td><td>Datacom DmSwitch</td></tr>
+              <tr><td><code>3com-msr</code></td><td>3Com MSR routers</td></tr>
+              <tr><td><code>mikrotik</code></td><td>MikroTik routers</td></tr>
+              <tr><td><code>coriant-8600</code></td><td>Coriant 8600 Smart Router Series</td></tr>
+              <tr><td><code>tellabs-msr</code></td><td>Tellabs MSR routers</td></tr>
+              <tr><td><code>junos</code></td><td>Juniper EX Switch JunOS</td></tr>
+              <tr><td><code>acme</code></td><td>Oracle Acme Packet</td></tr>
+              <tr><td><code>mediant</code></td><td>Audiocodes Mediant</td></tr>
+              <tr><td><code>nec-univerge-ix</code></td><td>NEC Univerge IX</td></tr>
+              <tr><td><code>hirschmann</code></td><td>Hirschmann Railswitch (L2E software, telnet)</td></tr>
+              <tr><td><code>zyxel</code></td><td>Zyxel switches (Cisco-IOS-like CLI, telnet)</td></tr>
+              <tr><td><code>cisco-ios-ssh</code></td><td>Cisco IOS over SSH (the SSH counterpart of <code>cisco-ios</code>)</td></tr>
+              <tr><td><code>cisco-asa-ssh</code></td><td>Cisco ASA over SSH (the SSH counterpart of <code>cisco-asa</code>)</td></tr>
+              <tr><td><code>comware-ssh</code></td><td>HP/H3C Comware switches over SSH (bracketed <code>&lt;host&gt;</code>/<code>[host]</code> prompt, no <code>enable</code> step)</td></tr>
+              <tr><td><code>cisco-sg300</code></td><td>Cisco SG300 small-business switches (Cisco-IOS-like CLI)</td></tr>
+              <tr><td><code>dell</code></td><td>Dell PowerConnect switches</td></tr>
+              <tr><td><code>procurve</code></td><td>HP ProCurve switches (telnet); see also <code>procurve-ssh</code></td></tr>
+              <tr><td><code>procurve-ssh</code></td><td>HP ProCurve switches over SSH (the SSH counterpart of <code>procurve</code>; also handles a hostname containing spaces)</td></tr>
+              <tr><td><code>planet-ssh</code></td><td>PLANET managed switches (Cisco-IOS-like CLI, SSH; observed on IGS&#8209;4215&#8209;16P2T2S and IGS&#8209;5225&#8209;8P4S, also reported working on the M&#8209;Series &mdash; with or without the switch&rsquo;s own Username/Password dialog after the SSH login, with or without a &ldquo;Building configuration&hellip;&rdquo; banner, and whether one or two <code>exit</code>s end the session)</td></tr>
+              <tr><td><code>aruba-cx-ssh</code></td><td>Aruba CX switches (AOS-CX, SSH; observed on PL.10.17). Administrator account required &mdash; AOS-CX has no <code>enable</code>, an operator&rsquo;s <code>&gt;</code> prompt is reported as an error. Also backs up HPE Aruba Networking wireless access points running AOS-8 (confirmed on an AP model 515, AOS-8 8.13.2.2).</td></tr>
+              <tr><td><code>nexus-ssh</code></td><td>Cisco Nexus switches (NX-OS, SSH; observed on 10.4(7)). Administrator account required &mdash; NX-OS has no <code>enable</code>, a <code>&gt;</code> prompt is reported as an error. The <code>!Time:</code> header line changes on every run and is ignored by <code>changes_only</code>.</td></tr>
+<tr><td><code>mediant-sbc</code></td><td>Cisco Nexus switches (NX-OS, SSH; observed on 10.4(7)). Administrator account required &mdash; NX-OS has no <code>enable</code>, a <code>&gt;</code> prompt is reported as an error. The <code>!Time:</code> header line changes on every run and is ignored by <code>changes_only</code>.</td></tr>
+              <tr><td><code>mediant-sbc</code></td><td>AudioCodes Mediant SBC / gateway with the current Cisco-style CLI (&ldquo;Welcome to AudioCodes CLI&rdquo;; observed on a Mediant 500Li). SSH by default; <code>transport=telnet</code> or <code>auto</code> (telnet only if no SSH service answers, never after an authentication failure). Reads <code>show running-config full</code> from the privileged prompt after <code>enable</code>; pager disabled per session. Not the older menu-style CLI &mdash; that is <code>mediant</code>.</td></tr>
+              <tr><td><code>procurve-snmp</code></td><td>HP ProCurve ProVision, incl. the older 4000M/8000M chassis, over SNMP+TFTP (no CLI needed). See <a href="#procurve-snmp">ProCurve SNMP backups</a>.</td></tr>
+              <tr><td><code>tplink-web-sg105e</code></td><td>TP-Link Easy Smart switches (TL&#8209;SG105E, TL&#8209;SG105PE and siblings, HTTP web UI &mdash; these switches have no CLI). See <a href="#tplink">Web UI backups</a>.</td></tr>
+              <tr><td><code>procurve-web-1700</code></td><td>HP ProCurve 1700 series (1700&#8209;8, 1700&#8209;24; HTTP web UI &mdash; web-managed only, no CLI). See <a href="#tplink">Web UI backups</a>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Need a device that isn't listed? Two routes: describe it with a
+        template (see <a href="#template-model">Template-driven model</a> below),
+        or write a per-device Perl model &mdash; see
+        <a href="How-To-add-a-model.html">How to add a model</a>.</p>
+      </section>
+
+      <section id="parallel">
+        <h2>Parallel fetching</h2>
+        <p>Fetching is sequential unless asked otherwise: one device at a time, in device-table order, every log line shown as it happens. With thousands of devices the run time is dominated by the network sessions (roughly 5&ndash;15&nbsp;s each, plus a full timeout for every unreachable device), and a sequential run no longer fits in a night.</p>
+        <span class="file-label">shell</span>
+        <pre><code>./fetchconfig.pl -devices=device_table -P 20</code></pre>
+        <p><code>-P N</code> fetches with <code>N</code> concurrent worker processes. The parent loads the device table, then hands out one device at a time to whichever worker asks next, so a slow device never holds up the others. Every worker is a copy of the fully loaded parent, so the models run unchanged. With <code>N</code> = 10&ndash;20 a run of several hours typically completes in well under one; the gain is bounded by what the devices and the network tolerate, not by the backup host.</p>
+        <div class="callout note">
+          <div class="callout-title">Output is atomic per device</div>
+          <p>While a worker fetches, everything it writes to stdout and stderr is buffered; when the device finishes, the parent copies that buffer to the real streams in one uninterrupted block. One device&rsquo;s output is therefore <strong>never mixed with another&rsquo;s</strong> &mdash; each block looks exactly as in a sequential run. Two consequences: blocks appear in <em>completion</em> order, not table order; and a device&rsquo;s lines appear when it finishes, not live. At <code>-P 1</code> nothing is buffered and behaviour is unchanged.</p>
+        </div>
+        <p>Everything else is unaffected: each device writes only its own directory, <code>.status</code> and <code>.debug</code>; the summary e-mail, per-device <code>to=</code> bundling and the <code>.status</code> files are produced by the parent from the workers&rsquo; results, exactly as in a sequential run. A worker that dies is detected by the parent; the device it was fetching is recorded as failed and the remaining devices are still fetched by the other workers.</p>
+        <p><strong>Sizing <code>N</code>.</strong> Start at 10 and raise it while watching for devices that refuse or delay logins: the limits are the switches&rsquo; concurrent-session caps, the TACACS+/RADIUS rate, and the links to remote sites &mdash; not the backup host. 10&ndash;25 is typical. <code>-P</code> applies to fetching only and cannot be combined with the lookup/maintenance modes, which stay single-process.</p>
+      </section>
+
       <section id="email-notifications">
-        <div class="section-kicker">06</div>
+        <div class="section-kicker">12</div>
         <h2>E-mail notifications</h2>
         <p>fetchconfig.pl can e-mail a summary of a run's backup results as an HTML table (Device&#8209;ID, Date, Time, State, Size, Changes). This is entirely optional: unless an <code>email:</code> line is present, no SMTP connection is ever attempted.</p>
 
@@ -733,15 +851,8 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
         <p class="prose-muted">Only reflects a changed-vs-previous comparison for devices where the run already performs one (<code>changes_only=1</code>, or <code>on_fetch_run</code>/<code>on_fetch_cat</code> set); for other devices it is reported as <code>n/a</code> &mdash; no extra repository scan is performed just for this report.</p>
       </section>
 
-      <section id="embedding">
-        <div class="section-kicker">07</div>
-        <h2>Device table on the command line</h2>
-        <p>Valid lines for the device table file can also be passed directly through the <code>-line=</code><em>string</em> switch.</p>
-        <pre><code>/path/to/fetchconfig.pl <span class="k">-line=</span><span class="s">"default: tellabs-msr user=backup,pass=s&amp;cr&amp;t,timeout=10,keep=5,changes_only=0,fetch_timeout=1200,filename_append_suffix=.txt,repository=/path/to/repo"</span> <span class="k">-line=</span><span class="s">"tellabs-msr lab-router 10.0.0.1"</span></code></pre>
-      </section>
-
       <section id="retrieving">
-        <div class="section-kicker">08</div>
+        <div class="section-kicker">13</div>
         <h2>Retrieving a previously backed-up config</h2>
         <p>In addition to fetching configuration from devices, fetchconfig.pl can retrieve a configuration file already saved in the repository, without contacting the device again &mdash; useful for scripting: dumping the latest config to stdout, comparing today's config against yesterday's, or pulling an older backup by its position in the history.</p>
 
@@ -887,7 +998,12 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
 
         <div class="flag-card">
           <div class="flag-head"><span class="flag-tag">-t, --list-template</span><span class="flag-req">honours -f</span></div>
-          <p>Lists the generic-model templates available to the loaded devices: scans every <code>template_dir=</code> a loaded device (or a <code>default: generic</code> line) configures, and the default <code>templates/</code> directory beside fetchconfig.pl as a fallback, then prints the unique template names, numbered. Directories are deduplicated by their real (symlink-resolved) path, so the same physical directory reached through different paths &mdash; e.g. a version symlink &mdash; is scanned once; configured paths are listed before the fallback. Each scanned directory is logged as <code>N. template dir: &lt;path&gt;</code>. Exit <code>0</code> if any found, <code>1</code> if none. See <a href="#template-model">Template-driven model</a>.</p>
+          <p>Lists the generic-model templates available to the loaded devices, one TAB-separated row per template: <code>&lt;id&gt; &lt;section&gt; &lt;full_path&gt; &lt;model&gt; &lt;template_dir&gt;</code>. <code>section</code> is <code>default</code> (a template in the directory the <code>default:</code> scope uses &mdash; the <code>default: generic template_dir=</code> if set, else the program default <code>templates/</code> beside fetchconfig.pl; feeds the defaults editor) or <code>device</code> (a template in a device-specific <code>template_dir=</code>; feeds the device editor). <code>template_dir</code> is the configured value as written (a directory: <code>$TAG</code> or a literal path), so a consumer can filter by exactly what the table holds; <code>full_path</code> is always the real resolved path (a <code>$TAG</code> is expanded). A device configuring the same path as the default still yields <code>device</code> rows, so a model may appear under both sections; device directories are deduplicated by configured path (no device id in the output). Rows are sorted default first, then device; within a section by directory, then model. Every directory to be scanned &mdash; the default included &mdash; must exist; a missing configured path is reported and the exit status is <code>2</code> regardless of what else was found, otherwise <code>0</code> if any template was found, <code>1</code> if none. Honours <code>-f</code>. See <a href="#template-model">Template-driven model</a>.</p>
+        </div>
+
+        <div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">--list-allowed-dirs</span><span class="flag-req">honours -f</span></div>
+          <p>Lists the <code>directory:</code> allowlist configured in the device table (see <a href="#directory-allowlist">Directory allowlist</a>), one TAB-separated row per entry: <code>&lt;id&gt; &lt;type&gt; &lt;tag&gt; &lt;path&gt;</code>. It also lints: exit <code>0</code> if a <code>directory:</code> section exists and every entry is valid (well-formed and its path exists on disk), <code>1</code> if no section, <code>2</code> if any entry is invalid.</p>
         </div>
 
         <div class="flag-card">
@@ -919,7 +1035,7 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
 
 <div class="flag-card">
           <div class="flag-head"><span class="flag-tag">-v, --version</span><span class="flag-req">version</span></div>
-          <p>Prints just the program version to stdout (one line, e.g. <code>9.64</code>) and exits with status 0. Nothing else is written &mdash; no banner, nothing on stderr &mdash; so a script can parse it safely.</p>
+          <p>Prints just the program version to stdout (one line, e.g. <code>9.65</code>) and exits with status 0. Nothing else is written &mdash; no banner, nothing on stderr &mdash; so a script can parse it safely.</p>
         </div>
 
 <div class="flag-card">
@@ -933,99 +1049,8 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
         </div>
 </section>
 
-      <section id="device-support">
-        <div class="section-kicker">09</div>
-        <h2>Device support</h2>
-        <p class="prose-muted">Known to be supported &mdash; not a comprehensive list. Other devices and versions are likely to work but haven't been verified.</p>
-        <div class="table-wrap">
-          <table class="device-grid">
-            <thead><tr><th>Model name</th><th>Devices / OS supported</th></tr></thead>
-            <tbody>
-              <tr><td><code>cisco-cat</code></td><td>CatOS switches</td></tr>
-              <tr><td><code>cisco-ios</code></td><td>IOS routers &mdash; 2500 series, 2600 series, 2800 series, CS&#8209;516 (with <code>show_cmd=wrterm</code>)</td></tr>
-              <tr><td><code>cisco-asa</code></td><td>Cisco ASA firewalls</td></tr>
-              <tr><td><code>cisco-pix</code></td><td>Cisco PIX firewalls</td></tr>
-              <tr><td><code>cisco-iosxr</code></td><td>Cisco IOS XR</td></tr>
-              <tr><td><code>fortigate</code></td><td>FortiOS 3.0</td></tr>
-              <tr><td><code>parks</code></td><td>Parks 209R</td></tr>
-              <tr><td><code>riverstone</code></td><td>Alcatel Ethernet Router 3100 (Riverstone RS3100)</td></tr>
-              <tr><td><code>terayon-os</code></td><td>Terayon 3200/3500 CMTS</td></tr>
-              <tr><td><code>dmswitch</code></td><td>Datacom DmSwitch</td></tr>
-              <tr><td><code>3com-msr</code></td><td>3Com MSR routers</td></tr>
-              <tr><td><code>mikrotik</code></td><td>MikroTik routers</td></tr>
-              <tr><td><code>coriant-8600</code></td><td>Coriant 8600 Smart Router Series</td></tr>
-              <tr><td><code>tellabs-msr</code></td><td>Tellabs MSR routers</td></tr>
-              <tr><td><code>junos</code></td><td>Juniper EX Switch JunOS</td></tr>
-              <tr><td><code>acme</code></td><td>Oracle Acme Packet</td></tr>
-              <tr><td><code>mediant</code></td><td>Audiocodes Mediant</td></tr>
-              <tr><td><code>nec-univerge-ix</code></td><td>NEC Univerge IX</td></tr>
-              <tr><td><code>hirschmann</code></td><td>Hirschmann Railswitch (L2E software, telnet)</td></tr>
-              <tr><td><code>zyxel</code></td><td>Zyxel switches (Cisco-IOS-like CLI, telnet)</td></tr>
-              <tr><td><code>cisco-ios-ssh</code></td><td>Cisco IOS over SSH (the SSH counterpart of <code>cisco-ios</code>)</td></tr>
-              <tr><td><code>cisco-asa-ssh</code></td><td>Cisco ASA over SSH (the SSH counterpart of <code>cisco-asa</code>)</td></tr>
-              <tr><td><code>comware-ssh</code></td><td>HP/H3C Comware switches over SSH (bracketed <code>&lt;host&gt;</code>/<code>[host]</code> prompt, no <code>enable</code> step)</td></tr>
-              <tr><td><code>cisco-sg300</code></td><td>Cisco SG300 small-business switches (Cisco-IOS-like CLI)</td></tr>
-              <tr><td><code>dell</code></td><td>Dell PowerConnect switches</td></tr>
-              <tr><td><code>procurve</code></td><td>HP ProCurve switches (telnet); see also <code>procurve-ssh</code></td></tr>
-              <tr><td><code>procurve-ssh</code></td><td>HP ProCurve switches over SSH (the SSH counterpart of <code>procurve</code>; also handles a hostname containing spaces)</td></tr>
-              <tr><td><code>planet-ssh</code></td><td>PLANET managed switches (Cisco-IOS-like CLI, SSH; observed on IGS&#8209;4215&#8209;16P2T2S and IGS&#8209;5225&#8209;8P4S, also reported working on the M&#8209;Series &mdash; with or without the switch&rsquo;s own Username/Password dialog after the SSH login, with or without a &ldquo;Building configuration&hellip;&rdquo; banner, and whether one or two <code>exit</code>s end the session)</td></tr>
-              <tr><td><code>aruba-cx-ssh</code></td><td>Aruba CX switches (AOS-CX, SSH; observed on PL.10.17). Administrator account required &mdash; AOS-CX has no <code>enable</code>, an operator&rsquo;s <code>&gt;</code> prompt is reported as an error. Also backs up HPE Aruba Networking wireless access points running AOS-8 (confirmed on an AP model 515, AOS-8 8.13.2.2).</td></tr>
-              <tr><td><code>nexus-ssh</code></td><td>Cisco Nexus switches (NX-OS, SSH; observed on 10.4(7)). Administrator account required &mdash; NX-OS has no <code>enable</code>, a <code>&gt;</code> prompt is reported as an error. The <code>!Time:</code> header line changes on every run and is ignored by <code>changes_only</code>.</td></tr>
-<tr><td><code>mediant-sbc</code></td><td>Cisco Nexus switches (NX-OS, SSH; observed on 10.4(7)). Administrator account required &mdash; NX-OS has no <code>enable</code>, a <code>&gt;</code> prompt is reported as an error. The <code>!Time:</code> header line changes on every run and is ignored by <code>changes_only</code>.</td></tr>
-              <tr><td><code>mediant-sbc</code></td><td>AudioCodes Mediant SBC / gateway with the current Cisco-style CLI (&ldquo;Welcome to AudioCodes CLI&rdquo;; observed on a Mediant 500Li). SSH by default; <code>transport=telnet</code> or <code>auto</code> (telnet only if no SSH service answers, never after an authentication failure). Reads <code>show running-config full</code> from the privileged prompt after <code>enable</code>; pager disabled per session. Not the older menu-style CLI &mdash; that is <code>mediant</code>.</td></tr>
-              <tr><td><code>procurve-snmp</code></td><td>HP ProCurve ProVision, incl. the older 4000M/8000M chassis, over SNMP+TFTP (no CLI needed). See <a href="#procurve-snmp">ProCurve SNMP backups</a>.</td></tr>
-              <tr><td><code>tplink-web-sg105e</code></td><td>TP-Link Easy Smart switches (TL&#8209;SG105E, TL&#8209;SG105PE and siblings, HTTP web UI &mdash; these switches have no CLI). See <a href="#tplink">Web UI backups</a>.</td></tr>
-              <tr><td><code>procurve-web-1700</code></td><td>HP ProCurve 1700 series (1700&#8209;8, 1700&#8209;24; HTTP web UI &mdash; web-managed only, no CLI). See <a href="#tplink">Web UI backups</a>.</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p>Need a device that isn't listed? Two routes: describe it with a
-        template (see <a href="#template-model">Template-driven model</a> below),
-        or write a per-device Perl model &mdash; see
-        <a href="How-To-add-a-model.html">How to add a model</a>.</p>
-      </section>
-
-      <section id="template-model">
-        <div class="section-kicker">10</div>
-        <h2>Template-driven model (generic)</h2>
-        <p class="prose-muted">Describe a device with a template instead of a Perl module.</p>
-        <p>Besides the per-device Perl models, fetchconfig has a <code>generic</code> model whose device interaction is described by a <strong>template</strong> file rather than Perl code. A template is a small state machine of expect/send steps, with the transport, prompt, timeouts, interrupt screens and ignore-lines as data. For a clean-CLI device this is a short file rather than a ~200-line module, and similar devices can share or clone one template.</p>
-        <p>A device selects it in the device table with the model <code>generic</code> and a template name:</p>
-        <pre><code>generic  sw1  10.0.0.1  model=cisco-ios,transport=ssh,user=...</code></pre>
-        <p>This loads <code>templates/cisco-ios.tmpl</code>; <code>transport</code> is <code>ssh</code> or <code>telnet</code>. Templates for Cisco IOS/IOS-XE (both transports) and HP ProCurve (menu/VT100) ship as worked examples. Two companion tools support the workflow: <code>tools/record-session.pl</code> captures a real session as a byte-accurate log to build a template from, and <code>tools/generate_template.pl</code> scaffolds a template draft from such a capture.</p>
-        <p>A template can be checked without a device:</p>
-        <pre><code>./fetchconfig.pl <span class="k">--check-template</span> templates/cisco-ios.tmpl</code></pre>
-        <p class="prose-muted">The argument must be the <strong>full path</strong> to the <code>.tmpl</code> file &mdash; a bare template name is not resolved, because the same name can exist in different <code>template_dir</code> directories. This runs the grammar and the load-time validator (self-loops, goto targets, capture markers, reachability, transport entry) and prints <code>ok</code> or the errors; it exits <code>0</code> ok, <code>1</code> errors, <code>2</code> file problem, and needs no device table. It is a <strong>structural</strong> check only &mdash; a template that passes may still need adjusting against the real device.</p>
-        <p>To list the templates available to the loaded devices:</p>
-        <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-t</span></code></pre>
-        <p class="prose-muted"><code>-t</code> (<code>--list-template</code>) scans every <code>template_dir=</code> a loaded device configures, plus the default template directory, and prints the template names it finds, numbered, one per line. Exit <code>0</code> if any template is found, <code>1</code> if none.</p>
-        <div class="callout">
-          <div class="callout-title">Further reading</div>
-          <p>The generic model and its tools are documented separately:</p>
-          <ul>
-            <li><a href="README.generic-model.html">README.generic-model</a> &mdash; the generic model and template grammar (quick reference)</li>
-            <li><a href="README.template_engine.html">README.template_engine</a> &mdash; the full engineering reference: architecture, grammar, execution semantics, writing and generating templates</li>
-            <li><a href="README.record-session.html">README.record-session</a> &mdash; the record-session.pl capture tool</li>
-            <li><a href="How-To-add-a-model.html">How to add a model</a> &mdash; writing a new per-device Perl model (the alternative to a template)</li>
-          </ul>
-        </div>
-        <p class="prose-muted">The template parser is production-ready; the execution engine has been verified on Cisco IOS-XE over telnet and SSH and on an HP ProCurve menu switch. Verify a template against the target device before relying on it.</p>
-      </section>
-
-      <section id="troubleshooting">
-        <div class="section-kicker">11</div>
-        <h2>Troubleshooting</h2>
-        <div class="callout warn">
-          <div class="callout-title">Legacy SSH key exchange</div>
-          <p>Some older SSH implementations (e.g. older HP/Aruba ProCurve firmware) only offer legacy key exchange algorithms that modern OpenSSH clients disable by default. fetchconfig.pl itself already re-enables what it needs for its own SSH connections (see the <code>KexAlgorithms</code>/<code>HostKeyAlgorithms</code>/<code>Ciphers</code> <code>master_opts</code> in <code>ProCurveSSH.pm</code> and <code>ComwareSSH.pm</code>), so this only matters if you want to connect to the same device manually with the system's own <code>ssh</code> command &mdash; the same kind of algorithm may need to be re-enabled in the SSH client's own configuration:</p>
-          <span class="file-label">/etc/ssh_config</span>
-          <pre><code>Host *
-    KexAlgorithms +diffie-hellman-group1-sha1</code></pre>
-        </div>
-      </section>
-
       <section id="options">
-        <div class="section-kicker">12</div>
+        <div class="section-kicker">14</div>
         <h2>Options reference</h2>
         <p>The modules <code>CiscoIOS</code>, <code>CiscoCAT</code>, <code>CiscoASA</code>, and <code>CiscoPIX</code> recognize the following options; nearly every other model reuses the same set (see the per-model matrix below for exactly which apply).</p>
 
@@ -1116,8 +1141,20 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
         <p class="prose-muted">Boolean. If <code>debug=on</code> (default off), records the raw telnet/SSH session (or, for the web UI models, every HTTP request and response) to <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code> for troubleshooting.</p>
       </section>
 
+      <section id="troubleshooting">
+        <div class="section-kicker">15</div>
+        <h2>Troubleshooting</h2>
+        <div class="callout warn">
+          <div class="callout-title">Legacy SSH key exchange</div>
+          <p>Some older SSH implementations (e.g. older HP/Aruba ProCurve firmware) only offer legacy key exchange algorithms that modern OpenSSH clients disable by default. fetchconfig.pl itself already re-enables what it needs for its own SSH connections (see the <code>KexAlgorithms</code>/<code>HostKeyAlgorithms</code>/<code>Ciphers</code> <code>master_opts</code> in <code>ProCurveSSH.pm</code> and <code>ComwareSSH.pm</code>), so this only matters if you want to connect to the same device manually with the system's own <code>ssh</code> command &mdash; the same kind of algorithm may need to be re-enabled in the SSH client's own configuration:</p>
+          <span class="file-label">/etc/ssh_config</span>
+          <pre><code>Host *
+    KexAlgorithms +diffie-hellman-group1-sha1</code></pre>
+        </div>
+      </section>
+
       <section id="security">
-        <h2>Security notes</h2>
+        <h2>Security notes</h2> <p>See also the <a href="#directory-allowlist">Directory allowlist</a>, which restricts the directories a device table may reference - important when the table is edited through a less-trusted front end.</p>
         <div class="callout warn">
           <div class="callout-title">Debug files contain credentials</div>
           <p>With <code>debug=on</code>, <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code> records the session verbatim &mdash; for the telnet/SSH models that includes the login and enable passwords exactly as typed, and for <code>procurve-snmp</code> the SNMP read-write community. Since v9.54 these files are created with mode <code>0600</code> regardless of the process umask. Still, enable <code>debug=on</code> only while troubleshooting and delete the file afterwards. Backups and the <code>.status</code> file use the process umask (typically <code>0644</code>); backups contain configuration secrets &mdash; and not always hashed: SNMP communities and some routing/VPN keys (BGP, OSPF, RADIUS/TACACS, IPsec pre-shared keys) are cleartext, and Cisco &ldquo;type 7&rdquo; passwords are reversible. Restrict the repository directory on a shared host and treat every backup as sensitive.</p>
@@ -1130,7 +1167,7 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
       </section>
 
       <section id="status-file">
-        <div class="section-kicker">13</div>
+        <div class="section-kicker">17</div>
         <h2>Status file</h2>
         <p>After every backup attempt fetchconfig writes a small status file next to the backups, at <code>&lt;repository&gt;/&lt;dev_id&gt;.status</code>. It is written for every device and every model, and does <em>not</em> depend on the <code>email:</code> line &mdash; it is a plain repository artifact, meant for external tools (for example a web front-end that reads <code>backup_duration_sec</code> to size a progress spinner). It is overwritten on every run and written atomically, so a reader never sees a half-written file.</p>
         <span class="file-label">&lt;dev_id&gt;.status</span>
@@ -1157,7 +1194,7 @@ backup_changed=changed</code></pre>
       </section>
 
       <section id="procurve-snmp">
-        <div class="section-kicker">14</div>
+        <div class="section-kicker">18</div>
         <h2>ProCurve SNMP backups (ProVision, 4000M/8000M)</h2>
         <p>The older HP ProCurve ProVision chassis (4000M, 8000M) can only be managed remotely through a VT100 menu, which is not usable for scripted backup. They will, however, export a text copy of their configuration over TFTP when told to over SNMP, and that is what <code>procurve-snmp</code> does. It is a transport unlike the other models &mdash; no shell and no web UI, but SNMP plus TFTP &mdash; and so has no <code>user</code>/<code>pass</code>: the credential is the SNMP read-write <code>community</code>.</p>
         <p>An SNMP set arms the switch&rsquo;s TFTP export, the config is fetched from the switch by TFTP, and a second SNMP set disables the export again. That disable always runs, even when the transfer failed, so the switch is never left with its TFTP server open.</p>
@@ -1172,7 +1209,7 @@ backup_changed=changed</code></pre>
       </section>
 
       <section id="tplink">
-        <div class="section-kicker">15</div>
+        <div class="section-kicker">19</div>
         <h2>Web UI backups (TP-Link Easy Smart, ProCurve 1700)</h2>
         <p>Some switches have no CLI at all &mdash; TP-Link Easy Smart switches (TL&#8209;SG105E, TL&#8209;SG105PE and siblings) and the HP ProCurve 1700 series. The <code>tplink-web-sg105e</code> and <code>procurve-web-1700</code> models retrieve the config the same way a browser does on the switch&rsquo;s config backup page: they log in over plain HTTP (the switches offer no HTTPS), download the config file, and log out again. The two models share their HTTP plumbing (<code>AbstractHTTP.pm</code>); the login, download and logout requests are per device, taken from packet captures of real browser sessions.</p>
         <p><strong>TP-Link:</strong> both session mechanisms seen on real devices are handled &mdash; the TL&#8209;SG105E binds the login session to the client&rsquo;s IP address, the TL&#8209;SG105PE v2 uses a session cookie. Either way the switch only allows a limited number of concurrent logins; if it reports the login table as full, the backup of that device is reported as failed rather than forcing another user out.</p>

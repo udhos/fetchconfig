@@ -1,4 +1,17 @@
 #
+
+
+# Optional directory allowlist. If any "directory:" line is present, every
+# repository= and template_dir= used by a device (or a default: line) must
+# name one of these directories - by its $TAG or its exact path. This lets a
+# less-trusted editor (e.g. a web UI) change devices without being able to
+# point them at arbitrary paths. Format: directory: <type> <$TAG> <path>,
+# type is "repository" or "template". Remove/omit to disable (no allowlist).
+#directory: repository $REPO1     /usr/local/fetchconfig/config
+#directory: template   $TEMPLATE1 /usr/local/fetchconfig/templates
+#directory: fetch_run  $CMD1      /var/fetchconfig/fetch_run
+# ("directory: fetch_run none" instead of a fetch_run dir forbids on_fetch_run)
+
 # $Id: device_table.example,v 1.19 2013/10/16 03:29:11 evertonm Exp $
 #
 

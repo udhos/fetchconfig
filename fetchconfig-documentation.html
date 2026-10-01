@@ -517,6 +517,7 @@
         <div class="nav-group-label">Features</div>
         <a href="#parallel">Parallel fetching</a>
         <a href="#email-notifications">E-mail notifications</a>
+        <a href="#change-reports">Change reports</a>
         <a href="#retrieving">Retrieving backups</a>
       </div>
       <div class="nav-group">
@@ -641,7 +642,7 @@ cpan install LWP::UserAgent Net::SNMP Net::TFTP</code></pre>
       </section>
 
       <section id="usage">
-        <div class="section-kicker">05</div>
+        <div class="section-kicker">04</div>
         <h2>Usage</h2>
         <ol>
           <li>Edit <code>device_table.example</code> according to your needs, and save it as <code>device_table</code>.</li>
@@ -659,7 +660,7 @@ vi device_table</code></pre>
       </section>
 
       <section id="device-table">
-        <div class="section-kicker">06</div>
+        <div class="section-kicker">05</div>
         <h2>Device table</h2>
         <p>The device table assigned with <code>-devices=</code> is a text file that supports two types of lines.</p>
 
@@ -684,26 +685,27 @@ cisco-ios       vpn-gw          192.168.0.1     keep=10,changes_only=1</code></p
       </section>
 
       <section id="embedding">
-        <div class="section-kicker">07</div>
+        <div class="section-kicker">06</div>
         <h2>Device table on the command line</h2>
         <p>Valid lines for the device table file can also be passed directly through the <code>-line=</code><em>string</em> switch.</p>
         <pre><code>/path/to/fetchconfig.pl <span class="k">-line=</span><span class="s">"default: tellabs-msr user=backup,pass=s&amp;cr&amp;t,timeout=10,keep=5,changes_only=0,fetch_timeout=1200,filename_append_suffix=.txt,repository=/path/to/repo"</span> <span class="k">-line=</span><span class="s">"tellabs-msr lab-router 10.0.0.1"</span></code></pre>
       </section>
 
       <section id="directory-allowlist">
-        <div class="section-kicker">08</div>
+        <div class="section-kicker">07</div>
         <h2>Directory allowlist</h2>
         <p class="prose-muted">Restrict which directories a repository=, template_dir= or on_fetch_run= may name.</p>
         <p>Optionally, the device table may restrict which directories a <code>repository=</code> or <code>template_dir=</code> option is allowed to name. This is useful when the device table is edited through a less-trusted front end (e.g. a web UI): the allowlist lives only in the real config file and cannot be widened from the UI, so an edit can never point a device at an arbitrary path.</p>
         <p>With all three directory types allowed:</p>
         <pre><code>directory: repository $REPO1     /usr/local/fetchconfig/config
 directory: template   $TEMPLATE1 /usr/local/fetchconfig/templates
-directory: fetch_run  $CMD1      /var/fetchconfig/fetch_run</code></pre>
+directory: fetch_run  $CMD1      /var/fetchconfig/fetch_run
+directory: report    $REP1       /var/www/fetchconfig/reports</code></pre>
         <p>With <code>on_fetch_run</code> disabled (<code>fetch_run none</code>):</p>
         <pre><code>directory: repository $REPO1     /usr/local/fetchconfig/config
 directory: template   $TEMPLATE1 /usr/local/fetchconfig/templates
 directory: fetch_run  none</code></pre>
-        <p>Each line is <code>directory: &lt;type&gt; &lt;$TAG&gt; &lt;path&gt;</code>, where <code>type</code> is <code>repository</code>, <code>template</code> or <code>fetch_run</code>, <code>$TAG</code> is a unique <code>$NAME</code> symbol, and <code>path</code> is the allowed directory. A section must cover <strong>all three</strong> types; <code>fetch_run</code> constrains <code>on_fetch_run=</code> (the directory of the command's program must be an allowed <code>fetch_run</code> directory), and <code>directory: fetch_run none</code> forbids <code>on_fetch_run</code> entirely.</p>
+        <p>Each line is <code>directory: &lt;type&gt; &lt;$TAG&gt; &lt;path&gt;</code>, where <code>type</code> is <code>repository</code>, <code>template</code>, <code>fetch_run</code> or <code>report</code>, <code>$TAG</code> is a unique <code>$NAME</code> symbol, and <code>path</code> is the allowed directory. A section must cover <strong>all four</strong> types; <code>fetch_run</code> constrains <code>on_fetch_run=</code> (the directory of the command's program must be an allowed <code>fetch_run</code> directory), and <code>directory: fetch_run none</code> forbids <code>on_fetch_run</code> entirely.</p>
         <p>Enforcement is <strong>opt-in</strong>: with no <code>directory:</code> line, nothing is restricted (existing device tables are unaffected). With at least one present, every <code>repository=</code> and <code>template_dir=</code> used by a device (or inherited from a <code>default:</code> line) must be allowed:</p>
         <ul>
           <li><code>repository=</code> must name a <code>repository</code> entry; <code>template_dir=</code> a <code>template</code> entry; <code>on_fetch_run=</code> must run a program in a <code>fetch_run</code> entry (types are not interchangeable).</li>
@@ -715,7 +717,7 @@ directory: fetch_run  none</code></pre>
       </section>
 
       <section id="template-model">
-        <div class="section-kicker">09</div>
+        <div class="section-kicker">08</div>
         <h2>Template-driven model (generic)</h2>
         <p class="prose-muted">Describe a device with a template instead of a Perl module.</p>
         <p>Besides the per-device Perl models, fetchconfig has a <code>generic</code> model whose device interaction is described by a <strong>template</strong> file rather than Perl code. A template is a small state machine of expect/send steps, with the transport, prompt, timeouts, interrupt screens and ignore-lines as data. For a clean-CLI device this is a short file rather than a ~200-line module, and similar devices can share or clone one template.</p>
@@ -742,7 +744,7 @@ directory: fetch_run  none</code></pre>
       </section>
 
       <section id="device-support">
-        <div class="section-kicker">10</div>
+        <div class="section-kicker">09</div>
         <h2>Device support</h2>
         <p class="prose-muted">Known to be supported &mdash; not a comprehensive list. Other devices and versions are likely to work but haven't been verified.</p>
         <div class="table-wrap">
@@ -808,7 +810,7 @@ directory: fetch_run  none</code></pre>
       </section>
 
       <section id="email-notifications">
-        <div class="section-kicker">12</div>
+        <div class="section-kicker">10</div>
         <h2>E-mail notifications</h2>
         <p>fetchconfig.pl can e-mail a summary of a run's backup results as an HTML table (Device&#8209;ID, Date, Time, State, Size, Changes). This is entirely optional: unless an <code>email:</code> line is present, no SMTP connection is ever attempted.</p>
 
@@ -851,8 +853,32 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
         <p class="prose-muted">Only reflects a changed-vs-previous comparison for devices where the run already performs one (<code>changes_only=1</code>, or <code>on_fetch_run</code>/<code>on_fetch_cat</code> set); for other devices it is reported as <code>n/a</code> &mdash; no extra repository scan is performed just for this report.</p>
       </section>
 
+      <section id="change-reports">
+        <div class="section-kicker">11</div>
+        <h2>Change reports</h2>
+        <p class="prose-muted">An HTML report of what changed, with coloured diffs; summary in e-mail, full report via fetchconfig-web.</p>
+        <p>After a run fetchconfig can write a self-contained HTML change report (summary table plus a coloured diff per changed device) to an allowlisted <code>report</code> directory, and embed up to <code>email_max_diff</code> device diffs in the summary e-mail with a link to the full report. The report directory is presented by fetchconfig-web (view/download/delete) and is not meant to be served to users directly. Options on <code>email:</code> lines:</p>
+        <ul>
+          <li><code>report_dir=$REP</code> &mdash; the report directory (a <code>report</code> allowlist entry).</li>
+          <li><code>write_report=on|off</code> &mdash; write the report. With <code>on</code> and no <code>from=/to=/smtp=</code>, only the report is written (no e-mail).</li>
+          <li><code>email_max_diff=N</code> &mdash; embed up to N changed devices' diffs in the e-mail (device-table order). Default <code>0</code> (no diffs); <code>0</code> or unset = none.</li>
+          <li><code>web_report_url=URL</code> &mdash; base URL for the e-mail's full-report link (emitted only when a report was written).</li>
+          <li><code>report_logo=FILE|none</code> &mdash; a logo in <code>report_dir</code>, embedded (self-contained), recommended 250&times;50&nbsp;px.</li>
+          <li><code>report_days=N</code> &mdash; prune reports older than N days (only if N&gt;1), by exact filename.</li>
+          <li><code>mask_secrets=on|off</code> &mdash; mask common secret forms in diffs (default on); master switch for all hiding.</li>
+          <li><code>report_hide=&lt;regex&gt;</code> &mdash; additional custom regex (one per line, accumulates); the matched substring becomes <code>****</code>. Governed by <code>mask_secrets</code>.</li>
+        </ul>
+        <p><strong>Secret masking is best effort</strong> &mdash; it masks common Cisco/ProCurve forms after diffing, on both old and new lines (a rotated secret shows as <code>**** &rarr; ****</code>), but is vendor-incomplete. Reports and report e-mails must be treated as sensitive; the stored configs in the repository still contain cleartext credentials regardless.</p>
+        <p><strong>Custom patterns.</strong> For secrets the built-ins miss, add regexes with <code>report_hide</code>, one per line &mdash; only the substring each regex matches becomes <code>****</code>, so match just the value (a fixed-width lookbehind keeps the keyword):</p>
+        <pre><code>email: report_hide=(?&lt;=wpa-passphrase )\S+
+email: report_hide=(?&lt;=^key )[0-9a-f]{16,}</code></pre>
+        <p>turning <code>wpa-passphrase c1ca253b...</code> into <code>wpa-passphrase ****</code>. Take care not to over-match (e.g. <code>(?&lt;=secret )\S+</code> also fires inside <code>my-secret</code>). Patterns accumulate; comment a line out to disable it. They are governed by <code>mask_secrets</code> (with <code>mask_secrets=off</code> nothing is hidden), and an invalid regex is logged and skipped. For <code>report_hide</code> the whole rest of the line is taken verbatim as the regex &mdash; no comma splitting, no quote stripping, no space trimming &mdash; so a regex may contain commas (e.g. <code>{16,}</code>), <code>=</code> and spaces with no escaping. Do not wrap it in quotes (they would become part of the pattern). One regex per line.</p>
+        <p>Each device's diff is wrapped in an <strong>armored</strong> <code>&lt;div class="device-diff" data-device="&lt;id&gt;" id="dev-&lt;id&gt;"&gt;</code> with a stable structure, so fetchconfig-web can parse it into an expandable per-device view. Treat this markup as a parse contract.</p>
+        <p><strong>Report directory setup.</strong> So that fetchconfig-web (running as the web server's user/group) can read and manage the reports, set the report directory's group to the web server's group and set the setgid bit, e.g. <code>chgrp &lt;webgroup&gt; /var/www/fetchconfig/reports</code> and <code>chmod g+s /var/www/fetchconfig/reports</code>. With <code>g+s</code>, each report file inherits the directory's group automatically &mdash; fetchconfig needs no special privileges and does not change ownership itself.</p>
+      </section>
+
       <section id="retrieving">
-        <div class="section-kicker">13</div>
+        <div class="section-kicker">12</div>
         <h2>Retrieving a previously backed-up config</h2>
         <p>In addition to fetching configuration from devices, fetchconfig.pl can retrieve a configuration file already saved in the repository, without contacting the device again &mdash; useful for scripting: dumping the latest config to stdout, comparing today's config against yesterday's, or pulling an older backup by its position in the history.</p>
 
@@ -1050,7 +1076,7 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
 </section>
 
       <section id="options">
-        <div class="section-kicker">14</div>
+        <div class="section-kicker">13</div>
         <h2>Options reference</h2>
         <p>The modules <code>CiscoIOS</code>, <code>CiscoCAT</code>, <code>CiscoASA</code>, and <code>CiscoPIX</code> recognize the following options; nearly every other model reuses the same set (see the per-model matrix below for exactly which apply).</p>
 
@@ -1070,7 +1096,8 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
               <tr><td><code>on_fetch_cat</code></td><td class="req-opt">Optional</td><td>Boolean. If <code>on_fetch_cat=1</code>, the fetched configuration is also written to stdout. Available for all modules.</td></tr>
               <tr><td><code>timezone</code></td><td class="req-opt">Optional</td><td>If <code>timezone=hide</code>, suppresses timezone information from the config filename.</td></tr>
               <tr><td><code>filename_append_suffix</code></td><td class="req-opt">Optional</td><td>Appended to the generated backup filename, which then reads <code>&lt;dev_id&gt;.run.YYYYMMDD.HHMMSS&lt;tz&gt;&lt;suffix&gt;</code>, e.g. <code>filename_append_suffix=.txt</code>. Available for all modules. <strong>fetchconfig 9.x and later only accept a suffix that starts with a &ldquo;.&rdquo;</strong> (a file extension); a dotless suffix, or one containing <code>/</code> or whitespace, fails that device&rsquo;s backup with an error and writes nothing. <strong>Do not add, remove or change the suffix once a device has backups</strong> &mdash; files are found by their <code>&lt;dev_id&gt;.run.</code> prefix, so old and new names would coexist (<code>keep=N</code> expires them together, &ldquo;latest&rdquo; ordering can be affected). Decide before the first backup; use <code>-s dev_id</code> or <code>-S</code> to find devices whose existing backups already mix suffixes.</td></tr>
-              <tr><td><code>to</code></td><td class="req-opt">Optional</td><td>Overrides, for this device only, who receives the backup summary e-mail. See <a href="#email-notifications">E-mail notifications</a>. Available for all modules.</td></tr>
+              <tr><td><code>to</code></td><td class="req-opt">Optional</td><td>Overrides, for this device only, who receives the backup summary e-mail. See <a href="#email-notifications">E-mail notifications</a>
+        <a href="#change-reports">Change reports</a>. Available for all modules.</td></tr>
               <tr><td><code>comment</code></td><td class="req-opt">Optional</td><td>Free-text note about the device, for whoever reads the device table &mdash; not used anywhere else. Available for all modules. Example: <code>comment=lab switch</code>.</td></tr>
             </tbody>
           </table>
@@ -1142,7 +1169,7 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
       </section>
 
       <section id="troubleshooting">
-        <div class="section-kicker">15</div>
+        <div class="section-kicker">14</div>
         <h2>Troubleshooting</h2>
         <div class="callout warn">
           <div class="callout-title">Legacy SSH key exchange</div>
@@ -1161,13 +1188,14 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
         </div>
         <p><strong>SSH host keys are not verified.</strong> The SSH models use <code>StrictHostKeyChecking=no</code> and <code>UserKnownHostsFile=/dev/null</code>: any host key is accepted and none remembered. This is deliberate &mdash; fetchconfig runs unattended, and a switch&rsquo;s host key changes on every hardware swap, which would otherwise halt backups until someone edited <code>known_hosts</code>. The trade-off is that an on-path attacker could impersonate a device and capture the login password. Run fetchconfig on a trusted management network.</p>
         <p><strong>Device IDs are validated.</strong> A <code>dev_id</code> may contain letters, digits, underscore, dot and dash (hostnames like <code>sw01.example.com</code> are fine) but may not consist only of dots, since <code>.</code> or <code>..</code> would resolve to the repository itself or its parent.</p>
-        <p><strong>SMTP.</strong> <code>AUTH LOGIN</code> sends the password base64-encoded, not encrypted &mdash; see the <code>tls</code> option under <a href="#email-notifications">E-mail notifications</a>. Header fields (From, To, Subject) have line breaks stripped before sending, so a device-table value cannot inject extra mail headers.</p>
+        <p><strong>SMTP.</strong> <code>AUTH LOGIN</code> sends the password base64-encoded, not encrypted &mdash; see the <code>tls</code> option under <a href="#email-notifications">E-mail notifications</a>
+        <a href="#change-reports">Change reports</a>. Header fields (From, To, Subject) have line breaks stripped before sending, so a device-table value cannot inject extra mail headers.</p>
         <p><strong>Backup file naming.</strong> Backups are named <code>&lt;dev_id&gt;.run.YYYYMMDD.HHMMSS[tz]</code>, i.e. one-second resolution. Two backups of one device completed within the same second would share a name and the second would overwrite the first. This is an accepted limitation: a real fetch never completes in under a second and scheduled runs are minutes apart. Since v9.55 every operation that orders backups (&ldquo;latest&rdquo; for <code>changes_only</code>, <code>keep=N</code> expiry, <code>-g</code>/<code>-n</code>/<code>-m</code>, <code>-l</code>, <code>-z</code>/<code>-Z</code>, <code>-s</code>/<code>-S</code>) sorts by the parsed timestamp <code>YYYYMMDD.HHMMSS</code>, not by a plain string sort of the whole name, so neither the timezone token (which changes with DST and by platform) nor a suffix can disturb the order.</p>
         <p><strong>Non-ASCII hostnames.</strong> <code>aruba-cx-ssh</code> and <code>planet-ssh</code> handle a prompt containing spaces or non-ASCII characters. <code>procurve</code>, <code>procurve-ssh</code>, <code>hirschmann</code>, <code>comware-ssh</code> and <code>nec-univerge-ix</code> still build their prompt regexp with <code>quotemeta()</code> and would not match such a prompt; this is left unchanged pending tests against real devices &mdash; keep hostnames on those devices to ASCII.</p>
       </section>
 
       <section id="status-file">
-        <div class="section-kicker">17</div>
+        <div class="section-kicker">15</div>
         <h2>Status file</h2>
         <p>After every backup attempt fetchconfig writes a small status file next to the backups, at <code>&lt;repository&gt;/&lt;dev_id&gt;.status</code>. It is written for every device and every model, and does <em>not</em> depend on the <code>email:</code> line &mdash; it is a plain repository artifact, meant for external tools (for example a web front-end that reads <code>backup_duration_sec</code> to size a progress spinner). It is overwritten on every run and written atomically, so a reader never sees a half-written file.</p>
         <span class="file-label">&lt;dev_id&gt;.status</span>
@@ -1194,7 +1222,7 @@ backup_changed=changed</code></pre>
       </section>
 
       <section id="procurve-snmp">
-        <div class="section-kicker">18</div>
+        <div class="section-kicker">16</div>
         <h2>ProCurve SNMP backups (ProVision, 4000M/8000M)</h2>
         <p>The older HP ProCurve ProVision chassis (4000M, 8000M) can only be managed remotely through a VT100 menu, which is not usable for scripted backup. They will, however, export a text copy of their configuration over TFTP when told to over SNMP, and that is what <code>procurve-snmp</code> does. It is a transport unlike the other models &mdash; no shell and no web UI, but SNMP plus TFTP &mdash; and so has no <code>user</code>/<code>pass</code>: the credential is the SNMP read-write <code>community</code>.</p>
         <p>An SNMP set arms the switch&rsquo;s TFTP export, the config is fetched from the switch by TFTP, and a second SNMP set disables the export again. That disable always runs, even when the transfer failed, so the switch is never left with its TFTP server open.</p>
@@ -1209,7 +1237,7 @@ backup_changed=changed</code></pre>
       </section>
 
       <section id="tplink">
-        <div class="section-kicker">19</div>
+        <div class="section-kicker">17</div>
         <h2>Web UI backups (TP-Link Easy Smart, ProCurve 1700)</h2>
         <p>Some switches have no CLI at all &mdash; TP-Link Easy Smart switches (TL&#8209;SG105E, TL&#8209;SG105PE and siblings) and the HP ProCurve 1700 series. The <code>tplink-web-sg105e</code> and <code>procurve-web-1700</code> models retrieve the config the same way a browser does on the switch&rsquo;s config backup page: they log in over plain HTTP (the switches offer no HTTPS), download the config file, and log out again. The two models share their HTTP plumbing (<code>AbstractHTTP.pm</code>); the login, download and logout requests are per device, taken from packet captures of real browser sessions.</p>
         <p><strong>TP-Link:</strong> both session mechanisms seen on real devices are handled &mdash; the TL&#8209;SG105E binds the login session to the client&rsquo;s IP address, the TL&#8209;SG105PE v2 uses a session cookie. Either way the switch only allows a limited number of concurrent logins; if it reports the login table as full, the backup of that device is reported as failed rather than forcing another user out.</p>

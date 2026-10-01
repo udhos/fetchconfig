@@ -5,6 +5,48 @@
 9.65
 ====
 
++ Change report: the "Changes" count per device now counts diff hunks (the
+  number of places that differ) instead of old+new diff lines, which
+  double-counted each changed line (e.g. 2 changed lines showed as 4).
+
++ Report masking: added the Hirschmann "users passwd <user> :vN:<hash>:"
+  form - the username is kept and only the hash is masked (the generic
+  passwd rule no longer masks the username on these lines). The :vN:<hash>:
+  token is masked wherever it appears.
+
++ Report masking: added built-in masking for "wpa-passphrase <value>" and a
+  bare "key <hex>". New email: report_hide=<regex> option (one per line,
+  accumulating) masks the matched substring with **** for secrets the
+  built-ins do not cover; invalid patterns are logged and skipped. All
+  masking (built-in and custom) is governed by the mask_secrets master.
+  The report_hide value is taken verbatim (the whole rest of the line), so a
+  regex may contain commas (e.g. {m,n}), = and spaces with no quoting.
+
++ A first-ever backup is now reported as "initial" (not "changed") in the
+  e-mail summary (its own statistics row and the device row) and in the
+  change report. A first backup has no previous config to compare against,
+  so marking it "changed" was misleading; "initial" is detected from the
+  absence of a previous backup at save time.
+
++ Change report: a new device (one backup, no previous config) is now
+  detected from the backup count and reported as "New" without attempting a
+  diff - this removes the spurious, duplicated "requested backup 2 but only
+  1 available" error lines a first-ever backup produced.
+
++ Change reports. After a run fetchconfig can write an HTML change report (a
+  summary table plus a coloured diff per changed device) to an allowlisted
+  "report" directory, and embed up to up to email_max_diff device diffs in the
+  summary e-mail (email_max_diff defaults to 0 - no diffs unless set) with a link to the full report. New "directory: report" and
+  "directory: report none" allowlist entries (the allowlist, when present,
+  now covers four types). New email: options report_dir, write_report,
+  email_max_diff, web_report_url, report_logo (embedded, 250x50), report_days
+  (prune, exact-name unlink) and mask_secrets. Secret masking is best effort
+  (common forms, after diffing, both sides) - reports remain sensitive. Each
+  report diff is an "armored" <div data-device=...> for fetchconfig-web. No
+  new libraries (MIME::Base64 is core). report_dir should be group-owned by
+  the web server group with the setgid bit (g+s) so reports inherit the group
+  for fetchconfig-web; fetchconfig does not change ownership itself.
+
 + procurve.tmpl: dropped the trailing space in the /Username:/ and
   /Password:/ expects - on a VT100/telnet device the space can arrive in a
   separate read, causing an intermittent login timeout. Validated over

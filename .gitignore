@@ -26,6 +26,4 @@ __pycache__/
 # editor/backup artifacts
 *.bak
 *.orig
-ASSESSMENT
-ASSESSMENT.md
-ASSESSMENT.html
+ASSESSMENT*

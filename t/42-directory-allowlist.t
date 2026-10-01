@@ -125,9 +125,10 @@ fetchconfig::model::Detector->init(fetchconfig::Logger->new({ prefix => 't' }));
     my ($ok5) = fetchconfig::model::Detector->resolve_allowed_fetch_run('x.sh');
     ok( !$ok5, 'relative on_fetch_run program rejected' );
 
-    # all three types now present (repository/template from earlier block + fetch_run)
+    # all four types present (repository/template from earlier + fetch_run + report)
+    fetchconfig::model::Detector->parse_directory_line('t', 21, 'report $REP /var/fc/reports');
     my @miss = fetchconfig::model::Detector->dir_allow_missing_types;
-    is( scalar(@miss), 0, 'all three directory types present -> no missing-type problem' );
+    is( scalar(@miss), 0, 'all four directory types present -> no missing-type problem' );
 }
 
 # --- dev_option expands directory aliases centrally ----------------------
@@ -140,6 +141,74 @@ fetchconfig::model::Detector->init(fetchconfig::Logger->new({ prefix => 't' }));
     is( $ok, '/var/fc/z', 'dev_option expands a repository $TAG to its path' );
     my $lit = $m->dev_option({ repository => '/var/fc/z' }, 'repository');
     is( $lit, '/var/fc/z', 'dev_option passes a literal allowed path unchanged' );
+}
+
+# --- report type + secret masking ----------------------------------------
+{
+    require fetchconfig::Report;
+    # masking (best effort) - value hidden, keyword kept, change still visible
+    is( fetchconfig::Report::mask_line('< snmp-server community SECRET ro'),
+        '< snmp-server community **** ro', 'SNMP community masked' );
+    is( fetchconfig::Report::mask_line('< enable secret 5 $1$ab$xy'),
+        '< enable secret 5 ****', 'enable secret hash masked' );
+    is( fetchconfig::Report::mask_line('  interface Gi0/1'),
+        '  interface Gi0/1', 'non-secret line untouched' );
+
+    # report none disables reporting and satisfies the type
+    fetchconfig::model::Detector->parse_directory_line('t', 40, 'report none');
+    ok( fetchconfig::model::Detector->dir_allow_report_none, 'report none sets the disabled flag' );
+}
+
+# --- report_hide custom masking + new built-ins --------------------------
+{
+    require fetchconfig::Report;
+    # new built-ins
+    is( fetchconfig::Report::mask_line('> wpa-passphrase abcdef123456'),
+        '> wpa-passphrase ****', 'wpa-passphrase value masked' );
+    is( fetchconfig::Report::mask_line('> key 22d2c432f618080c1beecdce74b0ad03'),
+        '> key ****', 'bare key hex value masked' );
+    is( fetchconfig::Report::mask_line('  key chain MYCHAIN'),
+        '  key chain MYCHAIN', 'key chain not over-masked' );
+
+    # Hirschmann: keep the username after "passwd", mask the :vN:<hash>:
+    is( fetchconfig::Report::mask_line('users passwd admin :v1:a257914def53abaccf:'),
+        'users passwd admin :v1:****:', 'Hirschmann user kept, hash masked' );
+    # Cisco bare password still masked (not broken by the Hirschmann rule)
+    is( fetchconfig::Report::mask_line('password mysecret'),
+        'password ****', 'Cisco bare password still masked' );
+
+    # custom report_hide: keyword kept via fixed-width lookbehind
+    fetchconfig::Report::set_custom_hide('(?<=wpa-passphrase )\\S+');
+    is( fetchconfig::Report::mask_line('x wpa-passphrase SECRETVALUE'),
+        'x wpa-passphrase ****', 'report_hide masks only the matched value' );
+
+    # a malformed pattern is skipped (no die)
+    fetchconfig::Report::set_custom_hide('(unbalanced', 'SECRETWORD');
+    my $out = eval { fetchconfig::Report::mask_line('has SECRETWORD here') };
+    ok( defined($out) && $out eq 'has **** here',
+        'malformed report_hide skipped, valid one still applied' );
+
+    fetchconfig::Report::set_custom_hide();   # reset
+
+    # change count = number of diff hunks (NcM/NaM/NdM), not <>-line count
+    my @diff = ('576c576','< a','---','> b','580c580','< c','---','> d');
+    my $hunks = grep { /^\d+[acd]\d+/ } @diff;
+    is( $hunks, 2, 'change count counts hunks (2), not <>-lines (4)' );
+}
+
+# --- report_hide value syntax: whole rest of line taken verbatim ----------
+{
+    require fetchconfig::Mailer; require fetchconfig::Logger;
+    { no warnings 'redefine';
+      *fetchconfig::Logger::error = sub {}; *fetchconfig::Logger::debug = sub {};
+      *fetchconfig::Logger::info = sub {}; }
+    # a regex with a comma ({16,}), an =, and spaces survives verbatim -
+    # no comma split, no quote stripping, no trimming.
+    my $rest = 'report_hide=(?<=^key )[0-9a-f]{16,}';
+    fetchconfig::Mailer->parse_email_line('/t', 0, "email: $rest", $rest);
+    my @pats = fetchconfig::Mailer->report_hide_patterns;
+    ok( (grep { $_ eq '(?<=^key )[0-9a-f]{16,}' } @pats),
+        'report_hide regex with a comma is captured verbatim (no quoting needed)' );
 }
 
 done_testing();

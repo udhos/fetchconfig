@@ -269,9 +269,11 @@ DIRECTORY ALLOWLIST
 	  directory: repository $REPO1     /usr/local/fetchconfig/config
 	  directory: template   $TEMPLATE1 /usr/local/fetchconfig/templates
 	  directory: fetch_run  $CMD1      /var/fetchconfig/fetch_run
+	  directory: report    $REP1       /var/www/fetchconfig/reports
 
 	Each line is: "directory:" <type> <$TAG> <path>, where <type> is
-	"repository", "template" or "fetch_run", <$TAG> is a unique
+	"repository", "template", "fetch_run" or "report", <$TAG> is a
+	unique
 	$NAME symbol, and <path> is the allowed directory.
 
 	If a "directory:" section is present it must cover ALL THREE
@@ -280,6 +282,8 @@ DIRECTORY ALLOWLIST
 	the command's program must be an allowed fetch_run directory. If
 	on_fetch_run is not wanted at all, write "directory: fetch_run
 	none", which satisfies the type and forbids any on_fetch_run.
+	Similarly "directory: report none" satisfies the report type and
+	disables change-report writing entirely.
 
 	Enforcement is OPT-IN: if the device table contains no
 	"directory:" line, nothing is restricted (existing device tables
@@ -399,6 +403,114 @@ EMAIL NOTIFICATIONS
 	(changes_only=1, or on_fetch_run/on_fetch_cat set); for other
 	devices it is reported as "n/a" -- no extra repository scan
 	is performed just for this report.
+
+
+CHANGE REPORTS
+
+	fetchconfig can produce a change report after a run: an HTML page
+	summarising which devices changed, with a coloured diff per changed
+	device, plus up to a configurable number of diffs embedded in the
+	summary e-mail. The report is written to an allowlisted "report"
+	directory (see DIRECTORY ALLOWLIST) that fetchconfig-web presents
+	(view/download/delete); it is NOT meant to be served to users
+	directly. Options are set on "email:" lines:
+
+	email: report_dir=$REP1         the report directory (a "report"
+	                                allowlist entry, by $TAG or path).
+	email: write_report=on|off      write the HTML report. With on and no
+	                                from=/to=/smtp=, only the report is
+	                                written and no e-mail is sent.
+	email: email_max_diff=N         embed up to N changed devices' diffs in
+	                                the e-mail (device-table order). Default 0
+	                                (no diffs); 0 or unset = no diffs in the
+	                                e-mail.
+	email: web_report_url=URL       base URL fetchconfig-web serves reports
+	                                from; used for the "full report" link in
+	                                the e-mail (only emitted when a report
+	                                was actually written).
+	email: report_logo=FILE|none    a logo file IN report_dir, embedded in
+	                                the HTML (self-contained). Recommended
+	                                size 250x50 px. none = no logo.
+	email: report_days=N            prune reports older than N days (only if
+	                                N > 1; 0 or unset = no pruning). Deletes
+	                                by exact filename, never a wildcard.
+	email: mask_secrets=on|off      mask common secret forms in the diffs
+	                                (default on). Master switch for all
+	                                hiding; applies to the e-mail and the
+	                                HTML report.
+	email: report_hide=<regex>      additional custom regex, taken verbatim
+	                                (whole rest of the line; one per line,
+	                                accumulates); the matched substring is
+	                                replaced with ****. Governed by
+	                                mask_secrets. See CHANGE REPORTS below.
+
+	Device states in the report: initial (first backup, no diff), Changed
+	(diff shown), Unchanged, Failed, and diff-unavailable (a changed
+	device whose previous backup could not be read).
+
+	SECRET MASKING IS BEST EFFORT. When mask_secrets is on (the
+	default), common Cisco/ProCurve forms are masked AFTER diffing, on
+	both the old and new line, so a rotated secret still shows as a
+	changed line (**** -> ****) without revealing either value. The
+	built-in forms include SNMP community, type-5/7 secrets, enable
+	secret hashes, key-string, pre-shared-key, wpa-psk, wpa-passphrase,
+	a bare "key <hex>" and the Hirschmann "passwd <user> :vN:<hash>:"
+	form (the username is kept, the hash masked). It is NOT comprehensive and is vendor-
+	incomplete -- reports and report e-mails must be treated as
+	sensitive regardless.
+
+	CUSTOM PATTERNS. For secrets the built-ins do not cover, add one or
+	more regexes, one per line:
+
+	  email: report_hide=(?<=wpa-passphrase )\S+
+	  email: report_hide=(?<=^key )[0-9a-f]{16,}
+
+	Only the substring each regex MATCHES is replaced with "****", so to
+	keep the surrounding keyword visible, match only the value -- the
+	examples above use a fixed-width lookbehind "(?<=KEYWORD )" so the
+	keyword stays and only the value is hidden, e.g.
+
+	  wpa-passphrase c1ca253b...   ->   wpa-passphrase ****
+
+	Take care not to over-match: a pattern like "(?<=secret )\S+" would
+	also fire inside words such as "my-secret". Patterns accumulate (one
+	per line); comment a line out to stop hiding its pattern. They are
+	governed by the mask_secrets master switch -- with mask_secrets=off
+	nothing is hidden, built-in or custom. An invalid regex is logged
+	and skipped (it never aborts the run).
+
+	VALUE SYNTAX. report_hide is special: everything after the first
+	"=" on the line is taken VERBATIM as the regex -- the whole rest of
+	the line, exactly as written. There is no comma splitting, no quote
+	stripping and no space trimming for this option, so a regex may
+	contain commas (e.g. the quantifiers "{m,n}", "{m,}"), "=", spaces
+	and any other character with no escaping. Do NOT wrap the regex in
+	quotes -- quotes would become part of the pattern. Put exactly one
+	regex on the line; use additional report_hide= lines for more.
+
+	ARMORED DIFFS. Each device's diff in the HTML report is wrapped in
+	a <div class="device-diff" data-device="<dev_id>" id="dev-<dev_id>">
+	with a stable structure, so an external program (fetchconfig-web)
+	can reliably parse it and present an expandable per-device view.
+	Treat this markup as a parse contract.
+
+	WARNING: the saved configuration files in the repository still
+	contain cleartext credentials regardless of report masking; the
+	report only masks what it displays, not what is stored.
+
+	REPORT DIRECTORY SETUP. So that fetchconfig-web (running as the web
+	server's user/group) can read and manage the reports fetchconfig
+	writes, set the group of report_dir to the web server's group and
+	set the setgid bit on it:
+
+	  chgrp <webgroup> /var/www/fetchconfig/reports
+	  chmod g+s        /var/www/fetchconfig/reports
+
+	With setgid (g+s) set, every report file created in the directory
+	automatically inherits the directory's group - fetchconfig needs no
+	special privileges and does not change ownership itself. Ensure the
+	directory's group permissions allow the web server to read (and, for
+	the delete buttons, write) the files.
 
 EMBEDDING DEVICE TABLE INTO COMMAND LINE
 

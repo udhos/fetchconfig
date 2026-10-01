@@ -29,6 +29,7 @@ use lib "$FindBin::Bin/";
 use fetchconfig::Logger;
 use fetchconfig::Constants;
 use fetchconfig::Mailer;
+use fetchconfig::Report;
 use fetchconfig::model::Detector;
 use fetchconfig::Tools;
 use Getopt::Long qw(GetOptionsFromArray);
@@ -253,6 +254,7 @@ if (defined($orphan_test) && !defined($orphan_delete)) {
 }
 
 fetchconfig::model::Detector->init($log);
+fetchconfig::Report->init($log);
 
 my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs);
 if ($parallel > 1 && $lookup_only) {

@@ -6,11 +6,15 @@
 # name one of these directories - by its $TAG or its exact path. This lets a
 # less-trusted editor (e.g. a web UI) change devices without being able to
 # point them at arbitrary paths. Format: directory: <type> <$TAG> <path>,
-# type is "repository" or "template". Remove/omit to disable (no allowlist).
+# type is "repository", "template", "fetch_run" or "report". If a directory:
+# section is present it must cover ALL FOUR types. Remove/omit the whole
+# section to disable the allowlist entirely.
 #directory: repository $REPO1     /usr/local/fetchconfig/config
 #directory: template   $TEMPLATE1 /usr/local/fetchconfig/templates
 #directory: fetch_run  $CMD1      /var/fetchconfig/fetch_run
-# ("directory: fetch_run none" instead of a fetch_run dir forbids on_fetch_run)
+#directory: report     $REP1      /var/www/fetchconfig/reports
+# ("directory: fetch_run none" forbids on_fetch_run; "directory: report none"
+#  disables change-report writing - each still satisfies its type)
 
 # $Id: device_table.example,v 1.19 2013/10/16 03:29:11 evertonm Exp $
 #
@@ -38,6 +42,30 @@
 # always appended). Quote the value if it contains a comma; the quotes
 # are stripped.
 #email:		footer="(c) 2006-2026 Everton da Silva Marques, Rainer Tammer and others"
+#
+# Change reports (see CHANGE REPORTS in README). write_report=on writes an
+# HTML report of what changed to report_dir (a "report" allowlist entry);
+# with on and no from=/to= only the report is written, no e-mail is sent.
+# email_max_diff diffs are embedded in the mail (default 0 = none). report_logo is a
+# file IN report_dir, embedded (250x50 px recommended). report_days>1 prunes
+# old reports. mask_secrets (default on) masks common secret forms in diffs.
+# report_dir must be group-owned by the web server's group with the setgid
+# bit set (chgrp <webgroup> <dir>; chmod g+s <dir>) so fetchconfig-web can
+# read/manage the reports fetchconfig writes. See CHANGE REPORTS in README.
+#email:		report_dir=$REP1
+#email:		write_report=on
+#email:		email_max_diff=10
+#email:		web_report_url=http://acme.com/cgi-bin/fetchconfig/fetchconfig-web.cgi?action=report
+#email:		report_logo=logo.png
+#email:		report_days=90
+#email:		mask_secrets=on
+# report_hide: extra custom regex patterns, one per line (accumulate). Only
+# the matched substring becomes ****; match just the value (fixed-width
+# lookbehind) to keep the keyword. Governed by mask_secrets.
+#email:		report_hide=(?<=wpa-passphrase )\S+
+# report_hide takes the whole rest of the line verbatim as the regex (no
+# comma-split, no quoting, no trimming) - commas, =, spaces are all literal.
+#email:		report_hide=(?<=^key )[0-9a-f]{16,}
 
 default:	cisco-ios	user=backup,pass=fran,enable=jose
 default:	cisco-ios	timeout=10,keep=5,changes_only=0

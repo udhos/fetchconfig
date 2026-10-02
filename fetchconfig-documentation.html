@@ -486,7 +486,7 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.65</span>
+      <span class="pill">v9.66</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
@@ -540,7 +540,7 @@
       <p class="lede">A Perl script for retrieving and backing up the configuration of network devices at scale &mdash; over telnet, SSH or a device&rsquo;s web UI, across dozens of vendors, with change tracking, e-mail summaries, and a repository you can script against.</p>
       <div class="hero-stats">
         <div class="hero-stat"><span class="num">34</span><span class="label">device platforms</span></div>
-        <div class="hero-stat"><span class="num">9.65</span><span class="label">version</span></div>
+        <div class="hero-stat"><span class="num">9.66</span><span class="label">version</span></div>
         <div class="hero-stat"><span class="num">Telnet / SSH / HTTP / SNMP</span><span class="label">transports</span></div>
         <div class="hero-stat"><span class="num">Linux / AIX / Windows</span><span class="label">tested platforms</span></div>
       </div>
@@ -1061,7 +1061,7 @@ email: report_hide=(?&lt;=^key )[0-9a-f]{16,}</code></pre>
 
 <div class="flag-card">
           <div class="flag-head"><span class="flag-tag">-v, --version</span><span class="flag-req">version</span></div>
-          <p>Prints just the program version to stdout (one line, e.g. <code>9.65</code>) and exits with status 0. Nothing else is written &mdash; no banner, nothing on stderr &mdash; so a script can parse it safely.</p>
+          <p>Prints just the program version to stdout (one line, e.g. <code>9.66</code>) and exits with status 0. Nothing else is written &mdash; no banner, nothing on stderr &mdash; so a script can parse it safely.</p>
         </div>
 
 <div class="flag-card">
@@ -1099,6 +1099,7 @@ email: report_hide=(?&lt;=^key )[0-9a-f]{16,}</code></pre>
               <tr><td><code>to</code></td><td class="req-opt">Optional</td><td>Overrides, for this device only, who receives the backup summary e-mail. See <a href="#email-notifications">E-mail notifications</a>
         <a href="#change-reports">Change reports</a>. Available for all modules.</td></tr>
               <tr><td><code>comment</code></td><td class="req-opt">Optional</td><td>Free-text note about the device, for whoever reads the device table &mdash; not used anywhere else. Available for all modules. Example: <code>comment=lab switch</code>.</td></tr>
+              <tr><td><code>site</code></td><td class="req-opt">Optional</td><td>Free-text site/location tag, like <code>comment</code> &mdash; fetchconfig does not use it. Used by fetchconfig-web for per-site access control (users see only devices whose site matches their user record; a device with no <code>site</code> is visible only to &ldquo;all sites&rdquo; / site&nbsp;0 users). Single-byte characters. Example: <code>site="Plant 3, Hall A"</code>.</td></tr>
             </tbody>
           </table>
         </div>
@@ -1109,7 +1110,7 @@ email: report_hide=(?&lt;=^key )[0-9a-f]{16,}</code></pre>
         </div>
 
         <h3>Per-model option matrix</h3>
-        <p class="prose-muted">Beyond the options above, each model recognizes its own subset of <code>user</code> / <code>pass</code> / <code>enable</code> / <code>timeout</code> / <code>repository</code> / <code>keep</code> / <code>fetch_timeout</code> / <code>changes_only</code>. <code>on_fetch_run</code>, <code>on_fetch_cat</code>, <code>timezone</code>, <code>filename_append_suffix</code>, <code>to</code>, and <code>comment</code> are available for every model and are omitted here for space.</p>
+        <p class="prose-muted">Beyond the options above, each model recognizes its own subset of <code>user</code> / <code>pass</code> / <code>enable</code> / <code>timeout</code> / <code>repository</code> / <code>keep</code> / <code>fetch_timeout</code> / <code>changes_only</code>. <code>on_fetch_run</code>, <code>on_fetch_cat</code>, <code>timezone</code>, <code>filename_append_suffix</code>, <code>to</code>, <code>comment</code> and <code>site</code> are available for every model and are omitted here for space.</p>
 
         <div class="table-wrap">
           <table class="matrix">

@@ -1352,6 +1352,7 @@ DEVICE OPTIONS
 	filename_append_suffix	Optional (see the cisco-ios/cisco-cat
 			section).
 	comment		Optional (see the cisco-ios/cisco-cat section).
+	site		Optional (see the cisco-ios/cisco-cat section).
 
 	The following are set only in the template file, not on the
 	device line: capture_from (regex marking where the saved config
@@ -1465,6 +1466,23 @@ DEVICE OPTIONS
 			the backup file). This option is available for
 			all modules.
 			Example: comment=lab switch
+
+	site		Optional. Free-text site/location tag for the
+			device, like comment= - fetchconfig itself does
+			not use it (not logged, not e-mailed, not saved
+			into the backup file). It is intended for the
+			fetchconfig-web application, which uses it for
+			per-site access control: users see and edit only
+			the devices whose site matches a site assigned
+			in their user record. A device with no site= is
+			visible only to users with the "all sites"
+			assignment (site 0); regular users do not see an
+			untagged device until it is given a site. Values
+			should be single-byte characters (the device
+			table is not UTF-8). Quote the value if it
+			contains a comma (see "Quoting option values"
+			below). This option is available for all modules.
+			Example: site="Plant 3, Hall A"
 
 	Quoting option values: any option value (comment= or
 	otherwise) may be wrapped in double quotes, e.g.

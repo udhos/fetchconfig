@@ -343,3 +343,9 @@ parks           lab209r-2	10.30.0.7	to=lab-owner@acme.com
 # comment itself contains a comma; without quotes, that comma would
 # be read as the start of a new option.
 riverstone	lab3101		10.1.30.3	comment="Building 3, Floor 2"
+
+# "site=" is a free-text site/location tag, like comment= (fetchconfig does
+# not use it). fetchconfig-web uses it for per-site access control; a device
+# with no site= is visible only to "all sites" (site 0) users. Single-byte
+# characters; quote the value if it contains a comma.
+riverstone	lab3102		10.1.30.4	site="Plant 3, Hall A",comment="core switch"

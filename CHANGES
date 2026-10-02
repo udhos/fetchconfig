@@ -2,6 +2,18 @@
 # fetchconfig.pl - CHANGES
 #
 
+9.66
+====
+
++ New documented device option "site=": a free-text site/location tag, like
+  comment= (fetchconfig itself does not use it). It is intended for the
+  fetchconfig-web application, which uses it for per-site access control -
+  users see and edit only the devices whose site matches a site assigned in
+  their user record; a device with no site= is visible only to "all sites"
+  (site 0) users. Values should be single-byte characters. (The device-table
+  parser already accepted arbitrary key=value options, so no parser change
+  was needed - this documents site= as an official option.)
+
 9.65
 ====
 

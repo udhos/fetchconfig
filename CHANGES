@@ -2,8 +2,34 @@
 # fetchconfig.pl - CHANGES
 #
 
+9.67
+====
+
++ -z and -Z gained -D and -T, mirroring -o/-e: with -D the zero-byte
+  backups found are deleted (each by one plain unlink on its exact path -
+  only the files, not directories; run -e -D afterwards to prune any
+  emptied day/month dirs), and -T previews them ("would delete: unlink
+  ..."). Without -D the behaviour is unchanged (list only). The exit
+  status is still that of the check (1 if any zero-byte backups were
+  found, 0 otherwise), whether or not they were deleted. -D now accepts
+  -o, -e, -z or -Z; -T still requires -D.
+
 9.66
 ====
+
+
++ cisco-asa-ssh and cisco-asa: a rejected enable password no longer hangs
+  the fetch for the whole fetch_timeout. The ASA re-prompts "Password: "
+  when the enable secret is wrong; the models now detect that second
+  prompt and fail immediately with "enable failed: the device rejected
+  the enable password ..." (the message points at a likely cause - a
+  missing device-specific enable= falling back to a default: enable= that
+  does not apply). The successful path (enable accepted, "#" prompt) is
+  unchanged.
+
+
++ Change report: the Devices sidebar is hidden when the report is printed
+  (an @media print rule), so the printed page uses the full width.
 
 + New documented device option "site=": a free-text site/location tag, like
   comment= (fetchconfig itself does not use it). It is intended for the

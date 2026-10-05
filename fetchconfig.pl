@@ -241,8 +241,10 @@ if (defined($compare_index)) {
     }
 }
 
-if (defined($orphan_delete) && !defined($orphan_check) && !defined($empty_check)) {
-    $log->error("-D requires -o or -e");
+if (defined($orphan_delete)
+    && !defined($orphan_check) && !defined($empty_check)
+    && !defined($zero_check_dev_id) && !defined($zero_check_all)) {
+    $log->error("-D requires -o, -e, -z or -Z");
     &usage;
     die "\n";
 }
@@ -291,12 +293,12 @@ if (defined($list_dev_id)) {
 }
 
 if (defined($zero_check_dev_id)) {
-    fetchconfig::Tools::check_zero_backups($zero_check_dev_id, $retrieve_out_file);
+    fetchconfig::Tools::check_zero_backups($zero_check_dev_id, $retrieve_out_file, $orphan_delete, $orphan_test);
     exit;
 }
 
 if (defined($zero_check_all)) {
-    fetchconfig::Tools::check_zero_backups_all($retrieve_out_file);
+    fetchconfig::Tools::check_zero_backups_all($retrieve_out_file, $orphan_delete, $orphan_test);
     exit;
 }
 
@@ -383,7 +385,9 @@ sub usage_text {
     $t .= "       $me [-devices=file] [-line=string] -g dev_id -n N -m M [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -l dev_id [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -z dev_id [-f file]\n";
+    $t .= "       $me [-devices=file] [-line=string] -z dev_id -D [-T] [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -Z [-f file]\n";
+    $t .= "       $me [-devices=file] [-line=string] -Z -D [-T] [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -s dev_id [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -S [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -o [-f file]\n";
@@ -403,8 +407,11 @@ sub usage_text {
     $t .= "       -m M           compare backup N against the older backup M (M must be > N); output is a diff\n";
     $t .= "       -l dev_id      list all backed up configs for dev_id (mutually exclusive with -g/-z/-Z/-o)\n";
     $t .= "       -z dev_id      list backed up configs for dev_id that are 0 bytes long (mutually exclusive with -g/-l/-Z/-o);\n";
-    $t .= "                      exits 1 if any are found, 0 if all backups are non-empty\n";
-    $t .= "       -Z             same as -z, but checks every device loaded via -devices=/-line= (mutually exclusive with -g/-l/-z/-o)\n";
+    $t .= "                      exits 1 if any are found, 0 if all backups are non-empty. With -D the listed zero-byte\n";
+    $t .= "                      backup files are deleted (just the files; run -e -D afterwards to prune emptied dirs);\n";
+    $t .= "                      -T previews. The exit status is still that of the check (1 if any were found)\n";
+    $t .= "       -Z             same as -z, but checks every device loaded via -devices=/-line= (mutually exclusive with -g/-l/-z/-o);\n";
+    $t .= "                      -D (optionally -T) deletes the zero-byte backups found, as for -z\n";
     $t .= "       -s dev_id      check dev_id for inconsistent backup filename suffixes (some backups with a suffix\n";
     $t .= "                      and some without, or differing suffixes) - see filename_append_suffix in the README\n";
     $t .= "                      (mutually exclusive with -g/-l/-z/-Z/-o/-e/-S); also compares the suffix the backups use\n";
@@ -420,7 +427,8 @@ sub usage_text {
     $t .= "                      root; exits 1 if any orphaned backups or status/debug files are found, 0 otherwise\n";
     $t .= "       -D             with -o: also DELETE the orphaned backup directories found, and the orphaned\n";
     $t .= "                      <dev_id>.status/<dev_id>.debug files; with -e: also DELETE\n";
-    $t .= "                      the empty directories found (requires -o or -e)\n";
+    $t .= "                      the empty directories found; with -z or -Z: also DELETE the zero-byte backup\n";
+    $t .= "                      files found (requires -o, -e, -z or -Z)\n";
     $t .= "       -T             with -o -D or -e -D: only show the delete commands, don't actually delete anything\n";
     $t .= "                      (requires -D) - use this first to preview what -D would remove; exit status is that\n";
     $t .= "                      of the plain check (-o / -e), i.e. 1 if anything was found\n";

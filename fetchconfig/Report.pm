@@ -230,6 +230,11 @@ sub _report_css {
   nav.side a{display:block;color:var(--text-muted);text-decoration:none;
     font-family:var(--font-mono);font-size:.82rem;padding:.2rem 0;}
   nav.side a:hover{color:var(--accent);}
+  /* when printing, drop the Devices sidebar and let the report use the full page */
+  @media print {
+    nav.side{display:none;}
+    main{padding:0;}
+  }
   main{flex:1 1 auto;padding:1.5rem 2rem;max-width:100%;overflow:auto;}
   header.report-head{display:flex;justify-content:space-between;align-items:flex-start;
     border-bottom:1px solid var(--border);padding-bottom:1rem;margin-bottom:1.2rem;}

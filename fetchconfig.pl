@@ -29,6 +29,7 @@ use lib "$FindBin::Bin/";
 use fetchconfig::Logger;
 use fetchconfig::Constants;
 use fetchconfig::Mailer;
+use fetchconfig::Report;
 use fetchconfig::model::Detector;
 use fetchconfig::Tools;
 use Getopt::Long qw(GetOptionsFromArray);
@@ -86,6 +87,7 @@ my $empty_check;        # set by -e: enables empty-directory check mode
 my $orphan_delete;      # set by -D: also delete what -o (orphaned backups) or -e (empty directories) found (requires -o or -e)
 my $orphan_test;        # set by -T: with -D, only show what would be deleted, don't delete (requires -D)
 my $check_template;     # set by --check-template FILE: structural check of one template, then exit
+my $template_syntax;    # set by --template-syntax FILE: print the template's '# syntax_style:' value, then exit
 my $list_template;      # set by -t/--list-template: list available templates from all template_dir=
 my $list_allowed_dirs;  # set by --list-allowed-dirs: list the directory: allowlist
 my $retrieve_out_file;  # set by -f: optional output file (default: stdout)
@@ -130,6 +132,7 @@ my $got = GetOptions(
     'D'         => \$orphan_delete,
     'T'         => \$orphan_test,
     'check-template=s' => \$check_template,
+    'template-syntax=s' => \$template_syntax,
     't|list-template'  => \$list_template,
     'list-allowed-dirs' => \$list_allowed_dirs,
     'n=s'       => \$retrieve_index,   # validated as a positive integer below
@@ -215,6 +218,15 @@ if (defined($check_template)) {
     exit(check_template_file($check_template));
 }
 
+# --template-syntax FILE: print the template's declared syntax style (the
+# value of a '# syntax_style: <value>' header comment) and exit. This is
+# metadata for a config viewer (fetchconfig-web) to pick a highlighter; it
+# has nothing to do with backing up a device. The value is a free-text
+# token [A-Za-z0-9_-]+; an absent or empty declaration prints nothing.
+if (defined($template_syntax)) {
+    exit(template_syntax_of($template_syntax));
+}
+
 if ((@device_file_list < 1) && (@line_list < 1)) {
     $log->error("at least one -devices=filename or one -line=string is required");
     &usage;
@@ -240,8 +252,10 @@ if (defined($compare_index)) {
     }
 }
 
-if (defined($orphan_delete) && !defined($orphan_check) && !defined($empty_check)) {
-    $log->error("-D requires -o or -e");
+if (defined($orphan_delete)
+    && !defined($orphan_check) && !defined($empty_check)
+    && !defined($zero_check_dev_id) && !defined($zero_check_all)) {
+    $log->error("-D requires -o, -e, -z or -Z");
     &usage;
     die "\n";
 }
@@ -253,8 +267,9 @@ if (defined($orphan_test) && !defined($orphan_delete)) {
 }
 
 fetchconfig::model::Detector->init($log);
+fetchconfig::Report->init($log);
 
-my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs);
+my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs) || defined($template_syntax);
 if ($parallel > 1 && $lookup_only) {
     $log->error("-P applies to fetching only and cannot be combined with -g/-l/-z/-Z/-o/-e/-s/-S");
     &usage;
@@ -289,12 +304,12 @@ if (defined($list_dev_id)) {
 }
 
 if (defined($zero_check_dev_id)) {
-    fetchconfig::Tools::check_zero_backups($zero_check_dev_id, $retrieve_out_file);
+    fetchconfig::Tools::check_zero_backups($zero_check_dev_id, $retrieve_out_file, $orphan_delete, $orphan_test);
     exit;
 }
 
 if (defined($zero_check_all)) {
-    fetchconfig::Tools::check_zero_backups_all($retrieve_out_file);
+    fetchconfig::Tools::check_zero_backups_all($retrieve_out_file, $orphan_delete, $orphan_test);
     exit;
 }
 
@@ -374,6 +389,42 @@ sub check_template_file {
     }
 }
 
+sub template_syntax_of {
+    my ($path) = @_;
+    if (!defined($path) || $path eq '') {
+        $log->error("--template-syntax requires a template file argument");
+        return 2;
+    }
+    if (! -f $path) {
+        $log->error("--template-syntax: file not found: $path");
+        return 2;
+    }
+    if (!open(my $fh, '<', $path)) {
+        $log->error("--template-syntax: cannot read $path: $!");
+        return 2;
+    } else {
+        my $style;
+        while (my $line = <$fh>) {
+            # A "# syntax_style: <value>" header comment; value is a free-text
+            # token [A-Za-z0-9_-]+. First match wins; case-insensitive key.
+            if ($line =~ /^\s*#\s*syntax_style\s*:\s*([A-Za-z0-9_-]+)/i) {
+                $style = $1;
+                last;
+            }
+        }
+        close $fh;
+        # Print the value (or nothing if undeclared) to stdout, so a caller
+        # like fetchconfig-web reads it directly. Log lines go to stderr, so
+        # stdout carries only the value. Exit 0 if declared, 1 if not.
+        if (defined($style)) {
+            print "$style\n";
+            return 0;
+        }
+        $log->debug("$path: no syntax_style declared");
+        return 1;
+    }
+}
+
 sub usage_text {
     my $t = '';
     $t .= "usage: $me [-v] [-devices=file] [-line=string] [-P N]\n";
@@ -381,7 +432,9 @@ sub usage_text {
     $t .= "       $me [-devices=file] [-line=string] -g dev_id -n N -m M [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -l dev_id [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -z dev_id [-f file]\n";
+    $t .= "       $me [-devices=file] [-line=string] -z dev_id -D [-T] [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -Z [-f file]\n";
+    $t .= "       $me [-devices=file] [-line=string] -Z -D [-T] [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -s dev_id [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -S [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -o [-f file]\n";
@@ -401,8 +454,11 @@ sub usage_text {
     $t .= "       -m M           compare backup N against the older backup M (M must be > N); output is a diff\n";
     $t .= "       -l dev_id      list all backed up configs for dev_id (mutually exclusive with -g/-z/-Z/-o)\n";
     $t .= "       -z dev_id      list backed up configs for dev_id that are 0 bytes long (mutually exclusive with -g/-l/-Z/-o);\n";
-    $t .= "                      exits 1 if any are found, 0 if all backups are non-empty\n";
-    $t .= "       -Z             same as -z, but checks every device loaded via -devices=/-line= (mutually exclusive with -g/-l/-z/-o)\n";
+    $t .= "                      exits 1 if any are found, 0 if all backups are non-empty. With -D the listed zero-byte\n";
+    $t .= "                      backup files are deleted (just the files; run -e -D afterwards to prune emptied dirs);\n";
+    $t .= "                      -T previews. The exit status is still that of the check (1 if any were found)\n";
+    $t .= "       -Z             same as -z, but checks every device loaded via -devices=/-line= (mutually exclusive with -g/-l/-z/-o);\n";
+    $t .= "                      -D (optionally -T) deletes the zero-byte backups found, as for -z\n";
     $t .= "       -s dev_id      check dev_id for inconsistent backup filename suffixes (some backups with a suffix\n";
     $t .= "                      and some without, or differing suffixes) - see filename_append_suffix in the README\n";
     $t .= "                      (mutually exclusive with -g/-l/-z/-Z/-o/-e/-S); also compares the suffix the backups use\n";
@@ -418,7 +474,8 @@ sub usage_text {
     $t .= "                      root; exits 1 if any orphaned backups or status/debug files are found, 0 otherwise\n";
     $t .= "       -D             with -o: also DELETE the orphaned backup directories found, and the orphaned\n";
     $t .= "                      <dev_id>.status/<dev_id>.debug files; with -e: also DELETE\n";
-    $t .= "                      the empty directories found (requires -o or -e)\n";
+    $t .= "                      the empty directories found; with -z or -Z: also DELETE the zero-byte backup\n";
+    $t .= "                      files found (requires -o, -e, -z or -Z)\n";
     $t .= "       -T             with -o -D or -e -D: only show the delete commands, don't actually delete anything\n";
     $t .= "                      (requires -D) - use this first to preview what -D would remove; exit status is that\n";
     $t .= "                      of the plain check (-o / -e), i.e. 1 if anything was found\n";
@@ -439,6 +496,9 @@ sub usage_text {
     $t .= "                      fetch_run); use \"directory: fetch_run none\" to forbid on_fetch_run.\n";
     $t .= "                      Honours -f.\n";
     $t .= "       --check-template PATH  structurally check the generic-model template at PATH\n";
+    $t .= "       --template-syntax PATH print the template's declared syntax style (the value of its\n";
+    $t .= "                      # syntax_style: <token> header comment) to stdout, for a config viewer;\n";
+    $t .= "                      exits 0 if declared, 1 if not. Backup behaviour is never affected\n";
     $t .= "                      (grammar + the load-time validator: self-loops, goto targets, capture\n";
     $t .= "                      markers, reachability, transport entry) and exit. PATH must be the full\n";
     $t .= "                      path to the .tmpl file (a bare template name is not resolved, since the\n";

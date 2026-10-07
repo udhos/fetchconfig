@@ -124,6 +124,30 @@ missing transport entry state, a bad transport.
 See `templates/cisco-ios.tmpl` (telnet + SSH) and, for a menu/VT100 device,
 `templates/procurve.tmpl`.
 
+## Declaring the output syntax (for config viewers)
+
+A `generic`-model backup can be in any syntax (Cisco-like, JSON, XML, INI,
+plain text), and the `generic` model name does not say which. A template may
+therefore declare the syntax of the config it produces, so a viewer (such as
+fetchconfig-web) can pick a highlighter:
+
+    # syntax_style: cisco-ios
+
+Put it in the template's header comment block. It is a plain `#` comment: the
+parser and the backup path ignore it completely, so it is optional, backward-
+compatible, and cannot change how a device is backed up. The value is a free-
+text token `[A-Za-z0-9_-]+`. fetchconfig-web currently recognises `cisco-ios`,
+`procurve`, `comware`, `zyxel`, `aruba-cx`, `nexus`, `mediant`, `template`,
+`json`, `xml` and `generic`; the set is open, and any other or absent value
+falls back to plain text.
+
+Read it without parsing the template yourself:
+
+    fetchconfig.pl --template-syntax /path/to/template.tmpl
+
+prints the token to stdout (exit 0), nothing if undeclared (exit 1), or an
+error to stderr if the file can't be read (exit 2).
+
 ## Security
 
 With `debug=on` the session debug log masks the passwords sent via `send_secret`

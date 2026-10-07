@@ -159,9 +159,17 @@ sub chat_login {
 		return undef;
 	    }
 
-	    ($prematch, $match) = $t->waitfor(Match => '/\S+# $/');
+	    # Accept the "#" prompt (enable OK) or a repeated "Password: ",
+	    # which the ASA sends when the enable password is rejected.
+	    # Without catching the re-prompt the code waits for a "#" that
+	    # never comes and blocks for the whole fetch_timeout; fail fast.
+	    ($prematch, $match) = $t->waitfor(Match => '/(Password: |\S+# )$/');
 	    if (!defined($prematch)) {
 		$self->log_error("could not find enable command prompt");
+		return undef;
+	    }
+	    if ($match =~ /^Password/) {
+		$self->log_error("enable failed: the device rejected the enable password (check the enable= option for this device; a default: enable= may not apply here)");
 		return undef;
 	    }
         }

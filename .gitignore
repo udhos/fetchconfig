@@ -26,6 +26,6 @@ __pycache__/
 # editor/backup artifacts
 *.bak
 *.orig
-ASSESSMENT
-ASSESSMENT.md
-ASSESSMENT.html
+
+# assessment/review report (working artifact, not part of the release)
+ASSESSMENT*

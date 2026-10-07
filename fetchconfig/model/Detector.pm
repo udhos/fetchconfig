@@ -76,6 +76,7 @@ my %dir_allow_tag;
 my %dir_allow_path;
 my $dir_allow_present = 0;
 my $dir_allow_fetch_run_none = 0;   # set by "directory: fetch_run none"
+my $dir_allow_report_none = 0;      # set by "directory: report none" (reporting disabled)
 my @dir_allow_rows;      # ordered [type, tag, path] for --list-allowed-dirs
 my @dir_allow_errors;    # [reason] for each rejected directory: line (for the linter)
 
@@ -407,9 +408,14 @@ sub fetch_device {
 	changes_only => $dev_changes_only,
 	success      => 1,
 	size         => $backup_size,
-	changed      => ($dev_changes_only || $dev_run || $dev_cat)
-	            ? ($cfg_equal ? 'unchanged' : 'changed')
-	            : 'n/a',
+	# "initial" when this run saved the first-ever backup (no previous
+	# config existed to compare against) - not a real change. Otherwise
+	# changed/unchanged from the comparison, or n/a when not tracked.
+	changed      => (!defined($latest_dir))
+	            ? 'initial'
+	            : (($dev_changes_only || $dev_run || $dev_cat)
+	               ? ($cfg_equal ? 'unchanged' : 'changed')
+	               : 'n/a'),
 	to           => $dev_email_to,
 	);
 
@@ -519,12 +525,20 @@ sub parse_directory_line {
         return;
     }
 
+    # Special form: "directory: report none" - reporting is disabled; the
+    # report type is satisfied and no report directory is permitted.
+    if ($body =~ /^\s*report\s+none\s*$/) {
+        $dir_allow_report_none = 1;
+        push @dir_allow_rows, [ 'report', 'none', 'none' ];
+        return;
+    }
+
     if ($body !~ /^\s*(\S+)\s+(\S+)\s+(\S.*?)\s*$/) {
         my $m = "unrecognized directory at file=$file line=$num: directory: $body"; $logger->error($m); push @dir_allow_errors, $m; return;
     }
     my ($type, $tag, $path) = ($1, $2, $3);
-    if ($type ne 'repository' && $type ne 'template' && $type ne 'fetch_run') {
-        my $m = "directory: type must be 'repository', 'template' or 'fetch_run' (got '$type') at file=$file line=$num"; $logger->error($m); push @dir_allow_errors, $m; return;
+    if ($type ne 'repository' && $type ne 'template' && $type ne 'fetch_run' && $type ne 'report') {
+        my $m = "directory: type must be 'repository', 'template', 'fetch_run' or 'report' (got '$type') at file=$file line=$num"; $logger->error($m); push @dir_allow_errors, $m; return;
     }
     if ($tag !~ /^\$[A-Za-z_][A-Za-z0-9_]*$/) {
         my $m = "directory: tag must look like \$NAME (got '$tag') at file=$file line=$num"; $logger->error($m); push @dir_allow_errors, $m; return;
@@ -543,6 +557,9 @@ sub parse_directory_line {
 
 # Is on_fetch_run forbidden by "directory: fetch_run none"?
 sub dir_allow_fetch_run_none { return $dir_allow_fetch_run_none; }
+
+# Is reporting disabled by "directory: report none"?
+sub dir_allow_report_none { return $dir_allow_report_none; }
 
 # Which directory types the allowlist actually defines (for the all-types
 # check). fetch_run is "defined" by a path entry OR by the none form.
@@ -661,6 +678,7 @@ sub dir_allow_missing_types {
     push @missing, "repository" unless $have{repository};
     push @missing, "template"   unless $have{template};
     push @missing, "fetch_run"  unless ($have{fetch_run} || $dir_allow_fetch_run_none);
+    push @missing, "report"     unless ($have{report}    || $dir_allow_report_none);
     return map { "directory: allowlist is missing a '$_' entry" } @missing;
 }
 
@@ -718,6 +736,7 @@ sub init {
     %dir_allow_path  = ();
     $dir_allow_present = 0;
     $dir_allow_fetch_run_none = 0;
+    $dir_allow_report_none = 0;
     @dir_allow_rows  = ();
     @dir_allow_errors = ();
 

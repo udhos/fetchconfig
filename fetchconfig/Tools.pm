@@ -330,7 +330,7 @@ sub list_backups {
 #   fetchconfig.pl -devices=device_table -z dev_id || alert "empty backup(s) for dev_id"
 #
 sub check_zero_backups {
-    my ($dev_id, $out_file) = @_;
+    my ($dev_id, $out_file, $delete, $test) = @_;
 
     my ($files_ref, $dir_tab_ref) = scan_backups($dev_id);
 
@@ -364,10 +364,14 @@ sub check_zero_backups {
 	++$zero_count;
 
 	$out .= sprintf("%d\t%s\t%s\n", $index, $size, $path);
+	# With -D, delete each zero-byte backup (the file only; emptied
+	# day/month dirs are left for -e -D to prune). -T previews.
+	safe_unlink($path, $test) if $delete;
     }
 
     my $summary = ($zero_count > 0)
 	? "dev=$dev_id: checked $count backup(s), found $zero_count zero-byte backup(s)"
+	  . ($delete ? ($test ? " (would delete)" : " (deleted)") : "")
 	: "dev=$dev_id: checked $count backup(s), no zero-byte backups found";
     if ($zero_count > 0) { $log->debug($summary); } else { $log->info($summary); }
 
@@ -530,7 +534,7 @@ sub check_suffix_consistency {
 }
 
 sub check_zero_backups_all {
-    my ($out_file) = @_;
+    my ($out_file, $delete, $test) = @_;
 
     my @dev_ids = fetchconfig::model::Detector->device_ids;
 
@@ -577,11 +581,15 @@ sub check_zero_backups_all {
 	    ++$total_zero;
 
 	    $out .= sprintf("%s\t%d\t%s\t%s\n", $dev_id, $index, $size, $path);
+	    # With -D, delete each zero-byte backup (the file only; emptied
+	    # day/month dirs are left for -e -D to prune). -T previews.
+	    safe_unlink($path, $test) if $delete;
 	}
     }
 
     my $summary = ($total_zero > 0)
 	? "checked $dev_count device(s)/$total_backups backup(s), found $total_zero zero-byte backup(s)"
+	  . ($delete ? ($test ? " (would delete)" : " (deleted)") : "")
 	: "checked $dev_count device(s)/$total_backups backup(s), no zero-byte backups found";
     if ($total_zero > 0) { $log->debug($summary); } else { $log->info($summary); }
 
@@ -743,6 +751,28 @@ sub safe_rmdir {
     $log->info("deleting: rmdir $path");
     if (!rmdir($path)) {
 	$log->error("rmdir failed: $path: $!");
+	return 0;
+    }
+    return 1;
+}
+
+# safe_unlink - remove ONE backup file by its exact, fully-qualified path,
+# used by -z/-Z with -D to delete zero-byte backups. Like safe_rmdir it is
+# a single operation on one explicit path (no wildcards, no recursion), it
+# honours the $test preview flag, and it reports on stderr ("deleting:
+# unlink <path>"; with $test "would delete: unlink <path>" and nothing is
+# done). Returns 1 on success (or in test mode), 0 on failure.
+sub safe_unlink {
+    my ($path, $test) = @_;
+
+    if ($test) {
+	$log->info("would delete: unlink $path");
+	return 1;
+    }
+
+    $log->info("deleting: unlink $path");
+    if (!unlink($path)) {
+	$log->error("unlink failed: $path: $!");
 	return 0;
     }
     return 1;

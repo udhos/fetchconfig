@@ -24,7 +24,7 @@ package fetchconfig::Constants; # fetchconfig/Constants.pm
 use strict;
 use warnings;
 
-my $version = '9.65';
+my $version = '9.67';
 
 sub version {
     $version;

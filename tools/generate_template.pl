@@ -34,7 +34,7 @@ use strict;
 use warnings;
 use Getopt::Long qw(:config no_ignore_case bundling);
 
-my $VERSION = '9.65';
+my $VERSION = '9.66';
 my (%opt, $show_help);
 GetOptions(
     'f|hex=s'       => \$opt{hex},

@@ -76,6 +76,26 @@ ignored.
 4.1 Directives (top of file)
 ----------------------------
 
+A template may also carry a syntax-style hint for config viewers:
+
+    # syntax_style: cisco-ios
+
+This is a plain # comment - the parser and the backup path ignore it
+completely (it is optional and cannot affect a backup). It names the
+syntax of the config the template produces, so a viewer such as
+fetchconfig-web can pick a highlighter for a "generic"-model backup. The
+value is a free-text token [A-Za-z0-9_-]+. fetchconfig-web currently
+recognises cisco-ios, procurve, comware, zyxel, aruba-cx, nexus, mediant,
+template, json, xml and generic; the set is open, and any other or absent
+value falls back to plain text. Read it without parsing the template
+yourself via:
+
+    fetchconfig.pl --template-syntax /path/to/template.tmpl
+
+which prints the value to stdout (exit 0), nothing if undeclared
+(exit 1), or an error to stderr if the file can't be read (exit 2).
+
+
 All optional; defaults in parentheses.
 
 Directive                Meaning

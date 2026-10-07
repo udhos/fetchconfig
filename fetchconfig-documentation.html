@@ -486,7 +486,7 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.65</span>
+      <span class="pill">v9.66</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
@@ -517,6 +517,7 @@
         <div class="nav-group-label">Features</div>
         <a href="#parallel">Parallel fetching</a>
         <a href="#email-notifications">E-mail notifications</a>
+        <a href="#change-reports">Change reports</a>
         <a href="#retrieving">Retrieving backups</a>
       </div>
       <div class="nav-group">
@@ -539,7 +540,7 @@
       <p class="lede">A Perl script for retrieving and backing up the configuration of network devices at scale &mdash; over telnet, SSH or a device&rsquo;s web UI, across dozens of vendors, with change tracking, e-mail summaries, and a repository you can script against.</p>
       <div class="hero-stats">
         <div class="hero-stat"><span class="num">34</span><span class="label">device platforms</span></div>
-        <div class="hero-stat"><span class="num">9.65</span><span class="label">version</span></div>
+        <div class="hero-stat"><span class="num">9.66</span><span class="label">version</span></div>
         <div class="hero-stat"><span class="num">Telnet / SSH / HTTP / SNMP</span><span class="label">transports</span></div>
         <div class="hero-stat"><span class="num">Linux / AIX / Windows</span><span class="label">tested platforms</span></div>
       </div>
@@ -641,7 +642,7 @@ cpan install LWP::UserAgent Net::SNMP Net::TFTP</code></pre>
       </section>
 
       <section id="usage">
-        <div class="section-kicker">05</div>
+        <div class="section-kicker">04</div>
         <h2>Usage</h2>
         <ol>
           <li>Edit <code>device_table.example</code> according to your needs, and save it as <code>device_table</code>.</li>
@@ -659,7 +660,7 @@ vi device_table</code></pre>
       </section>
 
       <section id="device-table">
-        <div class="section-kicker">06</div>
+        <div class="section-kicker">05</div>
         <h2>Device table</h2>
         <p>The device table assigned with <code>-devices=</code> is a text file that supports two types of lines.</p>
 
@@ -684,26 +685,27 @@ cisco-ios       vpn-gw          192.168.0.1     keep=10,changes_only=1</code></p
       </section>
 
       <section id="embedding">
-        <div class="section-kicker">07</div>
+        <div class="section-kicker">06</div>
         <h2>Device table on the command line</h2>
         <p>Valid lines for the device table file can also be passed directly through the <code>-line=</code><em>string</em> switch.</p>
         <pre><code>/path/to/fetchconfig.pl <span class="k">-line=</span><span class="s">"default: tellabs-msr user=backup,pass=s&amp;cr&amp;t,timeout=10,keep=5,changes_only=0,fetch_timeout=1200,filename_append_suffix=.txt,repository=/path/to/repo"</span> <span class="k">-line=</span><span class="s">"tellabs-msr lab-router 10.0.0.1"</span></code></pre>
       </section>
 
       <section id="directory-allowlist">
-        <div class="section-kicker">08</div>
+        <div class="section-kicker">07</div>
         <h2>Directory allowlist</h2>
         <p class="prose-muted">Restrict which directories a repository=, template_dir= or on_fetch_run= may name.</p>
         <p>Optionally, the device table may restrict which directories a <code>repository=</code> or <code>template_dir=</code> option is allowed to name. This is useful when the device table is edited through a less-trusted front end (e.g. a web UI): the allowlist lives only in the real config file and cannot be widened from the UI, so an edit can never point a device at an arbitrary path.</p>
         <p>With all three directory types allowed:</p>
         <pre><code>directory: repository $REPO1     /usr/local/fetchconfig/config
 directory: template   $TEMPLATE1 /usr/local/fetchconfig/templates
-directory: fetch_run  $CMD1      /var/fetchconfig/fetch_run</code></pre>
+directory: fetch_run  $CMD1      /var/fetchconfig/fetch_run
+directory: report    $REP1       /var/www/fetchconfig/reports</code></pre>
         <p>With <code>on_fetch_run</code> disabled (<code>fetch_run none</code>):</p>
         <pre><code>directory: repository $REPO1     /usr/local/fetchconfig/config
 directory: template   $TEMPLATE1 /usr/local/fetchconfig/templates
 directory: fetch_run  none</code></pre>
-        <p>Each line is <code>directory: &lt;type&gt; &lt;$TAG&gt; &lt;path&gt;</code>, where <code>type</code> is <code>repository</code>, <code>template</code> or <code>fetch_run</code>, <code>$TAG</code> is a unique <code>$NAME</code> symbol, and <code>path</code> is the allowed directory. A section must cover <strong>all three</strong> types; <code>fetch_run</code> constrains <code>on_fetch_run=</code> (the directory of the command's program must be an allowed <code>fetch_run</code> directory), and <code>directory: fetch_run none</code> forbids <code>on_fetch_run</code> entirely.</p>
+        <p>Each line is <code>directory: &lt;type&gt; &lt;$TAG&gt; &lt;path&gt;</code>, where <code>type</code> is <code>repository</code>, <code>template</code>, <code>fetch_run</code> or <code>report</code>, <code>$TAG</code> is a unique <code>$NAME</code> symbol, and <code>path</code> is the allowed directory. A section must cover <strong>all four</strong> types; <code>fetch_run</code> constrains <code>on_fetch_run=</code> (the directory of the command's program must be an allowed <code>fetch_run</code> directory), and <code>directory: fetch_run none</code> forbids <code>on_fetch_run</code> entirely.</p>
         <p>Enforcement is <strong>opt-in</strong>: with no <code>directory:</code> line, nothing is restricted (existing device tables are unaffected). With at least one present, every <code>repository=</code> and <code>template_dir=</code> used by a device (or inherited from a <code>default:</code> line) must be allowed:</p>
         <ul>
           <li><code>repository=</code> must name a <code>repository</code> entry; <code>template_dir=</code> a <code>template</code> entry; <code>on_fetch_run=</code> must run a program in a <code>fetch_run</code> entry (types are not interchangeable).</li>
@@ -715,7 +717,7 @@ directory: fetch_run  none</code></pre>
       </section>
 
       <section id="template-model">
-        <div class="section-kicker">09</div>
+        <div class="section-kicker">08</div>
         <h2>Template-driven model (generic)</h2>
         <p class="prose-muted">Describe a device with a template instead of a Perl module.</p>
         <p>Besides the per-device Perl models, fetchconfig has a <code>generic</code> model whose device interaction is described by a <strong>template</strong> file rather than Perl code. A template is a small state machine of expect/send steps, with the transport, prompt, timeouts, interrupt screens and ignore-lines as data. For a clean-CLI device this is a short file rather than a ~200-line module, and similar devices can share or clone one template.</p>
@@ -742,7 +744,7 @@ directory: fetch_run  none</code></pre>
       </section>
 
       <section id="device-support">
-        <div class="section-kicker">10</div>
+        <div class="section-kicker">09</div>
         <h2>Device support</h2>
         <p class="prose-muted">Known to be supported &mdash; not a comprehensive list. Other devices and versions are likely to work but haven't been verified.</p>
         <div class="table-wrap">
@@ -808,7 +810,7 @@ directory: fetch_run  none</code></pre>
       </section>
 
       <section id="email-notifications">
-        <div class="section-kicker">12</div>
+        <div class="section-kicker">10</div>
         <h2>E-mail notifications</h2>
         <p>fetchconfig.pl can e-mail a summary of a run's backup results as an HTML table (Device&#8209;ID, Date, Time, State, Size, Changes). This is entirely optional: unless an <code>email:</code> line is present, no SMTP connection is ever attempted.</p>
 
@@ -851,8 +853,32 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
         <p class="prose-muted">Only reflects a changed-vs-previous comparison for devices where the run already performs one (<code>changes_only=1</code>, or <code>on_fetch_run</code>/<code>on_fetch_cat</code> set); for other devices it is reported as <code>n/a</code> &mdash; no extra repository scan is performed just for this report.</p>
       </section>
 
+      <section id="change-reports">
+        <div class="section-kicker">11</div>
+        <h2>Change reports</h2>
+        <p class="prose-muted">An HTML report of what changed, with coloured diffs; summary in e-mail, full report via fetchconfig-web.</p>
+        <p>After a run fetchconfig can write a self-contained HTML change report (summary table plus a coloured diff per changed device) to an allowlisted <code>report</code> directory, and embed up to <code>email_max_diff</code> device diffs in the summary e-mail with a link to the full report. The report directory is presented by fetchconfig-web (view/download/delete) and is not meant to be served to users directly. Options on <code>email:</code> lines:</p>
+        <ul>
+          <li><code>report_dir=$REP</code> &mdash; the report directory (a <code>report</code> allowlist entry).</li>
+          <li><code>write_report=on|off</code> &mdash; write the report. With <code>on</code> and no <code>from=/to=/smtp=</code>, only the report is written (no e-mail).</li>
+          <li><code>email_max_diff=N</code> &mdash; embed up to N changed devices' diffs in the e-mail (device-table order). Default <code>0</code> (no diffs); <code>0</code> or unset = none.</li>
+          <li><code>web_report_url=URL</code> &mdash; base URL for the e-mail's full-report link (emitted only when a report was written).</li>
+          <li><code>report_logo=FILE|none</code> &mdash; a logo in <code>report_dir</code>, embedded (self-contained), recommended 250&times;50&nbsp;px.</li>
+          <li><code>report_days=N</code> &mdash; prune reports older than N days (only if N&gt;1), by exact filename.</li>
+          <li><code>mask_secrets=on|off</code> &mdash; mask common secret forms in diffs (default on); master switch for all hiding.</li>
+          <li><code>report_hide=&lt;regex&gt;</code> &mdash; additional custom regex (one per line, accumulates); the matched substring becomes <code>****</code>. Governed by <code>mask_secrets</code>.</li>
+        </ul>
+        <p><strong>Secret masking is best effort</strong> &mdash; it masks common Cisco/ProCurve forms after diffing, on both old and new lines (a rotated secret shows as <code>**** &rarr; ****</code>), but is vendor-incomplete. Reports and report e-mails must be treated as sensitive; the stored configs in the repository still contain cleartext credentials regardless.</p>
+        <p><strong>Custom patterns.</strong> For secrets the built-ins miss, add regexes with <code>report_hide</code>, one per line &mdash; only the substring each regex matches becomes <code>****</code>, so match just the value (a fixed-width lookbehind keeps the keyword):</p>
+        <pre><code>email: report_hide=(?&lt;=wpa-passphrase )\S+
+email: report_hide=(?&lt;=^key )[0-9a-f]{16,}</code></pre>
+        <p>turning <code>wpa-passphrase c1ca253b...</code> into <code>wpa-passphrase ****</code>. Take care not to over-match (e.g. <code>(?&lt;=secret )\S+</code> also fires inside <code>my-secret</code>). Patterns accumulate; comment a line out to disable it. They are governed by <code>mask_secrets</code> (with <code>mask_secrets=off</code> nothing is hidden), and an invalid regex is logged and skipped. For <code>report_hide</code> the whole rest of the line is taken verbatim as the regex &mdash; no comma splitting, no quote stripping, no space trimming &mdash; so a regex may contain commas (e.g. <code>{16,}</code>), <code>=</code> and spaces with no escaping. Do not wrap it in quotes (they would become part of the pattern). One regex per line.</p>
+        <p>Each device's diff is wrapped in an <strong>armored</strong> <code>&lt;div class="device-diff" data-device="&lt;id&gt;" id="dev-&lt;id&gt;"&gt;</code> with a stable structure, so fetchconfig-web can parse it into an expandable per-device view. Treat this markup as a parse contract.</p>
+        <p><strong>Report directory setup.</strong> So that fetchconfig-web (running as the web server's user/group) can read and manage the reports, set the report directory's group to the web server's group and set the setgid bit, e.g. <code>chgrp &lt;webgroup&gt; /var/www/fetchconfig/reports</code> and <code>chmod g+s /var/www/fetchconfig/reports</code>. With <code>g+s</code>, each report file inherits the directory's group automatically &mdash; fetchconfig needs no special privileges and does not change ownership itself.</p>
+      </section>
+
       <section id="retrieving">
-        <div class="section-kicker">13</div>
+        <div class="section-kicker">12</div>
         <h2>Retrieving a previously backed-up config</h2>
         <p>In addition to fetching configuration from devices, fetchconfig.pl can retrieve a configuration file already saved in the repository, without contacting the device again &mdash; useful for scripting: dumping the latest config to stdout, comparing today's config against yesterday's, or pulling an older backup by its position in the history.</p>
 
@@ -876,17 +902,23 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
         <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-Z</span></code></pre>
         <p class="prose-muted">Same as <code>-z</code>, but across every loaded device in one pass (tab-separated: dev_id, number, size, path). A device whose repository can't be read is logged and skipped without aborting the rest of the check.</p>
 
-        <h3>6. Find orphaned backups</h3>
+        <h3>6. Delete 0-byte backups</h3>
+        <p class="prose-muted">Add <code>-D</code> to delete the empty backups <code>-z</code>/<code>-Z</code> find &mdash; only the empty backup <strong>files</strong> (never directories), and only for devices still in the table, since <code>-z</code>/<code>-Z</code> look only at loaded devices (a decommissioned device&rsquo;s leftovers are orphaned files, cleaned with <code>-o</code> above). Preview first with <code>-T</code>: the deletes are logged as <code>would delete: unlink &lt;path&gt;</code>, nothing is removed.</p>
+        <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-z</span> fw01.acme.net <span class="k">-D -T</span>    <span class="c"># preview</span>
+./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-z</span> fw01.acme.net <span class="k">-D</span>       <span class="c"># delete</span></code></pre>
+        <p class="prose-muted">An emptied day/month directory is left in place; prune it afterwards with <code>-e -D</code>. The exit status is unchanged by <code>-D</code> &mdash; still 1 if any 0-byte backup was found, 0 otherwise.</p>
+
+        <h3>7. Find orphaned backups</h3>
         <p class="prose-muted">Configs on disk with no matching device in the table &mdash; e.g. left behind by a decommissioned or renamed device.</p>
         <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-o</span></code></pre>
         <p class="prose-muted"><code>-o</code> also lists a removed device's <code>&lt;dev_id&gt;.status</code> and <code>&lt;dev_id&gt;.debug</code> files at the repository root (not inside the dated directory); with <code>-D</code> they are deleted too. This clears a decommissioned device's debug log, which can hold credentials. To delete what <code>-o</code> found, add <code>-D</code>. Since this is destructive, preview it first with <code>-T</code> &mdash; the delete commands are only logged, never run:</p>
         <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-o -D -T</span>    <span class="c"># preview</span>
 ./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-o -D</span>       <span class="c"># delete for real</span></code></pre>
 
-        <h3>7. Save to a file instead of stdout</h3>
+        <h3>8. Save to a file instead of stdout</h3>
         <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-g</span> fw01.acme.net <span class="k">-n</span> 2 <span class="k">-f</span> config.file</code></pre>
 
-        <h3>8. Compare two backups</h3>
+        <h3>9. Compare two backups</h3>
         <pre><code>./fetchconfig.pl <span class="k">-devices=</span>device_table <span class="k">-g</span> fw01.acme.net <span class="k">-n</span> 1 <span class="k">-m</span> 2</code></pre>
         <p class="prose-muted">Output matches the standard <code>diff older newer</code> convention: lines starting with <code>&lt;</code> come from <code>-m</code> (older), lines starting with <code>&gt;</code> come from <code>-n</code> (newer).</p>
 
@@ -961,7 +993,7 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
 
 <div class="flag-card">
           <div class="flag-head"><span class="flag-tag">-D</span><span class="flag-req">requires -o or -e</span></div>
-          <p>With <code>-e</code>: deletes the empty directories found (see <code>-e</code>). With <code>-o</code>: also deletes every orphaned device directory <code>-o</code> finds (and the orphaned <code>&lt;dev_id&gt;.status</code> / <code>&lt;dev_id&gt;.debug</code> files at the repository root), and since v9.56 then prunes the day (<code>YYYYMMDD</code>) and month (<code>YYYYMM</code>) directories this leaves empty &mdash; one plain <code>rmdir</code> each, only if empty, each reported. Each backup file is deleted individually by its exact name &mdash; never a wildcard, never <code>rm -rf</code> &mdash; logged as <code>rm &lt;file&gt;</code>, followed by <code>rmdir &lt;path&gt;</code> for the now-empty directory. Deletion uses Perl's own <code>unlink()</code>/<code>rmdir()</code>; no shell command is actually spawned. <code>rmdir()</code> only succeeds on a genuinely empty directory, so anything left behind unexpectedly makes that removal fail loudly rather than being swept away. A repository root itself is never deleted.</p>
+          <p>With <code>-e</code>: deletes the empty directories found (see <code>-e</code>). With <code>-o</code>: also deletes every orphaned device directory <code>-o</code> finds (and the orphaned <code>&lt;dev_id&gt;.status</code> / <code>&lt;dev_id&gt;.debug</code> files at the repository root), and since v9.56 then prunes the day (<code>YYYYMMDD</code>) and month (<code>YYYYMM</code>) directories this leaves empty &mdash; one plain <code>rmdir</code> each, only if empty, each reported. Each backup file is deleted individually by its exact name &mdash; never a wildcard, never <code>rm -rf</code> &mdash; logged as <code>rm &lt;file&gt;</code>, followed by <code>rmdir &lt;path&gt;</code> for the now-empty directory. Deletion uses Perl's own <code>unlink()</code>/<code>rmdir()</code>; no shell command is actually spawned. <code>rmdir()</code> only succeeds on a genuinely empty directory, so anything left behind unexpectedly makes that removal fail loudly rather than being swept away. A repository root itself is never deleted. With <code>-z</code> or <code>-Z</code>: deletes the 0-byte backup <strong>files</strong> found &mdash; one plain <code>unlink</code> on each exact path (never a directory), logged as <code>deleting: unlink &lt;path&gt;</code>; an emptied directory is left for a later <code>-e -D</code> to prune. <code>-D</code> requires one of <code>-o</code>, <code>-e</code>, <code>-z</code> or <code>-Z</code>.</p>
           <ul class="exit-list">
             <li><span class="code">1</span> any deletion failed</li>
             <li><span class="code">0</span> nothing needed deleting, or everything found was deleted</li>
@@ -970,7 +1002,7 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
 
 <div class="flag-card">
           <div class="flag-head"><span class="flag-tag">-T</span><span class="flag-req">requires -D</span></div>
-          <p>Preview mode for both <code>-o -D</code> and <code>-e -D</code>: logs the delete commands <code>-D</code> would run, without deleting anything. Exit status is that of the plain check &mdash; <code>-o</code>: 1 if anything orphaned was found; <code>-e</code>: 1 if any empty directory was found; 0 otherwise. Use it before a bare <code>-o -D</code> or <code>-e -D</code>.</p>
+          <p>Preview mode for <code>-o -D</code>, <code>-e -D</code>, <code>-z -D</code> and <code>-Z -D</code>: logs the delete commands <code>-D</code> would run (<code>would delete: rmdir/unlink &lt;path&gt;</code>), without deleting anything. Exit status is that of the plain check &mdash; <code>-o</code>: 1 if anything orphaned was found; <code>-e</code>: 1 if any empty directory was found; <code>-z</code>/<code>-Z</code>: 1 if any 0-byte backup was found; 0 otherwise. Use it before a bare <code>-D</code> run.</p>
         </div>
 
 <div class="flag-card">
@@ -1011,6 +1043,11 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
           <p>Structurally checks the generic-model template at PATH (grammar + the load-time validator) and exits. PATH must be the <strong>full path</strong> to the <code>.tmpl</code> file &mdash; a bare name is not resolved, as the same name can exist in different <code>template_dir</code> directories. Prints <code>ok</code> or the errors; exits <code>0</code> ok, <code>1</code> errors, <code>2</code> file problem. Structural check only. Does not honour <code>-f</code>.</p>
         </div>
 
+<div class="flag-card">
+          <div class="flag-head"><span class="flag-tag">--template-syntax PATH</span><span class="flag-req">no device table</span></div>
+          <p>Prints the syntax style a generic-model template declares &mdash; the value of a <code># syntax_style: &lt;token&gt;</code> header comment &mdash; to <strong>stdout</strong>, and exits. This is metadata for a config viewer (e.g. fetchconfig-web) to pick a highlighter for a <code>generic</code>-model backup, whose <code>generic</code> model name says nothing about the output syntax; it has no effect on a backup. PATH is the full path to the <code>.tmpl</code> file, as for <code>--check-template</code>. Exits <code>0</code> and prints the token if declared, <code>1</code> and prints nothing if not, <code>2</code> on a file problem (error to stderr). Log output stays on stderr, so stdout carries only the value. The value is a free-text token <code>[A-Za-z0-9_-]+</code>. fetchconfig-web currently recognises <code>cisco-ios</code>, <code>procurve</code>, <code>comware</code>, <code>zyxel</code>, <code>aruba-cx</code>, <code>nexus</code>, <code>mediant</code>, <code>template</code>, <code>json</code>, <code>xml</code> and <code>generic</code>; the set is open, and any other or absent value lets the viewer fall back to plain text.</p>
+        </div>
+
         <h4 class="flag-group">Fetching options</h4>
 
 <div class="flag-card">
@@ -1035,7 +1072,7 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
 
 <div class="flag-card">
           <div class="flag-head"><span class="flag-tag">-v, --version</span><span class="flag-req">version</span></div>
-          <p>Prints just the program version to stdout (one line, e.g. <code>9.65</code>) and exits with status 0. Nothing else is written &mdash; no banner, nothing on stderr &mdash; so a script can parse it safely.</p>
+          <p>Prints just the program version to stdout (one line, e.g. <code>9.66</code>) and exits with status 0. Nothing else is written &mdash; no banner, nothing on stderr &mdash; so a script can parse it safely.</p>
         </div>
 
 <div class="flag-card">
@@ -1050,7 +1087,7 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
 </section>
 
       <section id="options">
-        <div class="section-kicker">14</div>
+        <div class="section-kicker">13</div>
         <h2>Options reference</h2>
         <p>The modules <code>CiscoIOS</code>, <code>CiscoCAT</code>, <code>CiscoASA</code>, and <code>CiscoPIX</code> recognize the following options; nearly every other model reuses the same set (see the per-model matrix below for exactly which apply).</p>
 
@@ -1070,8 +1107,10 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
               <tr><td><code>on_fetch_cat</code></td><td class="req-opt">Optional</td><td>Boolean. If <code>on_fetch_cat=1</code>, the fetched configuration is also written to stdout. Available for all modules.</td></tr>
               <tr><td><code>timezone</code></td><td class="req-opt">Optional</td><td>If <code>timezone=hide</code>, suppresses timezone information from the config filename.</td></tr>
               <tr><td><code>filename_append_suffix</code></td><td class="req-opt">Optional</td><td>Appended to the generated backup filename, which then reads <code>&lt;dev_id&gt;.run.YYYYMMDD.HHMMSS&lt;tz&gt;&lt;suffix&gt;</code>, e.g. <code>filename_append_suffix=.txt</code>. Available for all modules. <strong>fetchconfig 9.x and later only accept a suffix that starts with a &ldquo;.&rdquo;</strong> (a file extension); a dotless suffix, or one containing <code>/</code> or whitespace, fails that device&rsquo;s backup with an error and writes nothing. <strong>Do not add, remove or change the suffix once a device has backups</strong> &mdash; files are found by their <code>&lt;dev_id&gt;.run.</code> prefix, so old and new names would coexist (<code>keep=N</code> expires them together, &ldquo;latest&rdquo; ordering can be affected). Decide before the first backup; use <code>-s dev_id</code> or <code>-S</code> to find devices whose existing backups already mix suffixes.</td></tr>
-              <tr><td><code>to</code></td><td class="req-opt">Optional</td><td>Overrides, for this device only, who receives the backup summary e-mail. See <a href="#email-notifications">E-mail notifications</a>. Available for all modules.</td></tr>
+              <tr><td><code>to</code></td><td class="req-opt">Optional</td><td>Overrides, for this device only, who receives the backup summary e-mail. See <a href="#email-notifications">E-mail notifications</a>
+        <a href="#change-reports">Change reports</a>. Available for all modules.</td></tr>
               <tr><td><code>comment</code></td><td class="req-opt">Optional</td><td>Free-text note about the device, for whoever reads the device table &mdash; not used anywhere else. Available for all modules. Example: <code>comment=lab switch</code>.</td></tr>
+              <tr><td><code>site</code></td><td class="req-opt">Optional</td><td>Free-text site/location tag, like <code>comment</code> &mdash; fetchconfig does not use it. Used by fetchconfig-web for per-site access control (users see only devices whose site matches their user record; a device with no <code>site</code> is visible only to &ldquo;all sites&rdquo; / site&nbsp;0 users). Single-byte characters. Example: <code>site="Plant 3, Hall A"</code>.</td></tr>
             </tbody>
           </table>
         </div>
@@ -1082,7 +1121,7 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
         </div>
 
         <h3>Per-model option matrix</h3>
-        <p class="prose-muted">Beyond the options above, each model recognizes its own subset of <code>user</code> / <code>pass</code> / <code>enable</code> / <code>timeout</code> / <code>repository</code> / <code>keep</code> / <code>fetch_timeout</code> / <code>changes_only</code>. <code>on_fetch_run</code>, <code>on_fetch_cat</code>, <code>timezone</code>, <code>filename_append_suffix</code>, <code>to</code>, and <code>comment</code> are available for every model and are omitted here for space.</p>
+        <p class="prose-muted">Beyond the options above, each model recognizes its own subset of <code>user</code> / <code>pass</code> / <code>enable</code> / <code>timeout</code> / <code>repository</code> / <code>keep</code> / <code>fetch_timeout</code> / <code>changes_only</code>. <code>on_fetch_run</code>, <code>on_fetch_cat</code>, <code>timezone</code>, <code>filename_append_suffix</code>, <code>to</code>, <code>comment</code> and <code>site</code> are available for every model and are omitted here for space.</p>
 
         <div class="table-wrap">
           <table class="matrix">
@@ -1142,7 +1181,7 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
       </section>
 
       <section id="troubleshooting">
-        <div class="section-kicker">15</div>
+        <div class="section-kicker">14</div>
         <h2>Troubleshooting</h2>
         <div class="callout warn">
           <div class="callout-title">Legacy SSH key exchange</div>
@@ -1161,13 +1200,14 @@ parks		lab209r		10.30.0.6	<span class="k">to=</span>lab-owner@acme.com</code></p
         </div>
         <p><strong>SSH host keys are not verified.</strong> The SSH models use <code>StrictHostKeyChecking=no</code> and <code>UserKnownHostsFile=/dev/null</code>: any host key is accepted and none remembered. This is deliberate &mdash; fetchconfig runs unattended, and a switch&rsquo;s host key changes on every hardware swap, which would otherwise halt backups until someone edited <code>known_hosts</code>. The trade-off is that an on-path attacker could impersonate a device and capture the login password. Run fetchconfig on a trusted management network.</p>
         <p><strong>Device IDs are validated.</strong> A <code>dev_id</code> may contain letters, digits, underscore, dot and dash (hostnames like <code>sw01.example.com</code> are fine) but may not consist only of dots, since <code>.</code> or <code>..</code> would resolve to the repository itself or its parent.</p>
-        <p><strong>SMTP.</strong> <code>AUTH LOGIN</code> sends the password base64-encoded, not encrypted &mdash; see the <code>tls</code> option under <a href="#email-notifications">E-mail notifications</a>. Header fields (From, To, Subject) have line breaks stripped before sending, so a device-table value cannot inject extra mail headers.</p>
+        <p><strong>SMTP.</strong> <code>AUTH LOGIN</code> sends the password base64-encoded, not encrypted &mdash; see the <code>tls</code> option under <a href="#email-notifications">E-mail notifications</a>
+        <a href="#change-reports">Change reports</a>. Header fields (From, To, Subject) have line breaks stripped before sending, so a device-table value cannot inject extra mail headers.</p>
         <p><strong>Backup file naming.</strong> Backups are named <code>&lt;dev_id&gt;.run.YYYYMMDD.HHMMSS[tz]</code>, i.e. one-second resolution. Two backups of one device completed within the same second would share a name and the second would overwrite the first. This is an accepted limitation: a real fetch never completes in under a second and scheduled runs are minutes apart. Since v9.55 every operation that orders backups (&ldquo;latest&rdquo; for <code>changes_only</code>, <code>keep=N</code> expiry, <code>-g</code>/<code>-n</code>/<code>-m</code>, <code>-l</code>, <code>-z</code>/<code>-Z</code>, <code>-s</code>/<code>-S</code>) sorts by the parsed timestamp <code>YYYYMMDD.HHMMSS</code>, not by a plain string sort of the whole name, so neither the timezone token (which changes with DST and by platform) nor a suffix can disturb the order.</p>
         <p><strong>Non-ASCII hostnames.</strong> <code>aruba-cx-ssh</code> and <code>planet-ssh</code> handle a prompt containing spaces or non-ASCII characters. <code>procurve</code>, <code>procurve-ssh</code>, <code>hirschmann</code>, <code>comware-ssh</code> and <code>nec-univerge-ix</code> still build their prompt regexp with <code>quotemeta()</code> and would not match such a prompt; this is left unchanged pending tests against real devices &mdash; keep hostnames on those devices to ASCII.</p>
       </section>
 
       <section id="status-file">
-        <div class="section-kicker">17</div>
+        <div class="section-kicker">15</div>
         <h2>Status file</h2>
         <p>After every backup attempt fetchconfig writes a small status file next to the backups, at <code>&lt;repository&gt;/&lt;dev_id&gt;.status</code>. It is written for every device and every model, and does <em>not</em> depend on the <code>email:</code> line &mdash; it is a plain repository artifact, meant for external tools (for example a web front-end that reads <code>backup_duration_sec</code> to size a progress spinner). It is overwritten on every run and written atomically, so a reader never sees a half-written file.</p>
         <span class="file-label">&lt;dev_id&gt;.status</span>
@@ -1194,7 +1234,7 @@ backup_changed=changed</code></pre>
       </section>
 
       <section id="procurve-snmp">
-        <div class="section-kicker">18</div>
+        <div class="section-kicker">16</div>
         <h2>ProCurve SNMP backups (ProVision, 4000M/8000M)</h2>
         <p>The older HP ProCurve ProVision chassis (4000M, 8000M) can only be managed remotely through a VT100 menu, which is not usable for scripted backup. They will, however, export a text copy of their configuration over TFTP when told to over SNMP, and that is what <code>procurve-snmp</code> does. It is a transport unlike the other models &mdash; no shell and no web UI, but SNMP plus TFTP &mdash; and so has no <code>user</code>/<code>pass</code>: the credential is the SNMP read-write <code>community</code>.</p>
         <p>An SNMP set arms the switch&rsquo;s TFTP export, the config is fetched from the switch by TFTP, and a second SNMP set disables the export again. That disable always runs, even when the transfer failed, so the switch is never left with its TFTP server open.</p>
@@ -1209,7 +1249,7 @@ backup_changed=changed</code></pre>
       </section>
 
       <section id="tplink">
-        <div class="section-kicker">19</div>
+        <div class="section-kicker">17</div>
         <h2>Web UI backups (TP-Link Easy Smart, ProCurve 1700)</h2>
         <p>Some switches have no CLI at all &mdash; TP-Link Easy Smart switches (TL&#8209;SG105E, TL&#8209;SG105PE and siblings) and the HP ProCurve 1700 series. The <code>tplink-web-sg105e</code> and <code>procurve-web-1700</code> models retrieve the config the same way a browser does on the switch&rsquo;s config backup page: they log in over plain HTTP (the switches offer no HTTPS), download the config file, and log out again. The two models share their HTTP plumbing (<code>AbstractHTTP.pm</code>); the login, download and logout requests are per device, taken from packet captures of real browser sessions.</p>
         <p><strong>TP-Link:</strong> both session mechanisms seen on real devices are handled &mdash; the TL&#8209;SG105E binds the login session to the client&rsquo;s IP address, the TL&#8209;SG105PE v2 uses a session cookie. Either way the switch only allows a limited number of concurrent logins; if it reports the login table as full, the backup of that device is reported as failed rather than forcing another user out.</p>

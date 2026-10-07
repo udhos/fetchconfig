@@ -2,8 +2,103 @@
 # fetchconfig.pl - CHANGES
 #
 
+9.67
+====
+
++ Templates may declare the syntax of the config they produce with a
+  "# syntax_style: <token>" header comment (e.g. "# syntax_style:
+  cisco-ios"). It is a plain comment - the template parser and the backup
+  path ignore it entirely, so it is optional and backward-compatible and
+  cannot change how a device is backed up. It is metadata for a config
+  viewer (e.g. fetchconfig-web) to pick a syntax highlighter for a
+  generic-model backup, whose "generic" model name otherwise says nothing
+  about the output syntax. New option --template-syntax PATH reads one
+  template and prints its declared style to stdout (exit 0), or nothing
+  (exit 1) if undeclared, or an error (exit 2) if the file is unreadable;
+  log output stays on stderr so stdout carries only the value. The value
+  is a free-text token [A-Za-z0-9_-]+. The shipped cisco-ios.tmpl and
+  procurve.tmpl now declare their style as examples.
+
+
++ -z and -Z gained -D and -T, mirroring -o/-e: with -D the zero-byte
+  backups found are deleted (each by one plain unlink on its exact path -
+  only the files, not directories; run -e -D afterwards to prune any
+  emptied day/month dirs), and -T previews them ("would delete: unlink
+  ..."). Without -D the behaviour is unchanged (list only). The exit
+  status is still that of the check (1 if any zero-byte backups were
+  found, 0 otherwise), whether or not they were deleted. -D now accepts
+  -o, -e, -z or -Z; -T still requires -D.
+
+9.66
+====
+
+
++ cisco-asa-ssh and cisco-asa: a rejected enable password no longer hangs
+  the fetch for the whole fetch_timeout. The ASA re-prompts "Password: "
+  when the enable secret is wrong; the models now detect that second
+  prompt and fail immediately with "enable failed: the device rejected
+  the enable password ..." (the message points at a likely cause - a
+  missing device-specific enable= falling back to a default: enable= that
+  does not apply). The successful path (enable accepted, "#" prompt) is
+  unchanged.
+
+
++ Change report: the Devices sidebar is hidden when the report is printed
+  (an @media print rule), so the printed page uses the full width.
+
++ New documented device option "site=": a free-text site/location tag, like
+  comment= (fetchconfig itself does not use it). It is intended for the
+  fetchconfig-web application, which uses it for per-site access control -
+  users see and edit only the devices whose site matches a site assigned in
+  their user record; a device with no site= is visible only to "all sites"
+  (site 0) users. Values should be single-byte characters. (The device-table
+  parser already accepted arbitrary key=value options, so no parser change
+  was needed - this documents site= as an official option.)
+
 9.65
 ====
+
++ Change report: the "Changes" count per device now counts diff hunks (the
+  number of places that differ) instead of old+new diff lines, which
+  double-counted each changed line (e.g. 2 changed lines showed as 4).
+
++ Report masking: added the Hirschmann "users passwd <user> :vN:<hash>:"
+  form - the username is kept and only the hash is masked (the generic
+  passwd rule no longer masks the username on these lines). The :vN:<hash>:
+  token is masked wherever it appears.
+
++ Report masking: added built-in masking for "wpa-passphrase <value>" and a
+  bare "key <hex>". New email: report_hide=<regex> option (one per line,
+  accumulating) masks the matched substring with **** for secrets the
+  built-ins do not cover; invalid patterns are logged and skipped. All
+  masking (built-in and custom) is governed by the mask_secrets master.
+  The report_hide value is taken verbatim (the whole rest of the line), so a
+  regex may contain commas (e.g. {m,n}), = and spaces with no quoting.
+
++ A first-ever backup is now reported as "initial" (not "changed") in the
+  e-mail summary (its own statistics row and the device row) and in the
+  change report. A first backup has no previous config to compare against,
+  so marking it "changed" was misleading; "initial" is detected from the
+  absence of a previous backup at save time.
+
++ Change report: a new device (one backup, no previous config) is now
+  detected from the backup count and reported as "New" without attempting a
+  diff - this removes the spurious, duplicated "requested backup 2 but only
+  1 available" error lines a first-ever backup produced.
+
++ Change reports. After a run fetchconfig can write an HTML change report (a
+  summary table plus a coloured diff per changed device) to an allowlisted
+  "report" directory, and embed up to up to email_max_diff device diffs in the
+  summary e-mail (email_max_diff defaults to 0 - no diffs unless set) with a link to the full report. New "directory: report" and
+  "directory: report none" allowlist entries (the allowlist, when present,
+  now covers four types). New email: options report_dir, write_report,
+  email_max_diff, web_report_url, report_logo (embedded, 250x50), report_days
+  (prune, exact-name unlink) and mask_secrets. Secret masking is best effort
+  (common forms, after diffing, both sides) - reports remain sensitive. Each
+  report diff is an "armored" <div data-device=...> for fetchconfig-web. No
+  new libraries (MIME::Base64 is core). report_dir should be group-owned by
+  the web server group with the setgid bit (g+s) so reports inherit the group
+  for fetchconfig-web; fetchconfig does not change ownership itself.
 
 + procurve.tmpl: dropped the trailing space in the /Username:/ and
   /Password:/ expects - on a VT100/telnet device the space can arrive in a

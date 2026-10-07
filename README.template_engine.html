@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>fetchconfig Generic Template Engine</title>
+<title>fetchconfig template engine</title>
 <style>
 :root { --fg:#1f2328; --bg:#ffffff; --muted:#59636e; --line:#d1d9e0; --code:#f6f8fa; --link:#0969da; --accent:#1f6feb; }
 @media (prefers-color-scheme: dark) {
@@ -84,6 +84,19 @@ template interpreter.</p>
 <code>/regex/</code>, a <code>&quot;double-quoted&quot;</code> or a <code>&#x27;single-quoted&#x27;</code> string. Blank lines are
 ignored.</p>
 <h3 id="41-directives-top-of-file">4.1 Directives (top of file)</h3>
+<p>A template may also carry a syntax-style hint for config viewers:</p>
+<p>    # syntax_style: cisco-ios</p>
+<p>This is a plain <code>#</code> comment — the parser and the backup path ignore it
+completely (optional, cannot affect a backup). It names the syntax of the
+config the template produces, so a viewer such as fetchconfig-web can pick
+a highlighter for a <code>generic</code>-model backup. The value is a free-text token
+<code>[A-Za-z0-9_-]+</code>. fetchconfig-web currently recognises <code>cisco-ios</code>, <code>procurve</code>,
+<code>comware</code>, <code>zyxel</code>, <code>aruba-cx</code>, <code>nexus</code>, <code>mediant</code>, <code>template</code>, <code>json</code>, <code>xml</code>
+and <code>generic</code>; the set is open, and any other or absent value falls back to
+plain text. Read it via:</p>
+<p>    fetchconfig.pl --template-syntax /path/to/template.tmpl</p>
+<p>which prints the value to stdout (exit 0), nothing if undeclared (exit 1),
+or an error to stderr if unreadable (exit 2).</p>
 <p>All optional; defaults in parentheses.</p>
 <table><thead><tr><th style="text-align:left">Directive</th><th style="text-align:left">Meaning</th></tr></thead><tbody><tr><td style="text-align:left"><code>transport ssh telnet</code></td><td style="text-align:left">allowed transports, in preference order</td></tr><tr><td style="text-align:left"><code>banner_timeout N</code></td><td style="text-align:left">seconds to wait for the first prompt (30)</td></tr><tr><td style="text-align:left"><code>fetch_timeout N</code></td><td style="text-align:left">seconds to wait for the show output (base <code>timeout</code>)</td></tr><tr><td style="text-align:left"><code>fetch_delay N</code></td><td style="text-align:left">seconds to pause after connect (0)</td></tr><tr><td style="text-align:left"><code>prompt_settle N</code></td><td style="text-align:left">prompt settle time, ms (Abstract default)</td></tr><tr><td style="text-align:left"><code>max_visits N</code></td><td style="text-align:left">global cap on self-loops (8)</td></tr><tr><td style="text-align:left"><code>strip_ansi yes|no</code></td><td style="text-align:left">strip VT100/ANSI escapes from device output (no)</td></tr><tr><td style="text-align:left"><code>prompt_head &#x27;REGEX&#x27;</code></td><td style="text-align:left">matched before the learned hostname (empty)</td></tr><tr><td style="text-align:left"><code>prompt_tail &#x27;REGEX&#x27;</code></td><td style="text-align:left">matched after it (<code>#</code>)</td></tr><tr><td style="text-align:left"><code>ssh_extra_opts &#x27;STRING&#x27;</code></td><td style="text-align:left">extra ssh client options (legacy crypto)</td></tr></tbody></table>
 <h3 id="42-trimming-the-saved-config">4.2 Trimming the saved config</h3>

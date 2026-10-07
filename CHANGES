@@ -5,6 +5,21 @@
 9.67
 ====
 
++ Templates may declare the syntax of the config they produce with a
+  "# syntax_style: <token>" header comment (e.g. "# syntax_style:
+  cisco-ios"). It is a plain comment - the template parser and the backup
+  path ignore it entirely, so it is optional and backward-compatible and
+  cannot change how a device is backed up. It is metadata for a config
+  viewer (e.g. fetchconfig-web) to pick a syntax highlighter for a
+  generic-model backup, whose "generic" model name otherwise says nothing
+  about the output syntax. New option --template-syntax PATH reads one
+  template and prints its declared style to stdout (exit 0), or nothing
+  (exit 1) if undeclared, or an error (exit 2) if the file is unreadable;
+  log output stays on stderr so stdout carries only the value. The value
+  is a free-text token [A-Za-z0-9_-]+. The shipped cisco-ios.tmpl and
+  procurve.tmpl now declare their style as examples.
+
+
 + -z and -Z gained -D and -T, mirroring -o/-e: with -D the zero-byte
   backups found are deleted (each by one plain unlink on its exact path -
   only the files, not directories; run -e -D afterwards to prune any

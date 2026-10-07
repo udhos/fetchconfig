@@ -590,7 +590,32 @@ RETRIEVING A STORED CONFIG, AND COMMAND-LINE OPTIONS
         does not make "-Z" exit non-zero -- only an actual 0-byte
         backup does.
 
-	6. Find backed up configs on disk that no longer have a
+	6. Delete the 0-byte backups that "-z"/"-Z" find, by adding
+        "-D". This removes only the empty backup FILES (never
+        directories), and only for devices still in the device
+        table -- "-z"/"-Z" look only at loaded devices, so a
+        decommissioned device's leftovers are untouched here
+        (those are orphaned files; clean them with "-o", below).
+        Since this is destructive, preview it first by also
+        adding "-T" -- with "-T" the delete commands are only
+        logged (to stderr) as "would delete: unlink <path>",
+        nothing is removed:
+
+	./fetchconfig.pl -devices=device_table -z fw01.acme.net -D -T
+	./fetchconfig.pl -devices=device_table -Z -D -T
+
+	Once the preview looks right, drop "-T" to delete for real:
+
+	./fetchconfig.pl -devices=device_table -z fw01.acme.net -D
+	./fetchconfig.pl -devices=device_table -Z -D
+
+	An emptied day/month directory is left in place; prune it
+        afterwards with "-e -D" (see below). The exit status is
+        unchanged by "-D": still 1 if any 0-byte backup was
+        found, 0 otherwise. "-D" requires one of "-o", "-e",
+        "-z" or "-Z"; "-T" requires "-D".
+
+	7. Find backed up configs on disk that no longer have a
         matching device in the device table (e.g. a device that was
         decommissioned or renamed, leaving its old backups behind),
         with "-o":
@@ -664,12 +689,12 @@ RETRIEVING A STORED CONFIG, AND COMMAND-LINE OPTIONS
 	./fetchconfig.pl -devices=device_table -e -D -T   (preview)
 	./fetchconfig.pl -devices=device_table -e -D      (delete)
 
-	7. Save the retrieved config to a file instead of printing
+	8. Save the retrieved config to a file instead of printing
         it to stdout, by adding "-f":
 
 	./fetchconfig.pl -devices=device_table -g fw01.acme.net -n 2 -f config.file
 
-	8. Compare two backed up versions of the same device,
+	9. Compare two backed up versions of the same device,
         by adding "-m" together with "-n". The following example
         compares the latest backup ("-n 1") against the backup
         before it ("-m 2"):

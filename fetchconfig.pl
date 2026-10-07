@@ -87,6 +87,7 @@ my $empty_check;        # set by -e: enables empty-directory check mode
 my $orphan_delete;      # set by -D: also delete what -o (orphaned backups) or -e (empty directories) found (requires -o or -e)
 my $orphan_test;        # set by -T: with -D, only show what would be deleted, don't delete (requires -D)
 my $check_template;     # set by --check-template FILE: structural check of one template, then exit
+my $template_syntax;    # set by --template-syntax FILE: print the template's '# syntax_style:' value, then exit
 my $list_template;      # set by -t/--list-template: list available templates from all template_dir=
 my $list_allowed_dirs;  # set by --list-allowed-dirs: list the directory: allowlist
 my $retrieve_out_file;  # set by -f: optional output file (default: stdout)
@@ -131,6 +132,7 @@ my $got = GetOptions(
     'D'         => \$orphan_delete,
     'T'         => \$orphan_test,
     'check-template=s' => \$check_template,
+    'template-syntax=s' => \$template_syntax,
     't|list-template'  => \$list_template,
     'list-allowed-dirs' => \$list_allowed_dirs,
     'n=s'       => \$retrieve_index,   # validated as a positive integer below
@@ -216,6 +218,15 @@ if (defined($check_template)) {
     exit(check_template_file($check_template));
 }
 
+# --template-syntax FILE: print the template's declared syntax style (the
+# value of a '# syntax_style: <value>' header comment) and exit. This is
+# metadata for a config viewer (fetchconfig-web) to pick a highlighter; it
+# has nothing to do with backing up a device. The value is a free-text
+# token [A-Za-z0-9_-]+; an absent or empty declaration prints nothing.
+if (defined($template_syntax)) {
+    exit(template_syntax_of($template_syntax));
+}
+
 if ((@device_file_list < 1) && (@line_list < 1)) {
     $log->error("at least one -devices=filename or one -line=string is required");
     &usage;
@@ -258,7 +269,7 @@ if (defined($orphan_test) && !defined($orphan_delete)) {
 fetchconfig::model::Detector->init($log);
 fetchconfig::Report->init($log);
 
-my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs);
+my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs) || defined($template_syntax);
 if ($parallel > 1 && $lookup_only) {
     $log->error("-P applies to fetching only and cannot be combined with -g/-l/-z/-Z/-o/-e/-s/-S");
     &usage;
@@ -378,6 +389,42 @@ sub check_template_file {
     }
 }
 
+sub template_syntax_of {
+    my ($path) = @_;
+    if (!defined($path) || $path eq '') {
+        $log->error("--template-syntax requires a template file argument");
+        return 2;
+    }
+    if (! -f $path) {
+        $log->error("--template-syntax: file not found: $path");
+        return 2;
+    }
+    if (!open(my $fh, '<', $path)) {
+        $log->error("--template-syntax: cannot read $path: $!");
+        return 2;
+    } else {
+        my $style;
+        while (my $line = <$fh>) {
+            # A "# syntax_style: <value>" header comment; value is a free-text
+            # token [A-Za-z0-9_-]+. First match wins; case-insensitive key.
+            if ($line =~ /^\s*#\s*syntax_style\s*:\s*([A-Za-z0-9_-]+)/i) {
+                $style = $1;
+                last;
+            }
+        }
+        close $fh;
+        # Print the value (or nothing if undeclared) to stdout, so a caller
+        # like fetchconfig-web reads it directly. Log lines go to stderr, so
+        # stdout carries only the value. Exit 0 if declared, 1 if not.
+        if (defined($style)) {
+            print "$style\n";
+            return 0;
+        }
+        $log->debug("$path: no syntax_style declared");
+        return 1;
+    }
+}
+
 sub usage_text {
     my $t = '';
     $t .= "usage: $me [-v] [-devices=file] [-line=string] [-P N]\n";
@@ -449,6 +496,9 @@ sub usage_text {
     $t .= "                      fetch_run); use \"directory: fetch_run none\" to forbid on_fetch_run.\n";
     $t .= "                      Honours -f.\n";
     $t .= "       --check-template PATH  structurally check the generic-model template at PATH\n";
+    $t .= "       --template-syntax PATH print the template's declared syntax style (the value of its\n";
+    $t .= "                      # syntax_style: <token> header comment) to stdout, for a config viewer;\n";
+    $t .= "                      exits 0 if declared, 1 if not. Backup behaviour is never affected\n";
     $t .= "                      (grammar + the load-time validator: self-loops, goto targets, capture\n";
     $t .= "                      markers, reachability, transport entry) and exit. PATH must be the full\n";
     $t .= "                      path to the .tmpl file (a bare template name is not resolved, since the\n";

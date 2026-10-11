@@ -649,7 +649,12 @@ sub dequote_value {
 sub mask_secrets {
     my ($line) = @_;
 
-    (my $masked = $line) =~ s/\b(pass|enable|community)=[^,\s]*/$1=***/gi;
+    # Mask by key PREFIX so password=, passphrase=, secret=, key=, token=
+    # are caught as well as pass=, enable=, community= - a typo'd table
+    # line is echoed into the log by the "unrecognized line" errors, and
+    # must not carry a credential. A "quoted" value (which may contain
+    # commas and spaces) is masked as a whole.
+    (my $masked = $line) =~ s/\b((?:pass|enable|community|secret|key|token)\w*)=("(?:[^"\\]|\\.)*"|[^,\s]*)/$1=***/gi;
 
     $masked;
 }
@@ -859,7 +864,9 @@ sub dump_config {
     if (! -d $dir_path) {
 	my $mkdir_err;
 
-	make_path($dir_path, { error => \$mkdir_err });
+	# repository directories are owner-only: backups hold password/secret
+	# hashes and community strings
+	make_path($dir_path, { mode => 0700, error => \$mkdir_err });
 
 	if (@$mkdir_err) {
 	    my $detail = join('; ', map {
@@ -915,7 +922,11 @@ sub dump_config {
 
     local *OUT;
 
-    if (!open(OUT, '>', $file_path)) {
+    # create the backup file owner-only (0600) whatever the process umask
+    my $save_umask = umask(077);
+    my $open_ok = open(OUT, '>', $file_path);
+    umask($save_umask);
+    if (!$open_ok) {
 	$self->log_error("could not write dump file: $file_path: $!");
 	return undef;
     }

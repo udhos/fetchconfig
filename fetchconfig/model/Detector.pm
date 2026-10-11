@@ -23,6 +23,7 @@ package fetchconfig::model::Detector; # fetchconfig/model/Detector.pm
 
 use strict;
 use warnings;
+use Text::ParseWords ();
 use fetchconfig::Mailer;
 use fetchconfig::model::GenericTemplate;
 use fetchconfig::model::CiscoIOS;
@@ -75,6 +76,7 @@ my %dev_info_table;
 my %dir_allow_tag;
 my %dir_allow_path;
 my $dir_allow_present = 0;
+my %warned_unlisted_dir;   # F2: "no allowlist entry" warned once per dir per run
 my $dir_allow_fetch_run_none = 0;   # set by "directory: fetch_run none"
 my $dir_allow_report_none = 0;      # set by "directory: report none" (reporting disabled)
 my @dir_allow_rows;      # ordered [type, tag, path] for --list-allowed-dirs
@@ -277,6 +279,56 @@ sub fetch_device {
     $logger->info("-----[$dev_id]--------------------------------------------------------------------------------");
     $logger->info("dev=$dev_id host=$dev_host: retrieving config at " . scalar(localtime($fetch_ts_start)));
 
+    # System-directory check, ALWAYS applied (allowlist or not): a
+    # repository=, template_dir= or on_fetch_run program under /bin, /etc,
+    # /usr/lib, ... is rejected and the device skipped. See @SYSTEM_DIRS.
+    {
+	my $rejected;
+	for my $opt ('repository', 'template_dir') {
+	    my $val = $mod->dev_option_raw($dev_opt_tab, $opt);
+	    next unless defined($val) && length($val) && $val !~ /^\$/;   # $TAG resolved later
+	    if (my $why = _system_dir_path($val)) {
+		$logger->error("dev=$dev_id host=$dev_host: $opt=$val is $why - not allowed");
+		$rejected = 1;
+	    }
+	}
+	my $run = $mod->dev_option_raw($dev_opt_tab, 'on_fetch_run');
+	if (defined($run) && length($run) && $run !~ /^\$/) {
+	    my ($prog) = Text::ParseWords::shellwords($run);
+	    my $dir = (defined($prog) && $prog =~ m{/}) ? ($prog =~ s{/[^/]*$}{}r) : '';
+	    if (length($dir) && (my $why = _system_dir_path($dir))) {
+		$logger->error("dev=$dev_id host=$dev_host: on_fetch_run program is in $why - not allowed");
+		$rejected = 1;
+	    }
+	}
+	if ($rejected) {
+	    my $fetch_elap = time - $fetch_ts_start;
+	    $logger->info("dev=$dev_id host=$dev_host: config retrieval took $fetch_elap secs");
+	    return;
+	}
+    }
+
+    # Without a directory: allowlist nothing restricts where repository=,
+    # template_dir= or on_fetch_run may point (beyond the system-directory
+    # check above). Say so once per distinct directory per run, so an
+    # operator can see exactly which paths are unrestricted and decide
+    # whether to add a directory: section. Not an error: installations
+    # older than the allowlist feature have no such section.
+    if (!$class->dir_allowlist_present) {
+	for my $opt ('repository', 'template_dir', 'on_fetch_run') {
+	    my $val = $mod->dev_option_raw($dev_opt_tab, $opt);
+	    next unless defined($val) && length($val);
+	    my $dir = $val;
+	    if ($opt eq 'on_fetch_run') {
+		my ($prog) = Text::ParseWords::shellwords($val);
+		$dir = (defined($prog) && $prog =~ m{/}) ? ($prog =~ s{/[^/]*$}{}r) : '';
+		next unless length $dir;
+	    }
+	    next if $warned_unlisted_dir{"$opt\x00$dir"}++;
+	    $logger->info("warning: $opt directory $dir has no directory: allowlist entry (unrestricted; add a directory: section to the device table to restrict it)");
+	}
+    }
+
     # directory: allowlist enforcement (only if a directory: section exists).
     # repository= and template_dir= must resolve to an allowed directory of
     # the matching type; a $TAG is expanded to its path in the option table.
@@ -429,7 +481,29 @@ sub fetch_device {
 	    delete $ENV{FETCHCONFIG_PREV};
 	}
 	$ENV{FETCHCONFIG_CURR} = $curr;
-	system($dev_run);
+	# Split the configured command into program + arguments ourselves and
+	# run it with the list form of system(), which goes straight to
+	# execvp() and never through /bin/sh. A single-string system() would
+	# hand the whole line to the shell, so a device-table value like
+	# "/path/prog ; rm -rf /" would execute the second command. Quoted
+	# arguments ("a b") survive the split. on_fetch_run is therefore a
+	# program plus literal arguments, not a shell command line.
+	my @run_argv = Text::ParseWords::shellwords($dev_run);
+	if (!@run_argv) {
+	    $logger->error("dev=$dev_id host=$dev_host: on_fetch_run is empty after parsing");
+	}
+	else {
+	    my $rc = system { $run_argv[0] } @run_argv;
+	    if ($rc == -1) {
+		$logger->error("dev=$dev_id host=$dev_host: on_fetch_run failed to start: $run_argv[0]: $!");
+	    }
+	    elsif ($rc & 127) {
+		$logger->error("dev=$dev_id host=$dev_host: on_fetch_run killed by signal " . ($rc & 127));
+	    }
+	    elsif ($rc >> 8) {
+		$logger->error("dev=$dev_id host=$dev_host: on_fetch_run exited with status " . ($rc >> 8));
+	    }
+	}
 	delete $ENV{FETCHCONFIG_DEV_ID};
 	delete $ENV{FETCHCONFIG_DEV_HOST};
 	delete $ENV{FETCHCONFIG_PREV};
@@ -472,6 +546,29 @@ sub fetch_device {
 # do NOT canonicalize (symlinked, version-free paths must be preserved), so
 # a "/../" or "/./" must never be accepted. Returns () if OK, else a reason
 # string.
+# Directories that must never be used as a repository, template or
+# fetch_run directory, whether or not a directory: allowlist is present:
+# the OS itself lives there, and a backup written into one of them (or a
+# template read from one) is almost certainly a misconfiguration or an
+# attempt to plant a file somewhere privileged. A path is rejected if it
+# IS one of these or is UNDER one of them. The root "/" is rejected too.
+my @SYSTEM_DIRS = qw(
+    /bin /sbin /lib /lib64 /libexec /usr/bin /usr/sbin /usr/lib /usr/lib64
+    /usr/libexec /usr/share /usr/include /etc /boot /dev /proc /sys /run
+    /var/run /var/lock
+);
+sub _system_dir_path {
+    my ($path) = @_;
+    return undef unless defined($path) && length($path);
+    (my $p = $path) =~ s{/+$}{};            # drop trailing slashes
+    $p =~ s{/{2,}}{/}g;                     # collapse "//"
+    return 'the filesystem root "/"' if $p eq '';
+    for my $sys (@SYSTEM_DIRS) {
+        return "the system directory $sys" if $p eq $sys || index($p, "$sys/") == 0;
+    }
+    return undef;
+}
+
 sub _bad_dir_path {
     my ($path) = @_;
     return "empty path" unless defined($path) && length($path);
@@ -549,6 +646,12 @@ sub parse_directory_line {
     if (my $why = _bad_dir_path($path)) {
         my $m = "directory: illegal path '$path' ($why) at file=$file line=$num"; $logger->error($m); push @dir_allow_errors, $m; return;
     }
+    # A system directory must never be allowlisted - otherwise the allowlist
+    # could permit exactly what the device-value check below forbids (e.g.
+    # declaring /usr/share as an allowed fetch_run directory).
+    if (my $why = _system_dir_path($path)) {
+        my $m = "directory: path '$path' is $why at file=$file line=$num"; $logger->error($m); push @dir_allow_errors, $m; return;
+    }
     my $key = $type . "\x00" . _dir_key($path);
     $dir_allow_tag{$tag}   = { type => $type, path => $path };
     $dir_allow_path{$key}  = 1;
@@ -601,6 +704,9 @@ sub resolve_allowed_dir {
     }
     if (my $why = _bad_dir_path($value)) {
         return (0, "illegal path '$value' ($why)");
+    }
+    if (my $why = _system_dir_path($value)) {
+        return (0, "'$value' is $why");
     }
     my $key = $type . "\x00" . _dir_key($value);
     return (1, $value) if $dir_allow_path{$key};
@@ -739,6 +845,7 @@ sub init {
     $dir_allow_report_none = 0;
     @dir_allow_rows  = ();
     @dir_allow_errors = ();
+    %warned_unlisted_dir = ();
 
     fetchconfig::Mailer->init($log);
 

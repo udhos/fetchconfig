@@ -273,7 +273,7 @@ sub chat_login {
     $self->log_error("could not send pager disabling command");
     return undef;
   }
-  ($prematch, $match) = $self->wait_for_command_prompt($t, '(?:\\x1b\\[[\\d;?]*[A-Za-z])*' . quotemeta($prompt) . '# ', "no page");
+  ($prematch, $match) = $self->wait_for_command_prompt($t, '(?:\\x1b\\[[\\d;?]*[A-Za-z])*' . fetchconfig::model::Abstract::regexp_quote_keep_bytes($prompt) . '# ', "no page");
   return undef unless defined($prematch);
   $prompt;
 }
@@ -313,7 +313,7 @@ sub chat_fetch
   # space and keep waiting, the same pattern chat_login uses for
   # banners/menus. Bounded so a genuinely wedged pager still fails
   # instead of running out the whole fetch_timeout silently.
-  my $prompt_regexp = '(?:\\x1b\\[[\\d;?]*[A-Za-z])*' . quotemeta($prompt) . '# ';
+  my $prompt_regexp = '(?:\\x1b\\[[\\d;?]*[A-Za-z])*' . fetchconfig::model::Abstract::regexp_quote_keep_bytes($prompt) . '# ';
   my $more_regexp   = '-- ?MORE ?--';
   my $full_config   = '';
   my $more_retries  = 200; # generous: large configs can page many times

@@ -2,8 +2,45 @@
 # fetchconfig.pl - CHANGES
 #
 
-9.67
+9.68
 ====
+
++ on_fetch_run is run without a shell: the value is split into a program
+  plus literal arguments (quoting honoured) and executed directly, so
+  shell syntax like ";", "|" or "$(...)" is passed as plain text, not
+  interpreted. A start failure, signal or non-zero exit is logged. To run
+  a pipeline, put it in a script and name the script.
+
++ repository=, template_dir= and the on_fetch_run program may not be a
+  system directory (/bin, /sbin, /lib*, /usr/bin, /usr/sbin, /usr/lib*,
+  /usr/share, /usr/include, /etc, /boot, /dev, /proc, /sys, /run,
+  /var/run, /var/lock, the root "/", or anything under them). A device
+  value is rejected and the device skipped; a directory: allowlist line
+  that declares one is rejected at parse time.
+
++ A directory: allowlist that fails to parse (a bad or system-directory
+  path, a duplicate or malformed tag) now aborts the run before any fetch
+  or lookup, instead of continuing with a silently reduced allowlist.
+  Each error is logged as before; the run exits non-zero.
+  --list-allowed-dirs is exempt, so it can still report the errors.
+
++ Without a directory: allowlist, each distinct non-system repository=,
+  template_dir= and on_fetch_run directory in use is reported once per run
+  as a warning, so unrestricted paths are visible. (A system directory is
+  always rejected, as above - it never reaches this warning.) The
+  allowlist stays optional.
+
++ mask_secrets() masks by key prefix: password=, passphrase=, secret=,
+  key= and token= are masked as well as pass=, enable= and community=,
+  and a quoted value (commas/spaces included) is masked whole.
+
++ Backup files are created mode 0600 and repository directories 0700
+  regardless of the process umask; parallel-fetch worker files are
+  likewise owner-only.
+
++ comware-ssh, hirschmann, procurve and procurve-ssh now quote the learned
+  prompt with regexp_quote_keep_bytes() like the other models, so a
+  non-ASCII hostname cannot produce a prompt that never matches.
 
 + Templates may declare the syntax of the config they produce with a
   "# syntax_style: <token>" header comment (e.g. "# syntax_style:

@@ -288,6 +288,23 @@ foreach my $line (@line_list) {
 
 fetchconfig::Tools->init(log => $log, me => $me);
 
+# A directory: allowlist that failed to parse (a bad path, a system
+# directory, a duplicate or unknown tag) must stop the run rather than
+# continue with a silently reduced allowlist: the whole point of an
+# allowlist is to restrict, and running with a partial one would defeat
+# that. The individual errors were already logged at parse time; abort
+# here, before any fetch or lookup. --list-allowed-dirs is exempt - it
+# exists precisely to report these errors (it exits 2 itself).
+unless (defined($list_allowed_dirs)) {
+    my @allow_err = fetchconfig::model::Detector->dir_allowlist_errors;
+    if (@allow_err) {
+        $log->error("refusing to run: the directory: allowlist has "
+            . scalar(@allow_err) . " error(s) (see above); fix the device table"
+            . " or run --list-allowed-dirs to review");
+        exit 2;
+    }
+}
+
 if (defined($retrieve_dev_id)) {
     if (defined($compare_index)) {
 	fetchconfig::Tools::compare_config($retrieve_dev_id, $retrieve_index, $compare_index, $retrieve_out_file);
@@ -604,8 +621,12 @@ sub run_fetch_phase {
 		print $done_w "$dev_id\tstart\n";
 		open(my $save_out, '>&', \*STDOUT) or die "dup STDOUT: $!";
 		open(my $save_err, '>&', \*STDERR) or die "dup STDERR: $!";
+		# Worker output holds the device's full log (and on_fetch_cat
+		# config); create it owner-only regardless of the inherited umask.
+		my $worker_umask = umask(077);
 		open(STDOUT, '>', "$base.out") or die "open $base.out: $!";
 		open(STDERR, '>', "$base.err") or die "open $base.err: $!";
+		umask($worker_umask);
 		STDOUT->autoflush(1); STDERR->autoflush(1);
 		# results go to a file for the parent to replay
 		fetchconfig::Mailer->set_result_sink("$base.res");

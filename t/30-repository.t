@@ -69,6 +69,18 @@ sub slurp {
     like($content, qr/\n$/, 'file ends with a newline');
 }
 
+# --- dump_config: backup file 0600, directory 0700, whatever the umask --
+{
+    my $old_umask = umask(022);             # a permissive umask, as under cron
+    my $repo = tempdir(CLEANUP => 1);
+    my $m = quiet_model($repo);
+    my ($dir, $file) = $m->dump_config('devP', { repository => $repo }, ['x']);
+    is((stat("$dir/$file"))[2] & 0777, 0600, 'backup file is created 0600 regardless of umask');
+    is((stat($dir))[2] & 0777,         0700, 'device directory is created 0700 regardless of umask');
+    is(umask(), 022, 'process umask is restored afterwards');
+    umask($old_umask);
+}
+
 # --- dump_config: empty config is refused -----------------------------
 {
     my $repo = tempdir(CLEANUP => 1);

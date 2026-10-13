@@ -168,7 +168,7 @@ sub chat_login {
 	    return undef;
 	}
 
-	my $enable_prompt_regexp = '/(Password: ?|\(' . quotemeta($prompt) . '\)\s?#)$/';
+	my $enable_prompt_regexp = '/(Password: ?|\(' . fetchconfig::model::Abstract::regexp_quote_keep_bytes($prompt) . '\)\s?#)$/';
 
 	($prematch, $match) = $t->waitfor(Match => $enable_prompt_regexp);
 	if (!defined($prematch)) {
@@ -189,7 +189,7 @@ sub chat_login {
 		return undef;
 	    }
 
-	    ($prematch, $match) = $t->waitfor(Match => '/\(' . quotemeta($prompt) . '\)\s?#$/');
+	    ($prematch, $match) = $t->waitfor(Match => '/\(' . fetchconfig::model::Abstract::regexp_quote_keep_bytes($prompt) . '\)\s?#$/');
 	    if (!defined($prematch)) {
 		$self->log_error("could not find enable command prompt");
 		return undef;

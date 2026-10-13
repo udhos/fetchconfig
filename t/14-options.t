@@ -34,12 +34,13 @@ is(mask('user=admin,to=a@b.example'),
    'user=admin,to=a@b.example',
    'non-secret options are not masked');
 
-# Behaviour to be aware of (pinned, not endorsed): the pattern is
-# \b(pass|enable|community)=, so "password=" is NOT masked - "pass"
-# must be immediately followed by "=". Documented here so a change to
-# mask_secrets is a conscious one.
-is(mask('x password=P'),   'x password=P',   'password= is NOT masked (pass must be followed by =)');
-is(mask('x passphrase=K'), 'x passphrase=K', 'passphrase= is NOT masked');
+# Since 9.68 the match is by key PREFIX, so password=, passphrase=,
+# secret=, key= and token= are masked too (CWE-532 fix), and a "quoted"
+# value containing commas/spaces is masked as a whole.
+is(mask('x password=P'),        'x password=***',   'password= masked (key prefix)');
+is(mask('x passphrase=K'),      'x passphrase=***', 'passphrase= masked (key prefix)');
+is(mask('x secret=s,key=k,token=t'), 'x secret=***,key=***,token=***', 'secret/key/token masked');
+is(mask('x pass="a,b c",user=u'), 'x pass=***,user=u', 'quoted value with comma+space masked whole');
 
 # --- opt_trim ----------------------------------------------------------
 sub trim { fetchconfig::model::Abstract::opt_trim($_[0]) }

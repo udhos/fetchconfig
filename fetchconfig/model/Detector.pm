@@ -23,6 +23,7 @@ package fetchconfig::model::Detector; # fetchconfig/model/Detector.pm
 
 use strict;
 use warnings;
+use Text::ParseWords ();
 use fetchconfig::Mailer;
 use fetchconfig::model::GenericTemplate;
 use fetchconfig::model::CiscoIOS;
@@ -61,6 +62,8 @@ use fetchconfig::model::MediantSBC;
 use fetchconfig::model::ProCurveSNMP;
 
 my $logger;
+my $default_lock_dir;       # <dir of fetchconfig.pl>/.lock, set by init()
+my $lock_dir_failed = 0;    # set if a device's lock dir could not be used (-> driver exits 10)
 my %model_table;
 my %dev_id_table;
 my @dev_order;          # dev_ids in device-table order (for the sequential fetch phase)
@@ -75,6 +78,7 @@ my %dev_info_table;
 my %dir_allow_tag;
 my %dir_allow_path;
 my $dir_allow_present = 0;
+my %warned_unlisted_dir;   # F2: "no allowlist entry" warned once per dir per run
 my $dir_allow_fetch_run_none = 0;   # set by "directory: fetch_run none"
 my $dir_allow_report_none = 0;      # set by "directory: report none" (reporting disabled)
 my @dir_allow_rows;      # ordered [type, tag, path] for --list-allowed-dirs
@@ -209,6 +213,22 @@ sub parse {
 			$dev_opt_tab,
 			@row);
 
+    # keep= becomes "how many backups to retain" and is used arithmetically
+    # in purge_ancient (@files - keep). A non-numeric value coerces to 0 and
+    # a negative one over-counts, either of which would DELETE EVERY backup.
+    # Reject it at load time - the device-specific value, or the inherited
+    # default: value - so a typo fails the run instead of destroying history
+    # on the next pass. ("keep" unset is caught later as its own error.)
+    {
+	my $keep = $dev_opt_tab->{keep};
+	$keep = $mod->{default_options}->{keep} unless defined $keep;
+	if (defined($keep) && $keep !~ /^[1-9]\d*$/) {
+	    $logger->error("invalid keep=$keep for dev_id=$dev_id at file=$file line=$num"
+		. " (must be a positive integer): " . mask_secrets($line));
+	    return;
+	}
+    }
+
     # Register the device. Since 9.58 parse() never fetches: every
     # device line is recorded here (model, host, merged options, and
     # the source file/line for messages), and the fetching happens in a
@@ -277,6 +297,56 @@ sub fetch_device {
     $logger->info("-----[$dev_id]--------------------------------------------------------------------------------");
     $logger->info("dev=$dev_id host=$dev_host: retrieving config at " . scalar(localtime($fetch_ts_start)));
 
+    # System-directory check, ALWAYS applied (allowlist or not): a
+    # repository=, template_dir= or on_fetch_run program under /bin, /etc,
+    # /usr/lib, ... is rejected and the device skipped. See @SYSTEM_DIRS.
+    {
+	my $rejected;
+	for my $opt ('repository', 'template_dir') {
+	    my $val = $mod->dev_option_raw($dev_opt_tab, $opt);
+	    next unless defined($val) && length($val) && $val !~ /^\$/;   # $TAG resolved later
+	    if (my $why = _system_dir_path($val)) {
+		$logger->error("dev=$dev_id host=$dev_host: $opt=$val is $why - not allowed");
+		$rejected = 1;
+	    }
+	}
+	my $run = $mod->dev_option_raw($dev_opt_tab, 'on_fetch_run');
+	if (defined($run) && length($run) && $run !~ /^\$/) {
+	    my ($prog) = Text::ParseWords::shellwords($run);
+	    my $dir = (defined($prog) && $prog =~ m{/}) ? ($prog =~ s{/[^/]*$}{}r) : '';
+	    if (length($dir) && (my $why = _system_dir_path($dir))) {
+		$logger->error("dev=$dev_id host=$dev_host: on_fetch_run program is in $why - not allowed");
+		$rejected = 1;
+	    }
+	}
+	if ($rejected) {
+	    my $fetch_elap = time - $fetch_ts_start;
+	    $logger->info("dev=$dev_id host=$dev_host: config retrieval took $fetch_elap secs");
+	    return;
+	}
+    }
+
+    # Without a directory: allowlist nothing restricts where repository=,
+    # template_dir= or on_fetch_run may point (beyond the system-directory
+    # check above). Say so once per distinct directory per run, so an
+    # operator can see exactly which paths are unrestricted and decide
+    # whether to add a directory: section. Not an error: installations
+    # older than the allowlist feature have no such section.
+    if (!$class->dir_allowlist_present) {
+	for my $opt ('repository', 'template_dir', 'on_fetch_run') {
+	    my $val = $mod->dev_option_raw($dev_opt_tab, $opt);
+	    next unless defined($val) && length($val);
+	    my $dir = $val;
+	    if ($opt eq 'on_fetch_run') {
+		my ($prog) = Text::ParseWords::shellwords($val);
+		$dir = (defined($prog) && $prog =~ m{/}) ? ($prog =~ s{/[^/]*$}{}r) : '';
+		next unless length $dir;
+	    }
+	    next if $warned_unlisted_dir{"$opt\x00$dir"}++;
+	    $logger->info("warning: $opt directory $dir has no directory: allowlist entry (unrestricted; add a directory: section to the device table to restrict it)");
+	}
+    }
+
     # directory: allowlist enforcement (only if a directory: section exists).
     # repository= and template_dir= must resolve to an allowed directory of
     # the matching type; a $TAG is expanded to its path in the option table.
@@ -328,6 +398,62 @@ sub fetch_device {
 	    $logger->info("dev=$dev_id host=$dev_host: config retrieval took $fetch_elap secs");
 	    return;
 	}
+    }
+
+    # Device locking (lock=yes). Acquire an exclusive flock on a per-device
+    # lock file before fetching; $dev_lock holds the locked filehandle for
+    # the rest of this sub and releases it when the sub returns. On
+    # contention after the configured retries the device is recorded as
+    # "skipped" (the existing backup state) and the process exit code is
+    # left unchanged - a lock-skip is a per-device outcome, not a run
+    # failure. If the lock directory cannot be created/used, that is fatal:
+    # flag it so the driver exits 10 after the run.
+    my $dev_lock;
+    if ($mod->dev_option_flag($dev_opt_tab, 'lock', 0)) {
+	# Record a "skipped" result with the SAME field set the normal
+	# success/failure paths use - in particular repository=, so the
+	# per-device status file can be written, and to=/elapsed= so the
+	# mail routing and timing are right. (Omitting repository was the
+	# "cannot write status file: no repository" error.)
+	my $record_skip = sub {
+	    fetchconfig::Mailer->record_result(
+		dev_id       => $dev_id,
+		dev_host     => $dev_host,
+		ts           => $fetch_ts_start,
+		elapsed      => time - $fetch_ts_start,
+		repository   => $mod->dev_option($dev_opt_tab, "repository"),
+		changes_only => $dev_changes_only,
+		state        => 'skipped',
+		size         => undef,
+		changed      => 'n/a',
+		to           => $dev_email_to,
+	    );
+	};
+
+	my $lock_dir = $mod->lock_dir_resolve($dev_opt_tab, $default_lock_dir);
+	if (!defined($lock_dir)) {
+	    $lock_dir_failed = 1;
+	    $logger->error("dev=$dev_id host=$dev_host: lock requested but the lock directory is unusable - skipping");
+	    $record_skip->();
+	    return;
+	}
+	my $lock_path  = $mod->device_lock_path($lock_dir, $dev_id);
+	my $lock_retry = $mod->dev_option_posint($dev_opt_tab, 'lock_retry', 5, 1);        # 0 allowed
+	my $lock_wait  = $mod->dev_option_posint($dev_opt_tab, 'lock_retry_time', 10, 0);  # >=1
+	my $got = $mod->acquire_device_lock($lock_path, $dev_id, $lock_retry, $lock_wait);
+	if (!defined($got)) {
+	    # could not even open the lock file - treat as lock-dir failure
+	    $lock_dir_failed = 1;
+	    $record_skip->();
+	    return;
+	}
+	if ($got eq 'locked') {
+	    $logger->info("dev=$dev_id host=$dev_host: skipped - locked by another run"
+		. " (lock_retry=$lock_retry lock_retry_time=${lock_wait}s)");
+	    $record_skip->();
+	    return;
+	}
+	$dev_lock = $got;   # hold the lock for the duration of the fetch
     }
 
     my ($config_dir, $config_file) = $mod->fetch($file, $num, $line, $dev_id, $dev_host, $dev_opt_tab);
@@ -429,7 +555,29 @@ sub fetch_device {
 	    delete $ENV{FETCHCONFIG_PREV};
 	}
 	$ENV{FETCHCONFIG_CURR} = $curr;
-	system($dev_run);
+	# Split the configured command into program + arguments ourselves and
+	# run it with the list form of system(), which goes straight to
+	# execvp() and never through /bin/sh. A single-string system() would
+	# hand the whole line to the shell, so a device-table value like
+	# "/path/prog ; rm -rf /" would execute the second command. Quoted
+	# arguments ("a b") survive the split. on_fetch_run is therefore a
+	# program plus literal arguments, not a shell command line.
+	my @run_argv = Text::ParseWords::shellwords($dev_run);
+	if (!@run_argv) {
+	    $logger->error("dev=$dev_id host=$dev_host: on_fetch_run is empty after parsing");
+	}
+	else {
+	    my $rc = system { $run_argv[0] } @run_argv;
+	    if ($rc == -1) {
+		$logger->error("dev=$dev_id host=$dev_host: on_fetch_run failed to start: $run_argv[0]: $!");
+	    }
+	    elsif ($rc & 127) {
+		$logger->error("dev=$dev_id host=$dev_host: on_fetch_run killed by signal " . ($rc & 127));
+	    }
+	    elsif ($rc >> 8) {
+		$logger->error("dev=$dev_id host=$dev_host: on_fetch_run exited with status " . ($rc >> 8));
+	    }
+	}
 	delete $ENV{FETCHCONFIG_DEV_ID};
 	delete $ENV{FETCHCONFIG_DEV_HOST};
 	delete $ENV{FETCHCONFIG_PREV};
@@ -472,6 +620,29 @@ sub fetch_device {
 # do NOT canonicalize (symlinked, version-free paths must be preserved), so
 # a "/../" or "/./" must never be accepted. Returns () if OK, else a reason
 # string.
+# Directories that must never be used as a repository, template or
+# fetch_run directory, whether or not a directory: allowlist is present:
+# the OS itself lives there, and a backup written into one of them (or a
+# template read from one) is almost certainly a misconfiguration or an
+# attempt to plant a file somewhere privileged. A path is rejected if it
+# IS one of these or is UNDER one of them. The root "/" is rejected too.
+my @SYSTEM_DIRS = qw(
+    /bin /sbin /lib /lib64 /libexec /usr/bin /usr/sbin /usr/lib /usr/lib64
+    /usr/libexec /usr/share /usr/include /etc /boot /dev /proc /sys /run
+    /var/run /var/lock
+);
+sub _system_dir_path {
+    my ($path) = @_;
+    return undef unless defined($path) && length($path);
+    (my $p = $path) =~ s{/+$}{};            # drop trailing slashes
+    $p =~ s{/{2,}}{/}g;                     # collapse "//"
+    return 'the filesystem root "/"' if $p eq '';
+    for my $sys (@SYSTEM_DIRS) {
+        return "the system directory $sys" if $p eq $sys || index($p, "$sys/") == 0;
+    }
+    return undef;
+}
+
 sub _bad_dir_path {
     my ($path) = @_;
     return "empty path" unless defined($path) && length($path);
@@ -537,8 +708,8 @@ sub parse_directory_line {
         my $m = "unrecognized directory at file=$file line=$num: directory: $body"; $logger->error($m); push @dir_allow_errors, $m; return;
     }
     my ($type, $tag, $path) = ($1, $2, $3);
-    if ($type ne 'repository' && $type ne 'template' && $type ne 'fetch_run' && $type ne 'report') {
-        my $m = "directory: type must be 'repository', 'template', 'fetch_run' or 'report' (got '$type') at file=$file line=$num"; $logger->error($m); push @dir_allow_errors, $m; return;
+    if ($type ne 'repository' && $type ne 'template' && $type ne 'fetch_run' && $type ne 'report' && $type ne 'lock') {
+        my $m = "directory: type must be 'repository', 'template', 'fetch_run', 'report' or 'lock' (got '$type') at file=$file line=$num"; $logger->error($m); push @dir_allow_errors, $m; return;
     }
     if ($tag !~ /^\$[A-Za-z_][A-Za-z0-9_]*$/) {
         my $m = "directory: tag must look like \$NAME (got '$tag') at file=$file line=$num"; $logger->error($m); push @dir_allow_errors, $m; return;
@@ -548,6 +719,12 @@ sub parse_directory_line {
     }
     if (my $why = _bad_dir_path($path)) {
         my $m = "directory: illegal path '$path' ($why) at file=$file line=$num"; $logger->error($m); push @dir_allow_errors, $m; return;
+    }
+    # A system directory must never be allowlisted - otherwise the allowlist
+    # could permit exactly what the device-value check below forbids (e.g.
+    # declaring /usr/share as an allowed fetch_run directory).
+    if (my $why = _system_dir_path($path)) {
+        my $m = "directory: path '$path' is $why at file=$file line=$num"; $logger->error($m); push @dir_allow_errors, $m; return;
     }
     my $key = $type . "\x00" . _dir_key($path);
     $dir_allow_tag{$tag}   = { type => $type, path => $path };
@@ -601,6 +778,9 @@ sub resolve_allowed_dir {
     }
     if (my $why = _bad_dir_path($value)) {
         return (0, "illegal path '$value' ($why)");
+    }
+    if (my $why = _system_dir_path($value)) {
+        return (0, "'$value' is $why");
     }
     my $key = $type . "\x00" . _dir_key($value);
     return (1, $value) if $dir_allow_path{$key};
@@ -694,6 +874,10 @@ sub device_info {
 # currently loaded -devices=/-line= sources). Backs the -Z
 # (check zero-byte backups for all devices) feature.
 #
+# True if any device's lock directory could not be created/used; the
+# driver turns this into exit 10.
+sub lock_dir_failed { return $lock_dir_failed; }
+
 sub device_ids {
     my ($class) = @_;
 
@@ -726,9 +910,11 @@ sub model_by_label {
 }
 
 sub init {
-    my ($class, $log) = @_;
+    my ($class, $log, $lock_dir) = @_;
 
     $logger = $log;
+    $default_lock_dir = $lock_dir;
+    $lock_dir_failed = 0;
 
     # Reset the directory: allowlist state, so a second load in one process
     # (a daemon, a test) does not inherit the previous table's allowlist.
@@ -739,6 +925,7 @@ sub init {
     $dir_allow_report_none = 0;
     @dir_allow_rows  = ();
     @dir_allow_errors = ();
+    %warned_unlisted_dir = ();
 
     fetchconfig::Mailer->init($log);
 

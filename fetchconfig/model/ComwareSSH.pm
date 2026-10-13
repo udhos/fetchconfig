@@ -114,7 +114,7 @@ sub expect_prompt
   }
   # Comware user-view prompt is "<hostname>". quotemeta guards against
   # any regex metacharacter that might appear in the hostname.
-  my $prompt_regexp = '/<' . quotemeta($prompt) . '>/';
+  my $prompt_regexp = '/<' . fetchconfig::model::Abstract::regexp_quote_keep_bytes($prompt) . '>/';
   my ($prematch, $match) = $t->waitfor(Match => $prompt_regexp);
   if (!defined($prematch))
   {

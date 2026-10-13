@@ -306,6 +306,12 @@ DIRECTORY ALLOWLIST
 	  checked for illegal content: no "/../" or "/./" components, an
 	  absolute path, and only characters valid for the host OS; a bad
 	  path is rejected.
+	- System directories are never accepted, allowlist or not (since
+	  9.68): /bin, /sbin, /lib, /lib64, /usr/bin, /usr/sbin, /usr/lib,
+	  /usr/lib64, /usr/share, /usr/include, /etc, /boot, /dev, /proc,
+	  /sys, /run, /var/run, /var/lock, the root "/", and anything
+	  under them. A repository=, template_dir= or on_fetch_run
+	  program there is rejected and the device skipped.
 
 	A value that is off the list, of the wrong type, an undefined
 	tag, or has illegal content is rejected at fetch time with a
@@ -313,6 +319,18 @@ DIRECTORY ALLOWLIST
 	from a "default:" line rejects every device that inherits it.
 	The "--list-allowed-dirs" option prints the parsed allowlist (see
 	the command-line options reference).
+
+	Without a "directory:" section nothing restricts where
+	repository=, template_dir= or on_fetch_run may point, except the
+	system-directory rule above, which always applies: a system
+	directory is rejected whether or not an allowlist is present.
+	Since 9.68 each distinct non-system directory in use is then
+	reported once per run as "warning: ... has no directory:
+	allowlist entry (unrestricted ...)", so you can see which paths
+	are unrestricted and decide whether to add a "directory:"
+	section. (A system directory never reaches this warning - it is
+	rejected first.) The allowlist stays optional; an installation
+	without one keeps working.
 
 
 EMAIL NOTIFICATIONS
@@ -1020,6 +1038,21 @@ RETRIEVING A STORED CONFIG, AND COMMAND-LINE OPTIONS
                         invalid (bad line, type, duplicate tag, illegal path
                         content, or a missing directory). Honours "-f".
 
+	--clean-lock-dir [N]
+                        Removes device lock files older than N days (with -T,
+                        only shows what would be removed) (by
+                        mtime) from the lock directory, then exits. N
+                        defaults to 30 and has a minimum of 1. A lock file
+                        is removed ONLY if it is not currently held - the
+                        cleaner flock()s each candidate first and keeps any
+                        live lock - so an in-use lock is never deleted. The
+                        lock directory is "<dir of fetchconfig.pl>/.lock" by
+                        default; pass "-devices=" if a custom lock_dir= (or
+                        "directory: lock") applies, so the right directory
+                        is cleaned. Exits 0 on success, 2 on a bad N or an
+                        unusable lock directory. See "lock=" under OPTIONS
+                        and the note on local filesystems.
+
 	--check-template PATH
                         Structurally checks the generic-model template at
                         PATH (grammar plus the load-time validator: self-
@@ -1028,10 +1061,26 @@ RETRIEVING A STORED CONFIG, AND COMMAND-LINE OPTIONS
                         path to the .tmpl file - a bare template name is
                         not resolved, because the same name can exist in
                         different template_dir directories. Needs no device
-                        table. Prints "ok" or the errors; exits 0 ok, 1
-                        errors, 2 file problem. STRUCTURAL check only - it
-                        does not verify the template against a real device.
-                        Does NOT honour "-f" (result goes to the log).
+                        table and does NOT apply the directory: allowlist -
+                        any readable .tmpl path is checked. Prints "ok" or
+                        the errors; exits 0 ok, 1 errors, 2 file problem.
+                        STRUCTURAL check only - it does not verify the
+                        template against a real device. Does NOT honour
+                        "-f" (result goes to the log).
+
+	--template-syntax PATH
+                        Prints the syntax style the template at PATH
+                        declares - the value of a "# syntax_style: <token>"
+                        header comment - to stdout, and exits. Metadata for
+                        a config viewer (e.g. fetchconfig-web) to pick a
+                        highlighter for a generic-model backup; it has no
+                        effect on a backup. PATH is the full path to the
+                        .tmpl file, as for --check-template. Needs no device
+                        table and does NOT apply the directory: allowlist -
+                        any readable .tmpl path is read. Exits 0 and prints
+                        the token if declared, 1 and prints nothing if not,
+                        2 on a file problem (error to stderr). The value is
+                        a free-text token [A-Za-z0-9_-]+.
 
 	Fetching options
 	----------------
@@ -1379,6 +1428,36 @@ DEVICE OPTIONS
 	comment		Optional (see the cisco-ios/cisco-cat section).
 	site		Optional (see the cisco-ios/cisco-cat section).
 
+	The following device-locking options are available for all
+	models, per-device and via "default:":
+
+	lock		Optional. "lock=on" takes an exclusive lock on the
+			device before backing it up, so two runs cannot
+			back up the same device at once (overlapping cron,
+			or a web "Backup Now" over a cron run). Values are
+			"on" or "off"; default "off" (no locking). The lock is a flock on a
+			per-device file; it is released when the run ends
+			(even on crash) and the file is never deleted.
+			On contention the device is retried (see
+			lock_retry/lock_retry_time) and then recorded as
+			"skipped"; the process exit code is not changed.
+
+	lock_dir	Optional. Directory for the lock files, a
+			"directory: lock" $TAG or an absolute path.
+			Default "<directory of fetchconfig.pl>/.lock",
+			created mode 0700 if absent. If it cannot be
+			created or used, fetchconfig exits 10 after the
+			run. Must be a LOCAL filesystem - flock over NFS
+			(AIX) is unreliable. A system directory is refused.
+
+	lock_retry	Optional. How many times to retry a locked device
+			before skipping it. Integer >= 0; default 5.
+			"lock_retry=0" means skip on the first contention.
+
+	lock_retry_time	Optional. Seconds to wait between lock retries.
+			Integer >= 1; default 10. (The maximum wait before
+			skipping is lock_retry * lock_retry_time seconds.)
+
 	The following are set only in the template file, not on the
 	device line: capture_from (regex marking where the saved config
 	starts) and skip_first (drop the first N captured lines). See
@@ -1441,6 +1520,18 @@ DEVICE OPTIONS
 			will be erased right after the external program
 			is finished. This option is available for all
 			modules.
+			The value is a PROGRAM plus optional literal
+			arguments, not a shell command line: since 9.68
+			it is split into words (quoting is honoured,
+			e.g. prog "two words") and the program is
+			executed directly, never through /bin/sh. Shell
+			syntax such as ";", "|", "$(...)" or ">" is
+			passed to the program as ordinary text and has
+			no effect. To run a shell pipeline, put it in a
+			script and name the script here. The program
+			must not live in a system directory (/bin,
+			/sbin, /usr/lib, /etc, ... - see "directory:"
+			above); such a value is rejected.
 
 	on_fetch_cat	Optional. Boolean. If specified as
 			on_fetch_cat=1, the currently fetched
@@ -2326,9 +2417,13 @@ SECURITY NOTES
 	into that trace. Starting with 9.54 these files are created
 	with mode 0600 (owner read/write only) regardless of the process
 	umask. Still: only enable debug=on while troubleshooting, and
-	delete the .debug file afterwards. Backups and the .status file
-	are created with the process umask (typically 0644); the backups
-	do contain configuration secrets - and not always hashed: SNMP
+	delete the .debug file afterwards. Backup files, their directories
+	and the .status file are created with the process umask - an
+	unprivileged reader such as fetchconfig-web (running as "nobody" for
+	-l/-g) must be able to read them, so they are deliberately NOT forced
+	owner-only. (Parallel-fetch worker scratch files, which live in a
+	private temp dir and are never read that way, are owner-only.) The
+	backups do contain configuration secrets - and not always hashed: SNMP
 	communities and some routing/VPN keys (BGP, OSPF, RADIUS/TACACS,
 	IPsec pre-shared keys) are stored in cleartext, and Cisco "type
 	7" passwords are trivially reversible. Restrict the repository

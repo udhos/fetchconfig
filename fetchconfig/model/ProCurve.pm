@@ -431,7 +431,7 @@ sub chat_login_telnet {
     $self->log_error("could not send pager disabling command");
     return undef;
   }
-  ($prematch, $match) = $self->wait_for_command_prompt($t, '(?:\\x1b\\[[\\d;?]*[A-Za-z])*' . quotemeta($prompt) . '# ', "no page");
+  ($prematch, $match) = $self->wait_for_command_prompt($t, '(?:\\x1b\\[[\\d;?]*[A-Za-z])*' . fetchconfig::model::Abstract::regexp_quote_keep_bytes($prompt) . '# ', "no page");
   return undef unless defined($prematch);
   $prompt;
 }

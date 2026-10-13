@@ -22,6 +22,7 @@
 # $Id: fetchconfig.pl,v 9.8 2026/08/26 12:00:00 tammer Exp $
 
 use FindBin qw($Bin);
+use Cwd ();
 use strict;
 
 use lib "$FindBin::Bin/";
@@ -90,6 +91,7 @@ my $check_template;     # set by --check-template FILE: structural check of one 
 my $template_syntax;    # set by --template-syntax FILE: print the template's '# syntax_style:' value, then exit
 my $list_template;      # set by -t/--list-template: list available templates from all template_dir=
 my $list_allowed_dirs;  # set by --list-allowed-dirs: list the directory: allowlist
+my $clean_lock_dir;     # set by --clean-lock-dir N: remove lock files older than N days, then exit
 my $retrieve_out_file;  # set by -f: optional output file (default: stdout)
 my $parallel = 1;       # set by -P N: number of concurrent fetch workers (1 = sequential, the default)
 
@@ -135,6 +137,7 @@ my $got = GetOptions(
     'template-syntax=s' => \$template_syntax,
     't|list-template'  => \$list_template,
     'list-allowed-dirs' => \$list_allowed_dirs,
+    'clean-lock-dir:i'  => \$clean_lock_dir,   # N days; :i => value optional (default 30)
     'n=s'       => \$retrieve_index,   # validated as a positive integer below
     'm=s'       => \$compare_index,
     'P=s'       => \$parallel,
@@ -260,16 +263,22 @@ if (defined($orphan_delete)
     die "\n";
 }
 
-if (defined($orphan_test) && !defined($orphan_delete)) {
-    $log->error("-T requires -D");
+if (defined($orphan_test) && !defined($orphan_delete) && !defined($clean_lock_dir)) {
+    $log->error("-T requires -D (or --clean-lock-dir)");
     &usage;
     die "\n";
 }
 
-fetchconfig::model::Detector->init($log);
+# Default device-lock directory: "<canonical dir of fetchconfig.pl>/.lock".
+# Used when lock=yes and no lock_dir= is set. Resolved from the real path
+# of the script directory so a symlinked install still locks in one place.
+my $default_lock_dir = Cwd::realpath($FindBin::Bin);
+$default_lock_dir = $FindBin::Bin unless defined $default_lock_dir;
+$default_lock_dir .= '/.lock';
+fetchconfig::model::Detector->init($log, $default_lock_dir);
 fetchconfig::Report->init($log);
 
-my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs) || defined($template_syntax);
+my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs) || defined($template_syntax) || defined($clean_lock_dir);
 if ($parallel > 1 && $lookup_only) {
     $log->error("-P applies to fetching only and cannot be combined with -g/-l/-z/-Z/-o/-e/-s/-S");
     &usage;
@@ -287,6 +296,23 @@ foreach my $line (@line_list) {
 }
 
 fetchconfig::Tools->init(log => $log, me => $me);
+
+# A directory: allowlist that failed to parse (a bad path, a system
+# directory, a duplicate or unknown tag) must stop the run rather than
+# continue with a silently reduced allowlist: the whole point of an
+# allowlist is to restrict, and running with a partial one would defeat
+# that. The individual errors were already logged at parse time; abort
+# here, before any fetch or lookup. --list-allowed-dirs is exempt - it
+# exists precisely to report these errors (it exits 2 itself).
+unless (defined($list_allowed_dirs)) {
+    my @allow_err = fetchconfig::model::Detector->dir_allowlist_errors;
+    if (@allow_err) {
+        $log->error("refusing to run: the directory: allowlist has "
+            . scalar(@allow_err) . " error(s) (see above); fix the device table"
+            . " or run --list-allowed-dirs to review");
+        exit 2;
+    }
+}
 
 if (defined($retrieve_dev_id)) {
     if (defined($compare_index)) {
@@ -343,6 +369,16 @@ if (defined($list_allowed_dirs)) {
     exit;
 }
 
+# --clean-lock-dir [N]: remove *.lock files older than N days (default 30,
+# minimum 1) from the lock directory, then exit. A lock file is only
+# removed if it is NOT currently held (flock succeeds first), so an
+# in-use lock is never deleted. The lock directory is the default
+# <dir>/.lock, or the lock_dir=/directory: lock from a given -devices=.
+if (defined($clean_lock_dir)) {
+    my $days = $clean_lock_dir || 30;   # 0/omitted -> 30
+    exit(fetchconfig::Tools::clean_lock_dir($days, $default_lock_dir, $orphan_test));
+}
+
 # Phase 2: fetch every registered device - sequentially (the default,
 # device-table order, live output exactly as before), or with -P N
 # concurrent worker processes.
@@ -351,6 +387,11 @@ if (defined($list_allowed_dirs)) {
 fetchconfig::Mailer->send_summaries($log);
 
 $log->info("done");
+
+# Exit 10 if any device requested locking but its lock directory could
+# not be created or used. The backups that did run are still recorded;
+# this signals the misconfiguration to the caller.
+exit 10 if fetchconfig::model::Detector->lock_dir_failed;
 
 exit;
 
@@ -495,6 +536,10 @@ sub usage_text {
     $t .= "                      A directory: section must cover all three types (repository, template,\n";
     $t .= "                      fetch_run); use \"directory: fetch_run none\" to forbid on_fetch_run.\n";
     $t .= "                      Honours -f.\n";
+    $t .= "       --clean-lock-dir [N]  remove device lock files older than N days (default 30, min 1)\n";
+    $t .= "                             from the lock directory, then exit; with -T only show what would\n";
+    $t .= "                             be removed. A held lock is never removed. Honours -devices= for\n";
+    $t .= "                             a custom lock_dir=.\n";
     $t .= "       --check-template PATH  structurally check the generic-model template at PATH\n";
     $t .= "       --template-syntax PATH print the template's declared syntax style (the value of its\n";
     $t .= "                      # syntax_style: <token> header comment) to stdout, for a config viewer;\n";
@@ -604,8 +649,12 @@ sub run_fetch_phase {
 		print $done_w "$dev_id\tstart\n";
 		open(my $save_out, '>&', \*STDOUT) or die "dup STDOUT: $!";
 		open(my $save_err, '>&', \*STDERR) or die "dup STDERR: $!";
+		# Worker output holds the device's full log (and on_fetch_cat
+		# config); create it owner-only regardless of the inherited umask.
+		my $worker_umask = umask(077);
 		open(STDOUT, '>', "$base.out") or die "open $base.out: $!";
 		open(STDERR, '>', "$base.err") or die "open $base.err: $!";
+		umask($worker_umask);
 		STDOUT->autoflush(1); STDERR->autoflush(1);
 		# results go to a file for the parent to replay
 		fetchconfig::Mailer->set_result_sink("$base.res");

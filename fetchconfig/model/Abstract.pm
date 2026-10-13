@@ -936,12 +936,14 @@ sub dump_config {
 
     # NOTE: the filename has one-second resolution. Two backups of the
     # same device completed within the same second would get the same
-    # name, so the second would overwrite the first and the changes_only
-    # comparison would then compare the file with itself. This is an
-    # accepted limitation: a real fetch (login, pager, full config,
-    # logout) essentially never completes in under a second, and the
-    # scheduled runs are minutes apart. It only shows up in artificial
-    # back-to-back test runs. See README, "Backup file naming".
+    # name. Rather than let the second silently overwrite the first (and
+    # then compare the file with itself), the write below is O_EXCL: the
+    # second run fails to create the file and is reported, leaving the
+    # first intact. This essentially never happens for a real fetch
+    # (login, pager, full config, logout takes well over a second, and
+    # scheduled runs are minutes apart); device locking (lock=on)
+    # prevents concurrent same-device runs outright. See README,
+    # "Backup file naming".
     my $file = sprintf("${dev_id}.run.%04d%02d%02d.%02d%02d%02d$tz_off",
 		       $year, $mon, $day, $hour, $min, $sec);
 

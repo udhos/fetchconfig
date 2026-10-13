@@ -69,7 +69,223 @@ my @report_hide;  # accumulated report_hide=<regex> patterns (custom masking)
 
 my $FONT_FAMILY = 'sans-serif';
 
-my $HEADER_BG = '#22aabb';
+# Small logo shown in the e-mail header bar (NOT in the on-disk HTML
+# report, which keeps its own report_logo=). Embedded inline so fetchconfig
+# needs no separate image asset; emitted as a multipart/related part with
+# Content-ID <fcwlogo> and referenced from the HTML as src="cid:fcwlogo".
+# This is the same small logo used by fetchconfig-web, so the two mails
+# share one look. Base64 of a 50x50 PNG.
+my $MAIL_LOGO_B64 = <<'__LOGO__';
+iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAWfmNhQlgAABZ+anVtYgAAAB5qdW1k
+YzJwYQARABCAAACqADibcQNjMnBhAAAAFlhqdW1iAAAAR2p1bWRjMm1hABEAEIAAAKoAOJtxA3Vy
+bjpjMnBhOmEyM2EwNWZkLTZlNmQtNDZkOS04NWEzLTYyM2IzZTBkNWQyYwAAAAOTanVtYgAAAClq
+dW1kYzJhcwARABCAAACqADibcQNjMnBhLmFzc2VydGlvbnMAAAAAuGp1bWIAAABEanVtZGNib3IA
+EQAQgAAAqgA4m3ETYzJwYS5pbmdyZWRpZW50LnYzAAAAABhjMnNoPfCeUnj/N2dyLYCS7FqmIwAA
+AGxjYm9yo2lkYzpmb3JtYXRpaW1hZ2UvcG5namluc3RhbmNlSUR4LHhtcDppaWQ6ZTU5ODgxZDkt
+YjM5Ny00ZDlmLWE0MTMtNTg4ZTM2YjcwNzU5bHJlbGF0aW9uc2hpcGhwYXJlbnRPZgAAAeJqdW1i
+AAAAQWp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuYWN0aW9ucy52MgAAAAAYYzJzaJmLDfLOWdbF
+hkyao6hO4bgAAAGZY2JvcqJnYWN0aW9uc4KiZmFjdGlvbmtjMnBhLm9wZW5lZGpwYXJhbWV0ZXJz
+oWtpbmdyZWRpZW50c4GiY3VybHgtc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5pbmdy
+ZWRpZW50LnYzZGhhc2hYIOO10LM5BqsSOrho9KHexbESWAswExA99W2twB0LUUN2pGZhY3Rpb254
+HWNvbS5hbnRocm9waWMuY2xhdWRlLnByb3ZpZGVkanBhcmFtZXRlcnOheB9jb20uYW50aHJvcGlj
+Lm9yaWdpbi1jb25maWRlbmNlZ3Vua25vd25rZGVzY3JpcHRpb254ZkNsYXVkZSBwcm92aWRlZCB0
+aGlzIGZpbGUgYXQgdGhlIHJlcXVlc3Qgb2YgYSB1c2VyIGFuZCBtYXkgaGF2ZSBjcmVhdGVkIG9y
+IG1vZGlmaWVkIHRoZSBmaWxlIGNvbnRlbnRzLm1zb2Z0d2FyZUFnZW50oWRuYW1lZkNsYXVkZXJh
+bGxBY3Rpb25zSW5jbHVkZWT1AAAAyGp1bWIAAABAanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5o
+YXNoLmRhdGEAAAAAGGMyc2jFhrMoMrDidIvmpxRXu7f6AAAAgGNib3KlY2FsZ2ZzaGEyNTZjcGFk
+TQAAAAAAAAAAAAAAAABkaGFzaFggx3osK8ArMrzCBF0JoNWYK9GrV5iY99dvldetKswbjkpkbmFt
+ZW5qdW1iZiBtYW5pZmVzdGpleGNsdXNpb25zgaJlc3RhcnQYIWZsZW5ndGgZFooAAAI+anVtYgAA
+ACdqdW1kYzJjbAARABCAAACqADibcQNjMnBhLmNsYWltLnYyAAAAAg9jYm9ypWNhbGdmc2hhMjU2
+aXNpZ25hdHVyZXhNc2VsZiNqdW1iZj0vYzJwYS91cm46YzJwYTphMjNhMDVmZC02ZTZkLTQ2ZDkt
+ODVhMy02MjNiM2UwZDVkMmMvYzJwYS5zaWduYXR1cmVqaW5zdGFuY2VJRHgseG1wOmlpZDplNTI4
+MzVjYi03MDk4LTQwMWItODQzZi02YWM3MTM3OWQ5ODhyY3JlYXRlZF9hc3NlcnRpb25zg6JjdXJs
+eC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFgg47XQ
+szkGqxI6uGj0od7FsRJYCzATED31ba3AHQtRQ3aiY3VybHgqc2VsZiNqdW1iZj1jMnBhLmFzc2Vy
+dGlvbnMvYzJwYS5hY3Rpb25zLnYyZGhhc2hYIBs+Nd2lBCLqqfbF5DOowJRU11CKNwWdMKsOQVMW
+v1RpomN1cmx4KXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaGFzaC5kYXRhZGhhc2hY
+IBxERaXDmWzLC3P2osZop87kjKDG5Lh5DwFxd1+4SyNFdGNsYWltX2dlbmVyYXRvcl9pbmZvo2Ru
+YW1lb0FudGhyb3BpYyBGaWxlc2d2ZXJzaW9uZTEuMC4wa3NwZWNWZXJzaW9uZTIuNC4wAAAQOGp1
+bWIAAAAoanVtZGMyY3MAEQAQgAAAqgA4m3EDYzJwYS5zaWduYXR1cmUAAAAQCGNib3LShFkCEqIB
+JhghWQIKMIICBjCCAY2gAwIBAgIUQOWgCu7COdC+uIP6BkIFPWdVEwAwCgYIKoZIzj0EAwMwSTEX
+MBUGA1UEChMOQW50aHJvcGljLCBQQkMxLjAsBgNVBAMTJUFudGhyb3BpYyBDb250ZW50IENyZWRl
+bnRpYWxzIFJvb3QgQ0EwHhcNMjYwODA3MTg0MzU2WhcNMjgwODA2MTk0MzU2WjBEMRcwFQYDVQQK
+Ew5BbnRocm9waWMsIFBCQzEpMCcGA1UEAxMgQW50aHJvcGljIENsYXVkZSBDb250ZW50IFNpZ25p
+bmcwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASYegpry1AYBRTVNL1CpTlbROnY3dey+UrsF9C3
+phYrATN3ZHf93Mo8RQN0KOUuOn19P4oWNFWe5n2/She9N7eTo1gwVjAOBgNVHQ8BAf8EBAMCB4Aw
+FQYDVR0lBA4wDAYKKwYBBAGD6F4CATAMBgNVHRMBAf8EAjAAMB8GA1UdIwQYMBaAFM5R4gSBTmRb
+I/jjxM+aPpzB11zCMAoGCCqGSM49BAMDA2cAMGQCMDFzHRSeAXrSy1WOzkbhPZ6Km2wGTmZ/2gK1
+8k8BQGXyqz88Rdrz6CTX9flAnYNVxgIwcF9c3fVhqmJKpi+UhasNUMko69cyX6STPfta3Q8EjyzD
+jzoyrol46FP6VFHhvUcJoWNwYWRZDZ4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+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
+AAAAAElFTkSuQmCC
+__LOGO__
+$MAIL_LOGO_B64 =~ s/\s+//g;
+
+# Card/header palette, matching the fetchconfig-web mail.
+my $MAIL_CANVAS_BG = '#f4f5f7';
+my $MAIL_CARD_BG   = '#ffffff';
+my $MAIL_CARD_BORDER = '#e1e4e8';
+my $MAIL_HEADER_BG = '#1f4e79';
+my $MAIL_FOOTER_FG = '#8a929b';
+
+my $HEADER_BG = '#1f4e79';   # match the mail card header
 my @ROW_BG    = ('#cfcfcf', '#afafaf');
 my $FAILED_FG  = '#ff0000';
 my $CHANGED_FG = '#0000ff';
@@ -122,6 +338,17 @@ sub mask_password {
     (my $masked = $line) =~ s/\bpassword=[^,\s]*/password=***/gi;
 
     $masked;
+}
+
+# Percent-encode a string for use in a URL query value. Report filenames
+# are "report-YYYYMMDD-HHMMSS.html" (letters, digits, "-", "."), so this is
+# belt-and-braces, but correct. Kept dependency-free (no URI::Escape):
+# everything except the RFC 3986 unreserved set is percent-encoded.
+sub _url_encode {
+    my ($s) = @_;
+    return '' unless defined $s;
+    $s =~ s/([^A-Za-z0-9_.~-])/sprintf('%%%02X', ord($1))/ge;
+    return $s;
 }
 
 sub escape_html {
@@ -543,12 +770,34 @@ sub build_device_table_html {
 # Full e-mail body: heading, statistics table, then the per-device
 # table, all for the same set of rows.
 #
+# Test hook: set the change-report lexicals from a test (see t/49). Harmless
+# in production - nothing calls it except the test suite.
+sub _test_set_rep { ($rep_email_diffs,$rep_n_changed,$rep_max_diff,$rep_url,$rep_mask)=([],0,0,$_[1],0); }
+
 sub build_report_html {
     my ($class, $rows_ref, $heading) = @_;
 
-    my $html = '<html><body style="font-family: ' . $FONT_FAMILY . ';">' . "\n";
+    my $ver = escape_html(fetchconfig::Constants::version());
+    my $ff  = $FONT_FAMILY;
 
-    $html .= '<p style="font-family: ' . $FONT_FAMILY . ';">' . escape_html($heading) . "</p>\n" if defined($heading);
+    # Grey canvas -> centered white rounded card with a dark-blue header bar
+    # carrying the inline logo (cid:fcwlogo) and "fetchconfig vX.Y". The
+    # copyright footer is emitted OUTSIDE/below the card (see the end of this
+    # sub). Email-safe: nested tables + inline styles only, no <style> block.
+    my $html = '<!DOCTYPE html><html><head>'
+	. '<meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
+	. '<meta name="viewport" content="width=device-width, initial-scale=1"></head>' . "\n"
+	. qq{<body style="margin:0;padding:0;background:$MAIL_CANVAS_BG;font-family:$ff;color:#222;">\n}
+	. qq{<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:$MAIL_CANVAS_BG;"><tr><td align="center" style="padding:24px 12px;">\n}
+	. qq{<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:820px;background:$MAIL_CARD_BG;border:1px solid $MAIL_CARD_BORDER;border-radius:10px;overflow:hidden;">\n}
+	. qq{<tr><td style="background:$MAIL_HEADER_BG;padding:16px 24px;">}
+	. qq{<table role="presentation" cellpadding="0" cellspacing="0"><tr>}
+	. qq{<td style="vertical-align:middle;"><img src="cid:fcwlogo" alt="" width="40" height="40" style="display:block;border-radius:8px;"></td>}
+	. qq{<td style="vertical-align:middle;padding-left:14px;color:#ffffff;font-size:20px;font-weight:600;">fetchconfig <span style="opacity:0.8;font-weight:400;">v$ver</span></td>}
+	. qq{</tr></table></td></tr>\n}
+	. qq{<tr><td style="padding:24px;font-size:14px;line-height:1.5;">\n};
+
+    $html .= '<p style="font-family: ' . $FONT_FAMILY . ';margin:0 0 16px;">' . escape_html($heading) . "</p>\n" if defined($heading);
 
     $html .= $class->build_stats_table_html($rows_ref);
 
@@ -566,8 +815,15 @@ sub build_report_html {
     if (defined($rep_email_diffs)) {
 	my $ff = $FONT_FAMILY;
 	if (defined($rep_url)) {
-	    $html .= qq{<p style="font-family: $ff; margin-top: 16px;">Full report: <a href="}
-		   . escape_html($rep_url) . qq{">} . escape_html($rep_url) . qq{</a></p>\n};
+	    my $u = escape_html($rep_url);
+	    # A call-to-action button (same style as the fetchconfig-web
+	    # mails), then a plain "copy this link" fallback for clients that
+	    # don't render the button.
+	    $html .= qq{<p style="margin:20px 0 20px;">}
+		   . qq{<a href="$u" style="display:inline-block;background:$MAIL_HEADER_BG;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:6px;font-weight:600;font-family:$ff;">View the full report</a>}
+		   . qq{</p>\n};
+	    $html .= qq{<p style="font-family:$ff;margin:0 0 16px;font-size:13px;color:#57606a;">If the button does not work, copy this link into your browser:<br>}
+		   . qq{<a href="$u" style="color:$MAIL_HEADER_BG;word-break:break-all;">$u</a></p>\n};
 	}
 	if ($rep_max_diff > 0 && @$rep_email_diffs) {
 	    require fetchconfig::Report;
@@ -608,9 +864,15 @@ sub build_report_html {
     $footer = '(c) 2006-2026 Everton da Silva Marques, Rainer Tammer and others'
 	unless defined($footer);
 
-    $html .= '<p style="font-family: ' . $FONT_FAMILY . '; font-size: 10px; color: #888888; margin-top: 16px;">'
-	. escape_html($footer) . ' - Version ' . escape_html(fetchconfig::Constants::version())
-	. "</p>\n";
+    # Close the card body cell and the card table, then put the copyright
+    # OUTSIDE/below the card, centered on the grey canvas (muted, small) -
+    # the same placement as the fetchconfig-web mail.
+    $html .= "</td></tr>\n</table>\n";
+    $html .= qq{<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:820px;"><tr>}
+	. qq{<td style="padding:14px 8px 0;text-align:center;font-family:$ff;font-size:12px;color:$MAIL_FOOTER_FG;">}
+	. escape_html($footer) . ' - Version ' . $ver
+	. qq{</td></tr></table>\n};
+    $html .= "</td></tr></table>\n";
 
     $html .= "</body></html>\n";
 
@@ -623,7 +885,7 @@ sub build_report_html {
 # mail problem must never abort the backup run itself).
 #
 sub send_mail {
-    my ($class, $to_line, $subject, $html_body) = @_;
+    my ($class, $to_line, $subject, $html_body, $text_body) = @_;
 
     my $host = $email_config{smtp};
 
@@ -749,14 +1011,91 @@ sub send_mail {
     }
 
     $smtp->data;
-    $smtp->datasend("From: $from\n");
-    $smtp->datasend("To: " . join(', ', @rcpt_list) . "\n");
-    $smtp->datasend("Subject: $subject\n");
-    $smtp->datasend("MIME-Version: 1.0\n");
-    $smtp->datasend("Content-Type: text/html; charset=UTF-8\n");
-    $smtp->datasend("Content-Transfer-Encoding: 8bit\n");
-    $smtp->datasend("\n");
-    $smtp->datasend($html_body);
+    # MIME requires CRLF line endings in headers and at boundaries. Bare
+    # "\n" breaks multipart parsing in many clients, which is why an inline
+    # cid: image then fails to display. Use "\r\n" throughout, matching the
+    # (known-good) fetchconfig-web mailer.
+    $smtp->datasend("From: $from\r\n");
+    $smtp->datasend("To: " . join(', ', @rcpt_list) . "\r\n");
+    $smtp->datasend("Subject: $subject\r\n");
+    $smtp->datasend("MIME-Version: 1.0\r\n");
+
+    # The HTML references the header logo as src="cid:fcwlogo". Send
+    # multipart/related wrapping a multipart/alternative (a short text/plain
+    # fallback + the HTML), plus the logo as a Content-ID image, so the logo
+    # renders inline. Same structure as fetchconfig-web. Fall back to a
+    # single text/html part only if the logo is somehow empty.
+    if (defined($MAIL_LOGO_B64) && length($MAIL_LOGO_B64)) {
+	# 12 random bytes -> 24 hex chars, matching the fetchconfig-web mailer.
+	my $rand12 = sub {
+	    my $b = '';
+	    if (open(my $rf, '<:raw', '/dev/urandom')) {
+		while (length($b) < 12) { my $g = read($rf, my $c, 12 - length $b); last if !$g; $b .= $c; }
+		close $rf;
+	    }
+	    # fall back to a time/rand mix if /dev/urandom is unavailable
+	    $b .= pack('N', int(rand(0xffffffff))) while length($b) < 12;
+	    return unpack('H*', substr($b, 0, 12));
+	};
+	my $rb = 'fcwR-' . $rand12->();
+	my $ab = 'fcwA-' . $rand12->();
+
+	# Plain-text alternative. Includes the report link, so a text-only
+	# client still gets it.
+	# Prefer the caller's plain-text summary (the stats + device tables);
+	# fall back to a short notice (e.g. for the report-write-failure mail,
+	# which passes no text body). Normalise bare LF to CRLF for the wire.
+	my $text;
+	if (defined($text_body) && length($text_body)) {
+	    ($text = $text_body) =~ s/\r?\n/\r\n/g;
+	}
+	else {
+	    $text = "fetchconfig backup summary.\r\n\r\n"
+	          . "Please view this message in an HTML-capable mail client.\r\n";
+	    if (defined($rep_url)) {
+		$text .= "\r\nFull report:\r\n$rep_url\r\n";
+	    }
+	}
+
+	# multipart/related wrapping a multipart/alternative (text + HTML)
+	# plus the logo as a CID-referenced image. This is copied verbatim
+	# (bar variable names) from the fetchconfig-web mailer, which renders
+	# the inline image correctly - do not "tidy" the spacing: the exact
+	# datasend sequence is what makes clients associate cid:fcwlogo.
+	# Fold the "boundary=" onto a continuation line, exactly as the
+	# received fetchconfig-web mail does. The multipart Content-Type must
+	# fold here: an unfolded long Content-Type with the boundary inline is
+	# what made the inline logo fail to associate in the mail client.
+	$smtp->datasend(qq{Content-Type: multipart/related;\r\n\tboundary="$rb"\r\n});
+	$smtp->datasend("\r\n");
+	# 1) the alternative (text + html)
+	$smtp->datasend("--$rb\r\n");
+	$smtp->datasend(qq{Content-Type: multipart/alternative;\r\n\tboundary="$ab"\r\n\r\n});
+	$smtp->datasend("--$ab\r\n");
+	$smtp->datasend("Content-Type: text/plain; charset=UTF-8\r\n");
+	$smtp->datasend("Content-Transfer-Encoding: 8bit\r\n\r\n");
+	$smtp->datasend($text . "\r\n");
+	$smtp->datasend("--$ab\r\n");
+	$smtp->datasend("Content-Type: text/html; charset=UTF-8\r\n");
+	$smtp->datasend("Content-Transfer-Encoding: 8bit\r\n\r\n");
+	$smtp->datasend($html_body . "\r\n");
+	$smtp->datasend("--$ab--\r\n");
+	# 2) the inline logo (base64 PNG, Content-ID matches cid:fcwlogo)
+	$smtp->datasend("--$rb\r\n");
+	$smtp->datasend("Content-Type: image/png\r\n");
+	$smtp->datasend("Content-Transfer-Encoding: base64\r\n");
+	$smtp->datasend("Content-ID: <fcwlogo>\r\n");
+	$smtp->datasend("Content-Disposition: inline; filename=\"logo.png\"\r\n\r\n");
+	(my $b64 = $MAIL_LOGO_B64) =~ s/\s+//g;
+	$b64 =~ s/(.{1,76})/$1\r\n/g;
+	$smtp->datasend($b64);
+	$smtp->datasend("--$rb--\r\n");
+    } else {
+	$smtp->datasend("Content-Type: text/html; charset=UTF-8\r\n");
+	$smtp->datasend("Content-Transfer-Encoding: 8bit\r\n");
+	$smtp->datasend("\r\n");
+	$smtp->datasend($html_body);
+    }
 
     if (!$smtp->dataend) {
 	$log->error("fetchconfig::Mailer: SMTP server $host:$port did not accept mail body for <" . join('>,<', @rcpt_list) . ">");
@@ -776,6 +1115,61 @@ sub send_mail {
 #
 # --- change report (HTML + e-mail diffs) --------------------------------
 #
+# build_report_text - a plain-text version of the summary for the text/plain
+# MIME part: the statistics block and the per-device table, in the same row
+# order and with the same state/changed values as the HTML. No diffs (the
+# report link covers detail). Columns are auto-sized to the data. $rep_url,
+# when set, is appended as the full-report link.
+sub build_report_text {
+    my ($class, $rows_ref, $heading) = @_;
+
+    my $out = "fetchconfig backup summary - " . iso_date(time) . "\r\n";
+    $out .= "$heading\r\n" if defined($heading) && length($heading);
+
+    # Statistics: state buckets (success/failed/skipped, skipped only if it
+    # occurred) and changed buckets, matching build_stats_table_html.
+    my (%state_count, %changed_count);
+    for my $row (@$rows_ref) {
+	$state_count{row_state($row)}++;
+	$changed_count{defined($row->{changed}) ? $row->{changed} : 'n/a'}++;
+    }
+    $out .= "\r\nStatistics:\r\n";
+    for my $k ('success', 'failed', 'skipped') {
+	next if $k eq 'skipped' && !$state_count{$k};
+	$out .= sprintf("  %-10s %d\r\n", $k, $state_count{$k} || 0);
+    }
+    for my $k ('changed', 'unchanged', 'initial', 'n/a') {
+	next unless $changed_count{$k};
+	$out .= sprintf("  %-10s %d\r\n", $k, $changed_count{$k});
+    }
+
+    # Per-device table, auto-sized columns.
+    my @hdr = ('Device-ID', 'Date', 'Time', 'State', 'Size', 'Changes');
+    my @w   = map { length } @hdr;
+    my @data;
+    for my $row (@$rows_ref) {
+	my @d = (
+	    $row->{dev_id},
+	    iso_date($row->{ts}),
+	    iso_time($row->{ts}),
+	    row_state($row),
+	    defined($row->{size}) ? $row->{size} : '-',
+	    defined($row->{changed}) ? $row->{changed} : 'n/a',
+	);
+	for my $i (0 .. $#d) { $w[$i] = length($d[$i]) if length($d[$i]) > $w[$i]; }
+	push @data, \@d;
+    }
+    my $fmt = join('  ', map { "%-${_}s" } @w) . "\r\n";
+    $out .= "\r\nDevices:\r\n";
+    $out .= sprintf($fmt, @hdr);
+    $out .= sprintf($fmt, @$_) for @data;
+
+    if (defined($rep_url)) {
+	$out .= "\r\nFull report:\r\n$rep_url\r\n";
+    }
+    return $out;
+}
+
 # Map a @results row to a report state string.
 sub _report_state {
     my ($row) = @_;
@@ -963,20 +1357,29 @@ sub send_summaries {
     $rep_email_diffs = $email_diffs;
     $rep_n_changed   = $n_changed;
     $rep_max_diff    = $email_max_diff;
-    $rep_url         = ($report_file && defined($email_config{web_report_url}))
-                       ? $email_config{web_report_url}
-                       : (defined($email_config{web_report_url}) && !$write_report
-                          ? undef : undef);
-    # link only when a report file was actually written AND a url is set
-    $rep_url = (defined($report_file) && defined($email_config{web_report_url}))
-               ? $email_config{web_report_url} : undef;
+    # Build the "Full report" link, but only when a report file was actually
+    # written AND web_report_url is set. web_report_url is the BASE URL of
+    # fetchconfig-web (e.g. https://host/cgi-bin/fetchconfig-web.cgi); we
+    # append the query that points at this specific report
+    # (action=view_report&file=<basename>). Any query string already present
+    # on the configured value is dropped, so a legacy setting that still
+    # carries "?action=report" keeps working.
+    if (defined($report_file) && defined($email_config{web_report_url})) {
+	require File::Basename;
+	(my $base = $email_config{web_report_url}) =~ s/\?.*//;
+	my $rf = _url_encode(File::Basename::basename($report_file));
+	$rep_url = $base . "?action=view_report&file=" . $rf;
+    } else {
+	$rep_url = undef;
+    }
     $rep_mask = $mask;
 
     my @global_rows = sort { $a->{dev_id} cmp $b->{dev_id} } @results;
 
     $class->send_mail($to,
 		       'fetchconfig backup summary - ' . iso_date(time),
-		       $class->build_report_html(\@global_rows, 'Status of all backups'));
+		       $class->build_report_html(\@global_rows, 'Status of all backups'),
+		       $class->build_report_text(\@global_rows, 'Status of all backups'));
 
     # If the report file was requested but could not be written, tell the
     # user with a separate error e-mail (best effort; also logged above).
@@ -1009,7 +1412,8 @@ sub send_summaries {
 
 	$class->send_mail($override_to,
 			   'fetchconfig backup summary (your devices) - ' . iso_date(time),
-			   $class->build_report_html(\@rows, 'Status of your backups'));
+			   $class->build_report_html(\@rows, 'Status of your backups'),
+			   $class->build_report_text(\@rows, 'Status of your backups'));
     }
 }
 

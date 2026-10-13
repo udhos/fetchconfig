@@ -55,7 +55,7 @@
 #email:		report_dir=$REP1
 #email:		write_report=on
 #email:		email_max_diff=10
-#email:		web_report_url=http://acme.com/cgi-bin/fetchconfig/fetchconfig-web.cgi?action=report
+#email:		web_report_url=http://acme.com/cgi-bin/fetchconfig/fetchconfig-web.cgi
 #email:		report_logo=logo.png
 #email:		report_days=90
 #email:		mask_secrets=on

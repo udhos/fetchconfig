@@ -340,6 +340,19 @@ EMAIL NOTIFICATIONS
 	Changes). This is entirely optional: unless an "email:" line
 	is present, no SMTP connection is ever attempted.
 
+	The e-mail is laid out as a white rounded "card" on a grey
+	canvas, with a dark-blue header bar carrying a small logo and
+	"fetchconfig vX.Y", and the copyright footer below the card -
+	matching the look of the fetchconfig-web mails. The header logo
+	is embedded in the message itself (a multipart/related inline
+	image); it is separate from the report_logo= used inside the
+	on-disk HTML report.
+
+	The message is multipart: the HTML part above, and a plain-text
+	part carrying the same statistics and per-device tables rendered
+	as plain text (auto-sized columns, no diffs), so a text-only mail
+	client or a notification preview still shows the result summary.
+
 	1. Add an "email:" line to the DEFAULT OPTIONS SECTION (it is
 	independent of any device model):
 
@@ -442,10 +455,15 @@ CHANGE REPORTS
 	                                the e-mail (device-table order). Default 0
 	                                (no diffs); 0 or unset = no diffs in the
 	                                e-mail.
-	email: web_report_url=URL       base URL fetchconfig-web serves reports
-	                                from; used for the "full report" link in
-	                                the e-mail (only emitted when a report
-	                                was actually written).
+	email: web_report_url=URL       base URL of fetchconfig-web (the CGI
+	                                itself, with NO query string, e.g.
+	                                https://host/cgi-bin/fetchconfig-web.cgi).
+	                                fetchconfig appends
+	                                "?action=view_report&file=<report>"
+	                                automatically to build the "full report"
+	                                link in the e-mail (only emitted when a
+	                                report was actually written). Any query
+	                                string already on the value is ignored.
 	email: report_logo=FILE|none    a logo file IN report_dir, embedded in
 	                                the HTML (self-contained). Recommended
 	                                size 250x50 px. none = no logo.
@@ -876,7 +894,10 @@ RETRIEVING A STORED CONFIG, AND COMMAND-LINE OPTIONS
                         "-e -D -T" reports "would delete: rmdir <path>"
                         for each directory and deletes nothing.
 
-	-D		Requires "-o" or "-e". With "-o": also DELETES every orphaned
+	-D		Requires "-o", "-e", "-z" or "-Z". With "-z"/"-Z": also
+                        DELETES the zero-byte backup FILES found (one plain
+                        unlink per exact path; emptied directories are left
+                        for "-e -D" to prune). With "-o": also DELETES every orphaned
                         device directory "-o" finds, not just lists
                         it. The tab-separated listing (stdout/"-f")
                         is unchanged; what's deleted (or, with "-T",
@@ -902,10 +923,12 @@ RETRIEVING A STORED CONFIG, AND COMMAND-LINE OPTIONS
                         deletion failed, 0 if nothing needed deleting
                         or everything found was deleted successfully.
 
-	-T		Requires "-D". Preview mode for both "-o -D" and
-                        "-e -D": logs the delete commands "-D" would
-                        run (see above) without actually deleting
-                        anything. Exit status with "-T" is the same as
+	-T		Dry run. With "-o -D", "-e -D", "-z -D" or "-Z -D":
+                        logs the delete commands "-D" would run (see
+                        above) without actually deleting anything. Also
+                        valid with "--clean-lock-dir" (shows which lock
+                        files would be removed). Requires "-D" except
+                        with "--clean-lock-dir". Exit status with "-T" is the same as
                         the plain check - "-o": 1 if anything orphaned
                         was found; "-e": 1 if any empty directory was
                         found; 0 otherwise - since "-T" doesn't attempt
@@ -2469,12 +2492,15 @@ BACKUP FILE NAMING
 	YYYYMMDD.HHMMSS rather than by a plain string sort of the whole
 	name, so neither the tz token nor a suffix can disturb the order.
 	Two backups of the same device completed within the same second
-	would get the same name; the second would overwrite the first,
-	and the changes_only comparison would then compare the file with
-	itself. This is an accepted limitation: a real fetch (login,
-	pager, full configuration, logout) essentially never completes
-	in under a second, and scheduled runs are minutes apart. It
-	only shows up in artificial back-to-back test runs.
+	would get the same name. Rather than let the second silently
+	overwrite the first (and then compare the file with itself),
+	the backup is written with O_EXCL: the second run fails to create
+	the file and is reported, leaving the first intact. This
+	essentially never happens for a real fetch (login, pager, full
+	configuration, logout takes well over a second, and scheduled
+	runs are minutes apart); and device locking (lock=on) prevents
+	concurrent same-device runs outright. It only arises in
+	artificial back-to-back test runs.
 
 STATUS FILE
 

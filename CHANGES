@@ -2,6 +2,66 @@
 # fetchconfig.pl - CHANGES
 #
 
+9.69
+====
+
++ Device locking (lock=on, default off): before backing up a device,
+  fetchconfig takes an exclusive flock on a per-device lock file so two
+  runs cannot back up the same device at once (overlapping cron, or a
+  "Backup Now" over a cron run). On contention it retries lock_retry times
+  (default 5) at lock_retry_time-second intervals (default 10), then
+  records the device as "skipped" - the existing per-device backup state -
+  and continues; the process exit code is NOT changed by a lock-skip. The
+  lock is released automatically when the run ends (even on crash) and the
+  lock file is never unlinked. Options (per-device and default:):
+  lock=on|off, lock_dir=$TAG|/path, lock_retry=N (>=0; 0 = skip on first
+  contention), lock_retry_time=N (>=1 seconds). The lock directory is
+  lock_dir=, else "<dir of fetchconfig.pl>/.lock", created 0700 if absent;
+  if it cannot be created or used, fetchconfig exits 10 after the run.
+  The lock key is sha256(dev_id). A new "directory: lock $TAG /path"
+  allowlist type restricts lock_dir= when an allowlist is in use. Lock
+  files are opened O_NOFOLLOW and created 0600. Use a LOCAL filesystem -
+  flock over NFS (AIX) is unreliable.
+
++ A lock-skipped device is now reported as "skipped" in the e-mail
+  summary (its own statistics row and State column) instead of "failed",
+  and its per-device status file is written correctly - the skip path now
+  records the repository and timing like the normal paths did. This also
+  covers the system-directory and allowlist skips.
+
++ New --clean-lock-dir [N]: remove lock files older than N days (default
+  30, minimum 1) from the lock directory, then exit. A lock file is only
+  removed if it is not currently held (flock is tried first), so an in-use
+  lock is never deleted. With -T it is a dry run: it shows what would be
+  removed without removing anything.
+
++ A backup is written with O_EXCL: if a backup with the exact same name
+  already exists - two runs completing within the same one-second
+  filename resolution - fetchconfig refuses rather than silently
+  truncating the earlier run's completed file and then comparing it with
+  itself. (Device locking, lock=on, prevents the collision entirely; this
+  is the safety net for runs that do not use it.)
+
++ keep= is validated when the device table is loaded: a value that is not
+  a positive integer (a typo, or an inherited default:) is rejected with a
+  clear error instead of being coerced to 0 and deleting every backup for
+  the device on the next run.
+
++ timeout, fetch_timeout, banner_timeout and prompt_settle_ms are
+  validated: a non-positive-integer value is ignored (with a warning) so
+  the documented default applies, rather than coercing to 0 - where
+  Net::Telnet's Timeout => 0 would block forever.
+
++ Fix a permission regression from 9.68: backup files and their directories
+  were being forced to owner-only (0600/0700), which broke an unprivileged
+  reader - fetchconfig-web runs fetchconfig as "nobody" for -l (list), -g
+  (read content) and -g -m (diff), and could no longer traverse the
+  directories or read the files. Repository permissions again follow the
+  process umask, as before 9.68 (a setgid repository root still propagates,
+  e.g. drwxr-sr-x). Only the parallel-fetch worker scratch files, which
+  live in a private temp dir and are never read that way, stay owner-only.
+  Restrict the repository directory yourself if the host is shared.
+
 9.68
 ====
 
@@ -34,9 +94,12 @@
   key= and token= are masked as well as pass=, enable= and community=,
   and a quoted value (commas/spaces included) is masked whole.
 
-+ Backup files are created mode 0600 and repository directories 0700
-  regardless of the process umask; parallel-fetch worker files are
-  likewise owner-only.
++ Parallel-fetch (-P) worker scratch files (in the private temp dir) are
+  created owner-only. Repository backup files and directories continue to
+  follow the process umask - an unprivileged reader such as fetchconfig-web
+  (running as "nobody" for -l/-g) must be able to read them, so a hardcoded
+  owner-only mode is wrong here; restrict the repository directory yourself
+  if the host is shared.
 
 + comware-ssh, hirschmann, procurve and procurve-ssh now quote the learned
   prompt with regexp_quote_keep_bytes() like the other models, so a

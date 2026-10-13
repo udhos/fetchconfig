@@ -478,7 +478,7 @@ sub build_stats_table_html {
     my %changed_count;
 
     foreach my $row (@$rows_ref) {
-	$state_count{$row->{success} ? 'success' : 'failed'}++;
+	$state_count{row_state($row)}++;
 	$changed_count{defined($row->{changed}) ? $row->{changed} : 'n/a'}++;
     }
 
@@ -487,7 +487,8 @@ sub build_stats_table_html {
 
     my $row_index = 0;
 
-    foreach my $key ('success', 'failed') {
+    foreach my $key ('success', 'failed', 'skipped') {
+	next if ($key eq 'skipped' && !$state_count{$key});   # only show skipped if it occurred
 	$html .= body_row_html($row_index++, red_if_failed($key), $state_count{$key} || 0);
     }
 
@@ -502,6 +503,16 @@ sub build_stats_table_html {
     $html;
 }
 
+# row_state - the effective State of a result row for the summary mail:
+# the explicit backup_state if the caller set one ("skipped"), else derived
+# from the success boolean. A lock-skip (or a system-dir/allowlist skip) is
+# recorded with state => 'skipped' and must show as Skipped, not failed.
+sub row_state {
+    my ($row) = @_;
+    return $row->{state} if defined($row->{state}) && length($row->{state});
+    return $row->{success} ? 'success' : 'failed';
+}
+
 sub build_device_table_html {
     my ($class, $rows_ref) = @_;
 
@@ -511,7 +522,7 @@ sub build_device_table_html {
     my $row_index = 0;
 
     foreach my $row (@$rows_ref) {
-	my $state = $row->{success} ? 'success' : 'failed';
+	my $state = row_state($row);
 	my $size  = defined($row->{size}) ? $row->{size} : '-';
 
 	$html .= body_row_html($row_index++,
@@ -768,6 +779,7 @@ sub send_mail {
 # Map a @results row to a report state string.
 sub _report_state {
     my ($row) = @_;
+    return 'Skipped' if defined($row->{state}) && $row->{state} eq 'skipped';
     return 'Failed' unless $row->{success};
     my $ch = $row->{changed};
     # The run records 'initial' for a first-ever backup (no previous config),

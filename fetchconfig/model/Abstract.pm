@@ -27,6 +27,8 @@ use File::Compare;
 use File::Path qw(make_path);
 use POSIX qw(strftime);
 use Text::ParseWords ();
+use Fcntl qw(:DEFAULT :flock);
+use Digest::SHA qw(sha256_hex);
 
 ####################################
 # Implement model::Abstract - Begin
@@ -725,6 +727,7 @@ my %DIR_VALUED_OPTION = (
     repository   => 'repository',
     template_dir => 'template',
     on_fetch_run => 'fetch_run',
+    lock_dir     => 'lock',
 );
 
 sub _expand_dir_alias {
@@ -764,16 +767,32 @@ sub dev_option_raw {
 # the allowlist here - an off-list value is returned unchanged (a read
 # command then simply looks in that path). The allowlist is ENFORCED at fetch
 # time in Detector::fetch_device, on the raw effective value (dev_option_raw).
+# Timeout-family options must be positive integers; a non-numeric value
+# would coerce to 0, and Net::Telnet's Timeout => 0 blocks forever. Any
+# such value is treated as "unset" so the documented default applies (with
+# a warning), rather than silently becoming an infinite wait.
+my %POSINT_OPT = map { $_ => 1 } qw(timeout fetch_timeout banner_timeout prompt_settle_ms);
+
 sub dev_option {
     my ($self, $dev_opt_tab, $opt_name) = @_;
 
     my $value = $dev_opt_tab->{$opt_name};
+
+    if (defined($value) && $POSINT_OPT{$opt_name} && $value !~ /^[1-9]\d*$/) {
+	$self->log_info("warning: $opt_name=$value is not a positive integer; ignoring it");
+	$value = undef;
+    }
 
     if (defined($value)) {
 	return $self->_expand_dir_alias($opt_name, $value);
     }
 
     $value = $self->{default_options}->{$opt_name};
+
+    if (defined($value) && $POSINT_OPT{$opt_name} && $value !~ /^[1-9]\d*$/) {
+	$self->log_info("warning: default $opt_name=$value is not a positive integer; ignoring it");
+	$value = undef;
+    }
 
     if (defined($value)) {
 	return $self->_expand_dir_alias($opt_name, $value);
@@ -789,6 +808,31 @@ sub dev_option {
     }
 
     undef;
+}
+
+#
+# dev_option_posint - read a numeric option that must be a non-negative (or
+# positive) integer, falling back to a default with a warning if it is
+# missing, non-numeric, or out of range. Perl would otherwise coerce a
+# value like "abc" or "" to 0 and (for a timeout) block forever, or (for
+# keep) delete every backup. $allow_zero distinguishes options where 0 is
+# meaningful (lock_retry=0 = skip on first contention) from those where it
+# is not (timeout=0 = wait forever). Used for timeout/fetch_timeout/
+# banner_timeout/prompt_settle_ms and the lock_retry* options.
+sub dev_option_posint {
+    my ($self, $dev_opt_tab, $opt_name, $default, $allow_zero) = @_;
+
+    my $value = $self->dev_option($dev_opt_tab, $opt_name);
+    return $default unless defined($value) && length($value);
+
+    my $re = $allow_zero ? qr/^\d+$/ : qr/^[1-9]\d*$/;
+    if ($value !~ $re) {
+	$self->log_info("warning: $opt_name=$value is not a "
+	    . ($allow_zero ? "non-negative" : "positive")
+	    . " integer; using the default ($default)");
+	return $default;
+    }
+    return $value + 0;
 }
 
 #
@@ -864,9 +908,13 @@ sub dump_config {
     if (! -d $dir_path) {
 	my $mkdir_err;
 
-	# repository directories are owner-only: backups hold password/secret
-	# hashes and community strings
-	make_path($dir_path, { mode => 0700, error => \$mkdir_err });
+	# Directory permissions follow the process umask (and inherit a
+	# setgid repository root), as they always have. An unprivileged
+	# reader - e.g. fetchconfig-web running as "nobody" for -l/-g - must
+	# be able to traverse these directories, so the operator's umask, not
+	# a hardcoded mode, is the right control. Restrict the repository
+	# directory yourself if the host is shared.
+	make_path($dir_path, { error => \$mkdir_err });
 
 	if (@$mkdir_err) {
 	    my $detail = join('; ', map {
@@ -922,12 +970,30 @@ sub dump_config {
 
     local *OUT;
 
-    # create the backup file owner-only (0600) whatever the process umask
-    my $save_umask = umask(077);
-    my $open_ok = open(OUT, '>', $file_path);
-    umask($save_umask);
+    # The backup file is created at the process umask. fetchconfig-web
+    # reads backups as an unprivileged user (-g/-m as "nobody"), so the
+    # file must stay readable by that user; forcing owner-only here would
+    # break content retrieval and diffing. If the host is shared and
+    # backups must not be world-readable, set the umask (or restrict the
+    # repository directory) rather than relying on a hardcoded mode.
+    # Create the file exclusively (O_EXCL): if a backup with this exact name
+    # already exists - two runs completing within the same one-second
+    # filename resolution (see the note above) - refuse rather than silently
+    # truncate the earlier run's completed file and then compare it with
+    # itself. The mode is 0666 so the process umask still decides the final
+    # permissions (an unprivileged reader must be able to read backups; see
+    # the revert of the 9.68 owner-only change). Device locking (lock=on)
+    # prevents the collision in the first place; this is the safety net for
+    # runs that do not use it.
+    my $open_ok = sysopen(OUT, $file_path, O_WRONLY | O_CREAT | O_EXCL, 0666);
     if (!$open_ok) {
-	$self->log_error("could not write dump file: $file_path: $!");
+	if ($!{EEXIST}) {
+	    $self->log_error("dev=$dev_id: a backup named $file already exists"
+		. " - another run wrote it in the same second; not overwriting"
+		. " (enable lock=on to serialise concurrent runs)");
+	} else {
+	    $self->log_error("could not write dump file: $file_path: $!");
+	}
 	return undef;
     }
 
@@ -1182,6 +1248,86 @@ sub config_discard {
     $self->prune_dir_tree(3, $config_dir);
 }
 
+# ---------------------------------------------------------------------------
+# Device locking (flock). Prevents two runs from backing up the same device
+# at once (overlapping cron, or fetchconfig-web "Backup Now" over a cron
+# run). The lock is a per-device file in the lock directory; flock on it
+# serialises holders across the forked -P workers and across separate
+# invocations, and releases automatically when the holding process exits
+# (even on crash) - so the lock file is NEVER unlinked on release.
+#
+# Lock key: sha256_hex(dev_id). dev_id is the stable identity fetchconfig
+# already uses (directory name, status key); hashing it avoids unsafe
+# characters in the filename and needs no name resolution.
+
+# Resolve the lock directory to use. Precedence: the device/default
+# lock_dir= option (a $TAG is expanded like any directory option), else the
+# default "<dir-of-fetchconfig.pl>/.lock". The directory is created 0700 if
+# absent. Returns the path on success, or undef with an error logged if it
+# cannot be created or is not a usable owner-writable directory - the caller
+# turns that into the fatal exit (rc 10). A system directory is refused.
+sub lock_dir_resolve {
+    my ($self, $dev_opt_tab, $default_dir) = @_;
+
+    my $dir = $self->dev_option($dev_opt_tab, 'lock_dir');
+    $dir = $default_dir unless defined($dir) && length($dir);
+
+    # never a system directory, even via lock_dir=
+    if (my $why = fetchconfig::model::Detector::_system_dir_path($dir)) {
+	$self->log_error("lock_dir $dir is $why - refusing to use it as a lock directory");
+	return undef;
+    }
+
+    if (! -d $dir) {
+	my $old = umask(077);
+	my $ok  = mkdir($dir, 0700);
+	umask($old);
+	if (!$ok && ! -d $dir) {           # another run may have created it
+	    $self->log_error("could not create lock directory $dir: $!");
+	    return undef;
+	}
+    }
+    if (! -d $dir || ! -w $dir) {
+	$self->log_error("lock directory $dir is not a writable directory");
+	return undef;
+    }
+    return $dir;
+}
+
+sub device_lock_path {
+    my ($self, $lock_dir, $dev_id) = @_;
+    return "$lock_dir/" . sha256_hex($dev_id) . ".lock";
+}
+
+# Try to acquire the device lock. Returns the open, LOCKED filehandle on
+# success (keep it in scope for the duration of the fetch; closing it
+# releases the lock). Returns the string 'locked' if another run holds it
+# after all retries (caller records the device as skipped), or undef on a
+# real error opening the lock file. retry/retry_time govern the wait:
+# retry=0 means try once and give up immediately.
+sub acquire_device_lock {
+    my ($self, $lock_path, $dev_id, $retry, $retry_time) = @_;
+
+    my $fh;
+    # O_NOFOLLOW: never follow a symlink planted in the lock directory.
+    if (!sysopen($fh, $lock_path, O_RDWR | O_CREAT | O_NOFOLLOW, 0600)) {
+	$self->log_error("dev=$dev_id: could not open lock file $lock_path: $!");
+	return undef;
+    }
+
+    for (my $attempt = 0; ; ++$attempt) {
+	if (flock($fh, LOCK_EX | LOCK_NB)) {
+	    return $fh;                       # got it - caller holds $fh
+	}
+	last if $attempt >= $retry;           # retry=0 -> one try only
+	$self->log_debug("dev=$dev_id: locked by another run, retry "
+	    . ($attempt + 1) . "/$retry in ${retry_time}s");
+	sleep($retry_time);
+    }
+    close($fh);                               # we never took the lock
+    return 'locked';
+}
+
 sub purge_ancient {
     my ($self, $dev_id, $dev_opt_tab) = @_;
 
@@ -1210,7 +1356,9 @@ sub purge_ancient {
 
     my @sorted = sort @files;
 
-    for (my $i = 0; $i < $expired; ++$i) {
+    # $i < @sorted guards against any value that slipped past validation:
+    # never index past the array (an over-large $expired would give undef).
+    for (my $i = 0; $i < $expired && $i < @sorted; ++$i) {
 	my $file = $sorted[$i];
 	my $dir = $dir_tab{$file};
 

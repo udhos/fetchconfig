@@ -17,6 +17,7 @@ use strict;
 use warnings;
 use File::Path;
 use File::Basename;
+use Fcntl qw(:DEFAULT :flock);
 use fetchconfig::model::Detector;
 use fetchconfig::model::Abstract;
 
@@ -723,6 +724,75 @@ sub configured_repositories {
 # True if $dir contains no entries other than "." and "..". Unreadable
 # directories count as NOT empty (we never delete what we cannot see).
 #
+# clean_lock_dir($days, $lock_dir) - remove "<hash>.lock" files older than
+# $days days (by mtime) from $lock_dir, but ONLY if the lock is not
+# currently held: we flock(LOCK_EX|LOCK_NB) each candidate first and skip
+# (never unlink) any live lock, closing the unlink/flock race. $days is
+# clamped to a minimum of 1. Returns an exit code: 0 on success, 2 on a
+# bad argument or an unusable lock directory. Standalone mode (--clean-lock-dir).
+sub clean_lock_dir {
+    my ($days, $lock_dir, $test) = @_;
+
+    if (!defined($days) || $days !~ /^\d+$/ || $days < 1) {
+	$log->error("--clean-lock-dir: N must be a positive integer (days); minimum 1");
+	return 2;
+    }
+    if (!defined($lock_dir) || !length($lock_dir)) {
+	$log->error("--clean-lock-dir: no lock directory to clean");
+	return 2;
+    }
+    if (! -d $lock_dir) {
+	$log->info("--clean-lock-dir: lock directory $lock_dir does not exist - nothing to clean");
+	return 0;
+    }
+
+    my $cutoff = time - $days * 86400;
+    my $dh;
+    if (!opendir($dh, $lock_dir)) {
+	$log->error("--clean-lock-dir: cannot read $lock_dir: $!");
+	return 2;
+    }
+    my @entries = grep { /^[0-9a-f]{64}\.lock$/ } readdir($dh);
+    closedir($dh);
+
+    my ($removed, $held, $kept) = (0, 0, 0);
+    for my $name (@entries) {
+	my $path = "$lock_dir/$name";
+	my $mtime = (stat($path))[9];
+	next unless defined $mtime;
+	if ($mtime >= $cutoff) { ++$kept; next; }          # not old enough
+
+	# Only remove if no one holds it. Open without following a symlink,
+	# try a non-blocking exclusive lock; if it is held, leave it alone.
+	my $fh;
+	if (!sysopen($fh, $path, O_RDWR | O_NOFOLLOW)) {
+	    $log->error("--clean-lock-dir: cannot open $path: $!");
+	    next;
+	}
+	if (!flock($fh, LOCK_EX | LOCK_NB)) {
+	    ++$held;
+	    $log->info("--clean-lock-dir: $name is in use - keeping");
+	    close($fh);
+	    next;
+	}
+	# we hold the lock now (so it is free and old). With -T, only report
+	# what would be removed; otherwise unlink, then release.
+	if ($test) {
+	    ++$removed;
+	    $log->info("--clean-lock-dir: would delete $name (older than $days day(s))");
+	} elsif (unlink($path)) {
+	    ++$removed;
+	    $log->info("--clean-lock-dir: removed $name (older than $days day(s))");
+	} else {
+	    $log->error("--clean-lock-dir: could not remove $path: $!");
+	}
+	close($fh);
+    }
+    $log->info("--clean-lock-dir: " . ($test ? "$removed would be removed" : "$removed removed")
+	. ", $held in use, $kept newer than $days day(s) in $lock_dir");
+    return 0;
+}
+
 sub dir_is_empty {
     my ($dir) = @_;
     opendir(my $dh, $dir) or return 0;

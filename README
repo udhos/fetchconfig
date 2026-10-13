@@ -1038,6 +1038,21 @@ RETRIEVING A STORED CONFIG, AND COMMAND-LINE OPTIONS
                         invalid (bad line, type, duplicate tag, illegal path
                         content, or a missing directory). Honours "-f".
 
+	--clean-lock-dir [N]
+                        Removes device lock files older than N days (with -T,
+                        only shows what would be removed) (by
+                        mtime) from the lock directory, then exits. N
+                        defaults to 30 and has a minimum of 1. A lock file
+                        is removed ONLY if it is not currently held - the
+                        cleaner flock()s each candidate first and keeps any
+                        live lock - so an in-use lock is never deleted. The
+                        lock directory is "<dir of fetchconfig.pl>/.lock" by
+                        default; pass "-devices=" if a custom lock_dir= (or
+                        "directory: lock") applies, so the right directory
+                        is cleaned. Exits 0 on success, 2 on a bad N or an
+                        unusable lock directory. See "lock=" under OPTIONS
+                        and the note on local filesystems.
+
 	--check-template PATH
                         Structurally checks the generic-model template at
                         PATH (grammar plus the load-time validator: self-
@@ -1412,6 +1427,36 @@ DEVICE OPTIONS
 			section).
 	comment		Optional (see the cisco-ios/cisco-cat section).
 	site		Optional (see the cisco-ios/cisco-cat section).
+
+	The following device-locking options are available for all
+	models, per-device and via "default:":
+
+	lock		Optional. "lock=on" takes an exclusive lock on the
+			device before backing it up, so two runs cannot
+			back up the same device at once (overlapping cron,
+			or a web "Backup Now" over a cron run). Values are
+			"on" or "off"; default "off" (no locking). The lock is a flock on a
+			per-device file; it is released when the run ends
+			(even on crash) and the file is never deleted.
+			On contention the device is retried (see
+			lock_retry/lock_retry_time) and then recorded as
+			"skipped"; the process exit code is not changed.
+
+	lock_dir	Optional. Directory for the lock files, a
+			"directory: lock" $TAG or an absolute path.
+			Default "<directory of fetchconfig.pl>/.lock",
+			created mode 0700 if absent. If it cannot be
+			created or used, fetchconfig exits 10 after the
+			run. Must be a LOCAL filesystem - flock over NFS
+			(AIX) is unreliable. A system directory is refused.
+
+	lock_retry	Optional. How many times to retry a locked device
+			before skipping it. Integer >= 0; default 5.
+			"lock_retry=0" means skip on the first contention.
+
+	lock_retry_time	Optional. Seconds to wait between lock retries.
+			Integer >= 1; default 10. (The maximum wait before
+			skipping is lock_retry * lock_retry_time seconds.)
 
 	The following are set only in the template file, not on the
 	device line: capture_from (regex marking where the saved config
@@ -2372,11 +2417,13 @@ SECURITY NOTES
 	into that trace. Starting with 9.54 these files are created
 	with mode 0600 (owner read/write only) regardless of the process
 	umask. Still: only enable debug=on while troubleshooting, and
-	delete the .debug file afterwards. Since 9.68 backup files are
-	created 0600 and repository directories 0700 regardless of the
-	process umask (parallel-fetch worker files likewise owner-only);
-	the .status file still uses the process umask. The backups
-	do contain configuration secrets - and not always hashed: SNMP
+	delete the .debug file afterwards. Backup files, their directories
+	and the .status file are created with the process umask - an
+	unprivileged reader such as fetchconfig-web (running as "nobody" for
+	-l/-g) must be able to read them, so they are deliberately NOT forced
+	owner-only. (Parallel-fetch worker scratch files, which live in a
+	private temp dir and are never read that way, are owner-only.) The
+	backups do contain configuration secrets - and not always hashed: SNMP
 	communities and some routing/VPN keys (BGP, OSPF, RADIUS/TACACS,
 	IPsec pre-shared keys) are stored in cleartext, and Cisco "type
 	7" passwords are trivially reversible. Restrict the repository

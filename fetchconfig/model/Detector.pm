@@ -62,6 +62,8 @@ use fetchconfig::model::MediantSBC;
 use fetchconfig::model::ProCurveSNMP;
 
 my $logger;
+my $default_lock_dir;       # <dir of fetchconfig.pl>/.lock, set by init()
+my $lock_dir_failed = 0;    # set if a device's lock dir could not be used (-> driver exits 10)
 my %model_table;
 my %dev_id_table;
 my @dev_order;          # dev_ids in device-table order (for the sequential fetch phase)
@@ -210,6 +212,22 @@ sub parse {
 			$file, $num, $line,
 			$dev_opt_tab,
 			@row);
+
+    # keep= becomes "how many backups to retain" and is used arithmetically
+    # in purge_ancient (@files - keep). A non-numeric value coerces to 0 and
+    # a negative one over-counts, either of which would DELETE EVERY backup.
+    # Reject it at load time - the device-specific value, or the inherited
+    # default: value - so a typo fails the run instead of destroying history
+    # on the next pass. ("keep" unset is caught later as its own error.)
+    {
+	my $keep = $dev_opt_tab->{keep};
+	$keep = $mod->{default_options}->{keep} unless defined $keep;
+	if (defined($keep) && $keep !~ /^[1-9]\d*$/) {
+	    $logger->error("invalid keep=$keep for dev_id=$dev_id at file=$file line=$num"
+		. " (must be a positive integer): " . mask_secrets($line));
+	    return;
+	}
+    }
 
     # Register the device. Since 9.58 parse() never fetches: every
     # device line is recorded here (model, host, merged options, and
@@ -380,6 +398,62 @@ sub fetch_device {
 	    $logger->info("dev=$dev_id host=$dev_host: config retrieval took $fetch_elap secs");
 	    return;
 	}
+    }
+
+    # Device locking (lock=yes). Acquire an exclusive flock on a per-device
+    # lock file before fetching; $dev_lock holds the locked filehandle for
+    # the rest of this sub and releases it when the sub returns. On
+    # contention after the configured retries the device is recorded as
+    # "skipped" (the existing backup state) and the process exit code is
+    # left unchanged - a lock-skip is a per-device outcome, not a run
+    # failure. If the lock directory cannot be created/used, that is fatal:
+    # flag it so the driver exits 10 after the run.
+    my $dev_lock;
+    if ($mod->dev_option_flag($dev_opt_tab, 'lock', 0)) {
+	# Record a "skipped" result with the SAME field set the normal
+	# success/failure paths use - in particular repository=, so the
+	# per-device status file can be written, and to=/elapsed= so the
+	# mail routing and timing are right. (Omitting repository was the
+	# "cannot write status file: no repository" error.)
+	my $record_skip = sub {
+	    fetchconfig::Mailer->record_result(
+		dev_id       => $dev_id,
+		dev_host     => $dev_host,
+		ts           => $fetch_ts_start,
+		elapsed      => time - $fetch_ts_start,
+		repository   => $mod->dev_option($dev_opt_tab, "repository"),
+		changes_only => $dev_changes_only,
+		state        => 'skipped',
+		size         => undef,
+		changed      => 'n/a',
+		to           => $dev_email_to,
+	    );
+	};
+
+	my $lock_dir = $mod->lock_dir_resolve($dev_opt_tab, $default_lock_dir);
+	if (!defined($lock_dir)) {
+	    $lock_dir_failed = 1;
+	    $logger->error("dev=$dev_id host=$dev_host: lock requested but the lock directory is unusable - skipping");
+	    $record_skip->();
+	    return;
+	}
+	my $lock_path  = $mod->device_lock_path($lock_dir, $dev_id);
+	my $lock_retry = $mod->dev_option_posint($dev_opt_tab, 'lock_retry', 5, 1);        # 0 allowed
+	my $lock_wait  = $mod->dev_option_posint($dev_opt_tab, 'lock_retry_time', 10, 0);  # >=1
+	my $got = $mod->acquire_device_lock($lock_path, $dev_id, $lock_retry, $lock_wait);
+	if (!defined($got)) {
+	    # could not even open the lock file - treat as lock-dir failure
+	    $lock_dir_failed = 1;
+	    $record_skip->();
+	    return;
+	}
+	if ($got eq 'locked') {
+	    $logger->info("dev=$dev_id host=$dev_host: skipped - locked by another run"
+		. " (lock_retry=$lock_retry lock_retry_time=${lock_wait}s)");
+	    $record_skip->();
+	    return;
+	}
+	$dev_lock = $got;   # hold the lock for the duration of the fetch
     }
 
     my ($config_dir, $config_file) = $mod->fetch($file, $num, $line, $dev_id, $dev_host, $dev_opt_tab);
@@ -634,8 +708,8 @@ sub parse_directory_line {
         my $m = "unrecognized directory at file=$file line=$num: directory: $body"; $logger->error($m); push @dir_allow_errors, $m; return;
     }
     my ($type, $tag, $path) = ($1, $2, $3);
-    if ($type ne 'repository' && $type ne 'template' && $type ne 'fetch_run' && $type ne 'report') {
-        my $m = "directory: type must be 'repository', 'template', 'fetch_run' or 'report' (got '$type') at file=$file line=$num"; $logger->error($m); push @dir_allow_errors, $m; return;
+    if ($type ne 'repository' && $type ne 'template' && $type ne 'fetch_run' && $type ne 'report' && $type ne 'lock') {
+        my $m = "directory: type must be 'repository', 'template', 'fetch_run', 'report' or 'lock' (got '$type') at file=$file line=$num"; $logger->error($m); push @dir_allow_errors, $m; return;
     }
     if ($tag !~ /^\$[A-Za-z_][A-Za-z0-9_]*$/) {
         my $m = "directory: tag must look like \$NAME (got '$tag') at file=$file line=$num"; $logger->error($m); push @dir_allow_errors, $m; return;
@@ -800,6 +874,10 @@ sub device_info {
 # currently loaded -devices=/-line= sources). Backs the -Z
 # (check zero-byte backups for all devices) feature.
 #
+# True if any device's lock directory could not be created/used; the
+# driver turns this into exit 10.
+sub lock_dir_failed { return $lock_dir_failed; }
+
 sub device_ids {
     my ($class) = @_;
 
@@ -832,9 +910,11 @@ sub model_by_label {
 }
 
 sub init {
-    my ($class, $log) = @_;
+    my ($class, $log, $lock_dir) = @_;
 
     $logger = $log;
+    $default_lock_dir = $lock_dir;
+    $lock_dir_failed = 0;
 
     # Reset the directory: allowlist state, so a second load in one process
     # (a daemon, a test) does not inherit the previous table's allowlist.

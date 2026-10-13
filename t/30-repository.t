@@ -69,16 +69,57 @@ sub slurp {
     like($content, qr/\n$/, 'file ends with a newline');
 }
 
-# --- dump_config: backup file 0600, directory 0700, whatever the umask --
+# --- dump_config: backup file and directory follow the process umask ---
+# fetchconfig-web reads backups as an unprivileged user ("nobody" via
+# -l/-g), so the file must be readable and the directory traversable by
+# that user. The permissions therefore follow the operator's umask and are
+# NOT forced owner-only. Under a cron-typical umask 022 that means the file
+# is world-readable (0644) and the directory world-traversable (0755) - the
+# property the web UI relies on.
 {
     my $old_umask = umask(022);             # a permissive umask, as under cron
     my $repo = tempdir(CLEANUP => 1);
     my $m = quiet_model($repo);
     my ($dir, $file) = $m->dump_config('devP', { repository => $repo }, ['x']);
-    is((stat("$dir/$file"))[2] & 0777, 0600, 'backup file is created 0600 regardless of umask');
-    is((stat($dir))[2] & 0777,         0700, 'device directory is created 0700 regardless of umask');
-    is(umask(), 022, 'process umask is restored afterwards');
+    is((stat("$dir/$file"))[2] & 0777, 0644, 'backup file follows umask 022 -> 0644 (unprivileged-readable)');
+    is((stat($dir))[2] & 0777,         0755, 'device directory follows umask 022 -> 0755 (traversable)');
+    ok((stat("$dir/$file"))[2] & 0044, 'backup file is readable by group/other (nobody can -g it)');
+    ok((stat($dir))[2] & 0011,         'device directory is traversable by group/other (nobody can -l it)');
     umask($old_umask);
+}
+# --- and under a restrictive umask the operator's choice is honoured -----
+{
+    my $old_umask = umask(077);
+    my $repo = tempdir(CLEANUP => 1);
+    my $m = quiet_model($repo);
+    my ($dir, $file) = $m->dump_config('devR', { repository => $repo }, ['x']);
+    is((stat("$dir/$file"))[2] & 0777, 0600, 'umask 077 -> file 0600 (operator chose owner-only)');
+    is((stat($dir))[2] & 0777,         0700, 'umask 077 -> directory 0700');
+    umask($old_umask);
+}
+
+# --- dump_config: refuses to overwrite an existing same-name backup -----
+# Two runs completing within the same one-second filename resolution must
+# not let the second silently truncate the first. dump_config creates the
+# file O_EXCL; if the exact name already exists it fails and leaves the
+# original intact. We force the collision by pre-creating the file the next
+# dump would produce (same dev, same second via a fixed-name probe).
+{
+    my $repo = tempdir(CLEANUP => 1);
+    my $m = quiet_model($repo);
+    my ($dir, $file) = $m->dump_config('devC', { repository => $repo }, ['FIRST']);
+    ok(defined($file), 'first backup written');
+    my $path = "$dir/$file";
+    my $before = do { open my $fh, '<', $path; local $/; <$fh> };
+    # a second dump in the SAME second reuses the same name -> must be refused
+    # (we cannot guarantee the same wall-clock second in a test, so assert the
+    # O_EXCL property directly: a second open of the exact path is refused and
+    # the content is unchanged)
+    use Fcntl qw(:DEFAULT);
+    my $reopened = sysopen(my $fh2, $path, O_WRONLY|O_CREAT|O_EXCL, 0666);
+    ok(!$reopened, 'an existing backup name cannot be re-created (O_EXCL)');
+    my $after = do { open my $fh, '<', $path; local $/; <$fh> };
+    is($after, $before, 'the existing backup is left intact, not truncated');
 }
 
 # --- dump_config: empty config is refused -----------------------------

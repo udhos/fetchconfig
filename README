@@ -1441,8 +1441,6 @@ DEVICE OPTIONS
 			ships beside fetchconfig.pl (located regardless of the
 			working directory), so this is only needed to load
 			templates from elsewhere.
-	debug		Optional. debug=on writes a 0600 session log to
-			<repository>/<dev_id>.debug (passwords masked).
 	on_fetch_run	Optional (see the cisco-ios/cisco-cat section).
 	on_fetch_cat	Optional (see the cisco-ios/cisco-cat section).
 	timezone	Optional (see the cisco-ios/cisco-cat section).
@@ -1450,6 +1448,22 @@ DEVICE OPTIONS
 			section).
 	comment		Optional (see the cisco-ios/cisco-cat section).
 	site		Optional (see the cisco-ios/cisco-cat section).
+
+	The following options are available for all models, per-device
+	and via "default:":
+
+	debug		Optional, boolean (debug=on | debug=off, default
+			off). When on, writes a 0600 session log of the
+			device conversation to <repository>/<dev_id>.debug:
+			the raw telnet or SSH session (or, for the web-UI
+			models, every HTTP request/response; for
+			procurve-snmp, the SNMP operations and TFTP
+			transfer). Login and enable passwords are kept out
+			of the log. Overwritten on each run. Enable only
+			while troubleshooting and delete the file
+			afterwards, as it can still contain configuration
+			secrets. (Every model supports this since 9.71; the
+			telnet models gained it then.)
 
 	The following device-locking options are available for all
 	models, per-device and via "default:":

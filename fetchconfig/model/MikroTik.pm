@@ -251,6 +251,10 @@ sub do_fetch {
 
     $self->log_debug("connected");
 
+    # debug=on: capture the whole telnet session to $dev_id.debug
+    # (passwords are suspended from the log by print_secret()).
+    my $debug_fh = $self->open_telnet_debug_file($t, $dev_opt_tab, $dev_repository, $dev_id, $dev_host);
+
     $tm = $t->telnetmode();
     $self->log_debug("telnet command interpretation is: " . ($tm ? "on" : "off"));
 
@@ -267,6 +271,8 @@ sub do_fetch {
     return if $self->chat_fetch($t, $dev_id, $dev_host, $prompt, $fetch_timeout, $show_cmd, \@config);
 
     $ok = $t->close;
+
+    close($debug_fh) if defined $debug_fh;
     if (!$ok) {
 	$self->log_error("disconnecting: $!");
     }

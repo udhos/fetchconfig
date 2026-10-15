@@ -539,6 +539,34 @@ sub open_ssh_debug_file {
     return undef;
 }
 
+#
+# open_telnet_debug_file - when debug=on, open "$repository/$dev_id.debug"
+# (0600, credentials masked via print_secret) and attach it as the Net::Telnet
+# dump_log, so the whole telnet session is captured byte-for-byte. Mirrors
+# open_ssh_debug_file. Returns the filehandle (so the caller can close it), or
+# undef when debug is off or the file cannot be opened (logged). Passwords are
+# kept out of the log because the models send them with print_secret(), which
+# suspends the log around the send.
+#
+sub open_telnet_debug_file {
+    my ($self, $t, $dev_opt_tab, $dev_repository, $dev_id, $dev_host) = @_;
+
+    return undef unless $self->dev_option_flag($dev_opt_tab, "debug", 0);
+
+    my $debug_path = "$dev_repository/$dev_id.debug";
+    my $debug_fh;
+    if (open($debug_fh, '>', $debug_path)) {
+	$self->secure_debug_file($debug_fh);   # contains session data -> 0600
+	$debug_fh->autoflush(1);
+	print $debug_fh "# telnet session to $dev_host (dump_log; passwords masked)\n";
+	$t->dump_log($debug_fh);
+	return $debug_fh;
+    }
+
+    $self->log_error("could not write debug file: $debug_path: $!");
+    return undef;
+}
+
 ##################################
 # Interruption-tolerant prompt wait (9.60)
 #

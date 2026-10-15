@@ -2,6 +2,61 @@
 # fetchconfig.pl - CHANGES
 #
 
+9.71
+====
+
++ debug=on now works for ALL device models. Previously only the SSH, HTTP
+  and SNMP models (and a few telnet models) wrote a <dev_id>.debug session
+  log; the remaining ~19 telnet models (cisco-ios, cisco-cat, cisco-pix,
+  cisco-iosxr, cisco-sg300, dell, junos, fortigate, hirschmann, mikrotik,
+  riverstone, acme, parks, mediant, terayon, coriant-8600, 3com-msr,
+  tellabs-msr, nec-univerge-ix, dmswitch, cisco-asa, mikrotik) ignored it
+  (cisco-asa and mikrotik had the debug attach commented out). A shared
+  open_telnet_debug_file() helper (in model::Abstract, mirroring
+  open_ssh_debug_file) now attaches the telnet dump_log to a 0600
+  <repository>/<dev_id>.debug for every telnet model. Login and enable
+  passwords stay out of the log because the models already send them with
+  print_secret(), which suspends the log around the send.
+
+9.70
+====
+
++ The e-mail's text/plain part now carries a plain-text summary - the
+  statistics block and a per-device table (auto-sized columns, no diffs),
+  matching the HTML data - so text-only clients and previews are useful,
+  not just a "view in HTML" notice.
+
++ The HTML summary e-mail was restyled to match the fetchconfig-web mail:
+  a grey canvas, a white rounded card with a dark-blue (#1f4e79) header bar
+  carrying a small inline logo and "fetchconfig vX.Y", and the copyright
+  footer placed below/outside the card. The logo is embedded in the mail as
+  multipart/related image (Content-ID <fcwlogo>) inside a multipart/related{
+  multipart/alternative{ text/plain; text/html }; image } structure matching the
+  fetchconfig-web mailer exactly - 12-byte random boundaries and folded
+  multipart Content-Type headers. The embedded logo is the complete
+  fetchconfig-web PNG (an earlier build shipped a truncated copy with no
+  IDAT/IEND, which mail clients could not render). The summary card is 820px
+  wide so the full-report link fits on one line on desktop. The full-report link
+  is now a styled button with a "copy this link" text fallback, and the
+  plain-text part carries the report URL too. The embedded mail logo is
+  independent of the report_logo= used in the on-disk HTML report, which is
+  unchanged.
+
++ web_report_url is now the BASE URL of fetchconfig-web (the CGI itself,
+  no query string, e.g. https://host/cgi-bin/fetchconfig-web.cgi).
+  fetchconfig appends "?action=view_report&file=<report>" automatically so
+  the e-mail's "full report" link points at the specific report that was
+  written, not at the overview. Any query string already on the configured
+  value is ignored, so an existing "?action=report" setting keeps working.
+
++ Documentation and source-comment consistency pass (README, HTML manual,
+  and in-source comments brought into line with the 9.69 code - the -D/-T
+  option descriptions, the same-second backup note now that writes use
+  O_EXCL, and the system-directory/allowlist wording), and a CHANGES
+  correction: the device-locking, O_EXCL, keep=/timeout validation and
+  permission-revert entries below were released in 9.69 and are filed
+  under 9.69.
+
 9.69
 ====
 
@@ -188,11 +243,12 @@
 
 + Change reports. After a run fetchconfig can write an HTML change report (a
   summary table plus a coloured diff per changed device) to an allowlisted
-  "report" directory, and embed up to up to email_max_diff device diffs in the
-  summary e-mail (email_max_diff defaults to 0 - no diffs unless set) with a link to the full report. New "directory: report" and
-  "directory: report none" allowlist entries (the allowlist, when present,
-  now covers four types). New email: options report_dir, write_report,
-  email_max_diff, web_report_url, report_logo (embedded, 250x50), report_days
+  "report" directory, and embed up to email_max_diff device diffs in the summary
+  e-mail (email_max_diff defaults to 0 - no diffs unless set) with a link to the
+  full report. New "directory: report" and "directory: report none" allowlist
+  entries (the allowlist, when present, now covers four types). New email:
+  options report_dir, write_report, email_max_diff, web_report_url, report_logo
+  (embedded, 250x50), report_days
   (prune, exact-name unlink) and mask_secrets. Secret masking is best effort
   (common forms, after diffing, both sides) - reports remain sensitive. Each
   report diff is an "armored" <div data-device=...> for fetchconfig-web. No
@@ -267,13 +323,13 @@
 
 + New optional directory: allowlist in the device table. When present, a
   device's repository= and template_dir= must name a listed directory (by
-  $TAG or exact path, trailing slash ignored, paths checked for /../, /./
-  and illegal characters, typed repository/template); an off-list value is
-  rejected at fetch time and the device skipped. Absent section = no
-  enforcement. New --list-allowed-dirs prints AND lints the allowlist (exit 2 if an
-  entry is malformed or its directory is missing). Intended to let
-  a less-trusted editor (fetchconfig-web) change devices without widening
-  the set of usable directories.
+  $TAG or exact path, trailing slash ignored, paths checked for /../, /./ and
+  illegal characters, typed repository/template); an off-list value is rejected
+  at fetch time and the device skipped. Absent section = no enforcement. New
+  --list-allowed-dirs prints AND lints the allowlist (exit 2 if an entry is
+  malformed or its directory is missing). Intended to let a less-trusted editor
+  (fetchconfig-web) change devices without widening the set of usable
+  directories.
 
 + -t/--list-template output changed to one TAB-separated row per template:
   <id> <section> <full_path> <model> <template_dir>, where <section> is

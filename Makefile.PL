@@ -48,11 +48,23 @@ test:
 test-verbose:
 \t\$(PROVE) -v -I. t/
 
-# Regenerate the documentation: every *.md becomes its plain-text and .html
-# companion via tools/md2html.py (README.*, How-To-add-a-model). The hand-
-# maintained fetchconfig-documentation.html is NOT touched.
+# Regenerate the documentation from the *.md sources. Two converters (for now):
+#   tools/render-doc.py  - the styled HTML (sidebar/hero/tables/tabs/callouts,
+#                          Mermaid with an embedded-SVG fallback from
+#                          tools/mermaid-cache/). README.md -> README.html,
+#                          fetchconfig-documentation.md -> fetchconfig-documentation.html,
+#                          X.md -> X.html. LICENSE.md is skipped (verbatim, below).
+#   tools/md2html.py     - the plain-text (ASCII) companions (authoritative), and
+#                          the verbatim LICENSE.html / LICENSE / COPYING.
+# fetchconfig-documentation.md is HTML-only (the styled reference), so its ASCII
+# companion is removed. Titles come from each .md's H1. (Diagrams: run
+# tools/gen-mermaid-svg.py only when a diagram changes; "make doc" embeds the cache.)
 doc:
-\t\$(PERL) tools/md2html.py --all .
+\t\$(PERL) tools/render-doc.py --all .
+\t\$(PERL) tools/md2html.py --all . --text-only
+\t\$(PERL) tools/md2html.py LICENSE.md LICENSE.html
+\tcp -f LICENSE COPYING
+\trm -f fetchconfig-documentation
 
 # Installation is done by hand (README); not implemented here.
 install:

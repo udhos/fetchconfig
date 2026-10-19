@@ -11,7 +11,7 @@ my @rows = ({ dev_id => 'd1', ts => time, success => 1, size => 10, changed => '
 my $h = fetchconfig::Mailer->build_report_html(\@rows, 'Status of all backups');
 
 like($h, qr/background:#f4f5f7/,              'grey canvas');
-like($h, qr/max-width:640px.*border-radius:10px/s, 'white rounded card');
+like($h, qr/max-width:820px.*border-radius:10px/s, 'white rounded card');
 like($h, qr/background:#1f4e79/,              'dark-blue header bar');
 like($h, qr/src="cid:fcwlogo"/,               'inline logo via cid:fcwlogo');
 my $ver = fetchconfig::Constants::version();

@@ -12,13 +12,19 @@ use strict;
 use warnings;
 use Test::More;
 
-require_ok('fetchconfig::model::Detector');
+# model::Detector registers every model at init(), so loading it pulls in the
+# transport CPAN modules (Net::Telnet, Net::OpenSSH, ...). Where those are not
+# installed, skip rather than fail: this test exercises the directory-allowlist
+# logic, not the transports. (Same guard as 45/46/51.)
+my $loadable = eval { require fetchconfig::model::Detector;
+                      require fetchconfig::Logger; 1 };
+plan skip_all => 'model::Detector/Logger not loadable here (needs Net::Telnet)'
+    unless $loadable;
 my $D = 'fetchconfig::model::Detector';
 
 # parse_directory_line logs via the package logger, which init() sets.
 # init() also registers the models (~90ms, no forking) - fine for a unit
 # test. Silence the logger so the error paths exercised below stay quiet.
-require fetchconfig::Logger;
 {
     no warnings qw(redefine once);
     *fetchconfig::Logger::error = sub { };

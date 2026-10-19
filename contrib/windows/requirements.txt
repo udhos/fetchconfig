@@ -1,0 +1,2 @@
+pyinstaller==6.22.3
+paramiko==3.5.1

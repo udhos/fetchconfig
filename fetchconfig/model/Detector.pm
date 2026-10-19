@@ -94,14 +94,14 @@ my @dir_allow_errors;    # [reason] for each rejected directory: line (for the l
 my $DEV_ID_RE = qr/^[\w.-]+$/;
 
 #
-# Returns $line with any pass=... / enable=... value replaced by
-# '***', so raw device_table lines can be logged (e.g. on a parse
-# error) without leaking cleartext credentials.
+# Returns $line with any pass=... / enable=... / community=... value
+# replaced by '***', so raw device_table lines can be logged (e.g. on a
+# parse error) without leaking cleartext credentials.
 #
 sub mask_secrets {
     my ($line) = @_;
 
-    (my $masked = $line) =~ s/\b(pass|enable)=[^,\s]*/$1=***/gi;
+    (my $masked = $line) =~ s/\b(pass|enable|community)=[^,\s]*/$1=***/gi;
 
     $masked;
 }
@@ -283,6 +283,11 @@ sub fetch_device {
     my $dev_run = $mod->dev_option($dev_opt_tab, "on_fetch_run");
     my $dev_cat = $mod->dev_option($dev_opt_tab, "on_fetch_cat");
 
+    # Announce the device first, so anything logged while locating the
+    # previous backup (e.g. "there is no latest config" on a freshly added
+    # device) appears inside this device's block, not before it.
+    $logger->info("-----[$dev_id]--------------------------------------------------------------------------------");
+
     #
     # Do we need to locate the latest backup?
     # - changes_only means we need to compare in order to detect change
@@ -294,7 +299,6 @@ sub fetch_device {
     }
 
     my $fetch_ts_start = time;
-    $logger->info("-----[$dev_id]--------------------------------------------------------------------------------");
     $logger->info("dev=$dev_id host=$dev_host: retrieving config at " . scalar(localtime($fetch_ts_start)));
 
     # System-directory check, ALWAYS applied (allowlist or not): a
@@ -869,15 +873,17 @@ sub device_info {
 }
 
 #
+# True if any device's lock directory could not be created/used; the
+# driver turns this into exit 10.
+#
+sub lock_dir_failed { return $lock_dir_failed; }
+
+#
 # Returns a sorted list of every dev_id resolved so far by
 # lookup_only parse() calls (i.e. every device known from the
 # currently loaded -devices=/-line= sources). Backs the -Z
 # (check zero-byte backups for all devices) feature.
 #
-# True if any device's lock directory could not be created/used; the
-# driver turns this into exit 10.
-sub lock_dir_failed { return $lock_dir_failed; }
-
 sub device_ids {
     my ($class) = @_;
 

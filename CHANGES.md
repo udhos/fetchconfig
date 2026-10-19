@@ -1,0 +1,864 @@
+# fetchconfig -- Changes
+
+## 9.72
+
++ Model-framework code-review fixes:
+
+  - MikroTik: expect_enable_prompt_paging() called escape_brackets() as a
+    package sub (&escape_brackets), which does not exist in the MikroTik
+    package and died on every fetch; it now calls the inherited
+    $self->escape_brackets().
+
+  - ProCurveSSH: the final-line ANSI strip is now guarded against an empty
+    config (matching ProCurve.pm) - a switch that answers the show command
+    with nothing but its prompt no longer crashes.
+
+  - JunOS: chat_login() now returns undef (not 1) when the pager-disable
+    command fails, so the caller treats it as a login failure instead of
+    continuing with a bogus prompt.
+
+  - Generic template model: the template ssh_extra_opts directive is now
+    actually passed to the ssh client (it was parsed but ignored); the
+    procurve.tmpl directive is written in "-o Key=Value" form to match the
+    ProCurveSSH model.
+
+  - mediant-sbc: the prompt_settle_ms option (default 150 ms) is now honoured
+    on SSH (drain to idle before matching the prompt), as it already is for
+    nexus-ssh and aruba-cx-ssh.
+
+  - Detector: device-table log masking now also masks community= values
+    (previously only pass= and enable=).
+
++ Removed the generic-template prompt_settle directive. It was accepted by
+  the template parser and emitted by generate_template, but never consumed by
+  the generic engine, whose timing is governed by per-state timeouts and
+  fetch_delay. Removed from the parser, both template generators
+  (generate_template.pl / .py) and the shipped templates (procurve.tmpl,
+  cisco-ios.tmpl). The SSH-model option prompt_settle_ms is a different
+  option and is unaffected.
+
++ Removed dead code: %holding and %started (fetchconfig.pl parallel-fetch
+  bookkeeping that was never read) and the unused entry_state() in
+  GenericTemplateParser. dump_options() (model::Abstract) is kept as a
+  documented debugging helper, with its call left commented out.
+
++ Fixed the --help text: the --check-template and --template-syntax option
+  descriptions were spliced together; each now describes its own option.
+
+## 9.71
+
++ New DEVELOPER-GUIDE.md / .html: a comprehensive architecture and
+  engineering guide (execution model, the per-device pipeline, parallel
+  fetch, all data structures, the device-table format, the model API, the
+  security mechanisms and deliberate non-mitigations, extension recipes,
+  testing and conventions), with an ASCII fetch-pipeline sequence diagram
+  and an Abstract-API call graph, for engineers extending fetchconfig. The
+  How-To-add-a-model skeleton now sends the password with print_secret()
+  (not a raw print, which would reach the .debug log) and cross-references
+  the developer guide.
+
++ debug=on now works for ALL device models. Previously only the SSH, HTTP
+  and SNMP models (and a few telnet models) wrote a <dev_id>.debug session
+  log; the remaining ~19 telnet models (cisco-ios, cisco-cat, cisco-pix,
+  cisco-iosxr, cisco-sg300, dell, junos, fortigate, hirschmann, mikrotik,
+  riverstone, acme, parks, mediant, terayon, coriant-8600, 3com-msr,
+  tellabs-msr, nec-univerge-ix, dmswitch, cisco-asa, mikrotik) ignored it
+  (cisco-asa and mikrotik had the debug attach commented out). A shared
+  open_telnet_debug_file() helper (in model::Abstract, mirroring
+  open_ssh_debug_file) now attaches the telnet dump_log to a 0600
+  <repository>/<dev_id>.debug for every telnet model. Login and enable
+  passwords stay out of the log because the models already send them with
+  print_secret(), which suspends the log around the send.
+
++ The helper tools now report the release version and accept -V/--version:
+  generate_template.pl and md2html.py gained the option (record-session.pl
+  already had it), and every script under tools/ is pinned to the
+  fetchconfig version (9.71), so "<tool> --version" always matches the
+  package.
+
++ The "there is no latest config" notice (logged when a freshly added
+  device has no previous backup yet) is now logged at info level, not
+  error, and appears inside the device's own log block (after the
+  -----[dev]----- header) rather than before it. It is the normal
+  first-run state, not a failure.
+
++ record-session.pl: fixed several capture bugs found while porting the
+  tool. Secret masking now runs once at end of session on COMPLETE lines,
+  so a secret, a -m token, or a typed password split across two network
+  reads is masked as a whole instead of leaking (a community that spanned
+  a read boundary was being saved as "xxxlic"); the .hex still keeps the
+  original per-read framing. Password masking now stops at the Enter even
+  when the next command arrives in the same read (it used to mask the
+  command too). The .txt render no longer leaks a charset select ("ESC (
+  B" shown as "(B"), an escape split across two reads, or telnet
+  negotiation bytes. Over telnet the tool now answers option negotiation
+  (accepts ECHO/SGA, offers TTYPE/NAWS); the raw IAC bytes stay in the
+  .hex so generate_template still detects telnet captures.
+
++ Documentation build ("make doc"): each *.md now regenerates BOTH its
+  .html and its plain-text companion, so the shipped text files no longer
+  drift out of sync with the Markdown. The title now comes from a single
+  source: each .md's "# fetchconfig -- <Subtitle>" H1 becomes the .html
+  <title> "fetchconfig &mdash; <Subtitle>" and the text's first line
+  "fetchconfig -- <Subtitle>". The four docs whose H1 used a different
+  wording were normalised to this format. DEVELOPER-GUIDE now ships a
+  plain-text version too, and md2html.py's text renderer drops HTML comment
+  blocks (the <!--MERMAID--> diagram sources) so only the readable ASCII
+  diagrams remain in the text. CHANGES and DEPENDENCIES are now kept as
+  .md too (CHANGES.md, DEPENDENCIES.md), with their text and .html forms
+  generated the same way. Every shipped .md source is pure 7-bit ASCII.
+
++ Styled HTML documentation (new tools/render-doc.py): the .html docs now render
+  as a sidebar/hero manual - scroll-spy navigation, numbered section kickers,
+  callouts, styled tables, dark code blocks, IBM Plex from a CDN with a
+  system-font fallback. README.md -> README.html, X.md -> X.html; the plain-text
+  (ASCII) companions and the verbatim LICENSE still come from md2html.py. Mermaid
+  diagrams (the <!--MERMAID--> blocks) render from the CDN with an embedded-SVG
+  fallback - pre-rendered into tools/mermaid-cache/ by tools/gen-mermaid-svg.py -
+  so the pages also work offline / on AIX; the plain-text docs keep the ASCII
+  diagram. The HTML is 7-bit-ASCII entity-encoded (VI-safe).
+
++ The top-level README is now the single documentation source, converted to
+  Markdown (README.md): ALL-CAPS section headers became "##" sections (the
+  in-body "IMPORTANT CHANGE ..." / "INSTALLATION (Windows)" notes became "###"
+  sub-sections), and the DEVICE OPTIONS reference is now a consistent
+  "Option | Description" table per module group. Its H1 is
+  "# fetchconfig -- README / Documentation", so the generated page <title> is
+  "fetchconfig &mdash; README / Documentation" (fetchconfig-web reads the
+  <title> to build its Help-menu entries). The hero carries the
+  testers/compatibility notice as a
+  red info box plus a pointer to the fetchconfig-web companion project. The old
+  hand-maintained fetchconfig-documentation.html has been removed: README.html
+  (generated from README.md) supersedes it and adds the pager_cmd option the old
+  page was missing.
+
++ contrib/windows/: Python ports of the two developer tools -
+  record_session.py and generate_template.py - with the same command line
+  and the same .hex/.txt formats as the Perl versions. build.cmd packages
+  them into standalone record_session.exe and generate_template.exe with
+  PyInstaller, so Windows users need no Perl, PuTTY or OpenSSH; the .py
+  files also run on POSIX (paramiko for ssh). The notes are kept in
+  contrib/windows/README.windows.md, from which "make doc" derives the
+  README.windows text and .html like every other document.
+
++ Licensing is now sourced from a single file, LICENSE.md: an H1 title
+  wrapping the verbatim GNU GPL version 2 in a fenced block. "make doc"
+  derives LICENSE (plain text) and LICENSE.html from it, and copies LICENSE
+  to COPYING. The license text is preserved byte-for-byte: md2html.py now
+  renders a document that is just a title plus one fenced block as a
+  verbatim pass-through (no heading, no indentation, no transliteration), so
+  LICENSE and COPYING are identical to the canonical FSF GPLv2 text; the
+  .html keeps the text verbatim inside a <pre>. The license is pure 7-bit
+  ASCII (the five form-feed page breaks are the FSF original's).
+
++ New LICENSE-ADDITIONS.md (with derived LICENSE-ADDITIONS text and .html): a
+  supplemental warranty and liability disclaimer for recipients in Germany
+  and the EU. It does not alter or restrict the GPL (it adds no term within
+  the meaning of GPL section 6); it clarifies how the GPLv2 warranty and
+  liability disclaimers (sections 11 and 12) apply under mandatory German/EU
+  law - excluding liability to the maximum extent permitted, keeping the
+  mandatory carve-outs (intent, gross negligence, injury to life/body/health,
+  Produkthaftungsgesetz, fraudulent concealment, Kardinalpflichten) and the
+  section 521 BGB limitation for gratuitous provision - with severability and
+  German governing law (CISG excluded).
+
++ t/42-directory-allowlist.t now skips gracefully (plan skip_all) when
+  model::Detector cannot be loaded because the transport CPAN modules
+  (Net::Telnet, ...) are absent, matching the guard already used in
+  t/45/46/51. Previously it used require_ok and reported a hard failure on a
+  minimal host without the transports; the directory-allowlist logic it tests
+  needs no transport.
+
+## 9.70
+
++ The e-mail's text/plain part now carries a plain-text summary - the
+  statistics block and a per-device table (auto-sized columns, no diffs),
+  matching the HTML data - so text-only clients and previews are useful,
+  not just a "view in HTML" notice.
+
++ The HTML summary e-mail was restyled to match the fetchconfig-web mail:
+  a grey canvas, a white rounded card with a dark-blue (#1f4e79) header bar
+  carrying a small inline logo and "fetchconfig vX.Y", and the copyright
+  footer placed below/outside the card. The logo is embedded in the mail as
+  multipart/related image (Content-ID <fcwlogo>) inside a multipart/related{
+  multipart/alternative{ text/plain; text/html }; image } structure matching the
+  fetchconfig-web mailer exactly - 12-byte random boundaries and folded
+  multipart Content-Type headers. The embedded logo is the complete
+  fetchconfig-web PNG (an earlier build shipped a truncated copy with no
+  IDAT/IEND, which mail clients could not render). The summary card is 820px
+  wide so the full-report link fits on one line on desktop. The full-report link
+  is now a styled button with a "copy this link" text fallback, and the
+  plain-text part carries the report URL too. The embedded mail logo is
+  independent of the report_logo= used in the on-disk HTML report, which is
+  unchanged.
+
++ web_report_url is now the BASE URL of fetchconfig-web (the CGI itself,
+  no query string, e.g. https://host/cgi-bin/fetchconfig-web.cgi).
+  fetchconfig appends "?action=view_report&file=<report>" automatically so
+  the e-mail's "full report" link points at the specific report that was
+  written, not at the overview. Any query string already on the configured
+  value is ignored, so an existing "?action=report" setting keeps working.
+
++ Documentation and source-comment consistency pass (README, HTML manual,
+  and in-source comments brought into line with the 9.69 code - the -D/-T
+  option descriptions, the same-second backup note now that writes use
+  O_EXCL, and the system-directory/allowlist wording), and a CHANGES
+  correction: the device-locking, O_EXCL, keep=/timeout validation and
+  permission-revert entries below were released in 9.69 and are filed
+  under 9.69.
+
+## 9.69
+
++ Device locking (lock=on, default off): before backing up a device,
+  fetchconfig takes an exclusive flock on a per-device lock file so two
+  runs cannot back up the same device at once (overlapping cron, or a
+  "Backup Now" over a cron run). On contention it retries lock_retry times
+  (default 5) at lock_retry_time-second intervals (default 10), then
+  records the device as "skipped" - the existing per-device backup state -
+  and continues; the process exit code is NOT changed by a lock-skip. The
+  lock is released automatically when the run ends (even on crash) and the
+  lock file is never unlinked. Options (per-device and default:):
+  lock=on|off, lock_dir=$TAG|/path, lock_retry=N (>=0; 0 = skip on first
+  contention), lock_retry_time=N (>=1 seconds). The lock directory is
+  lock_dir=, else "<dir of fetchconfig.pl>/.lock", created 0700 if absent;
+  if it cannot be created or used, fetchconfig exits 10 after the run.
+  The lock key is sha256(dev_id). A new "directory: lock $TAG /path"
+  allowlist type restricts lock_dir= when an allowlist is in use. Lock
+  files are opened O_NOFOLLOW and created 0600. Use a LOCAL filesystem -
+  flock over NFS (AIX) is unreliable.
+
++ A lock-skipped device is now reported as "skipped" in the e-mail
+  summary (its own statistics row and State column) instead of "failed",
+  and its per-device status file is written correctly - the skip path now
+  records the repository and timing like the normal paths did. This also
+  covers the system-directory and allowlist skips.
+
++ New --clean-lock-dir [N]: remove lock files older than N days (default
+  30, minimum 1) from the lock directory, then exit. A lock file is only
+  removed if it is not currently held (flock is tried first), so an in-use
+  lock is never deleted. With -T it is a dry run: it shows what would be
+  removed without removing anything.
+
++ A backup is written with O_EXCL: if a backup with the exact same name
+  already exists - two runs completing within the same one-second
+  filename resolution - fetchconfig refuses rather than silently
+  truncating the earlier run's completed file and then comparing it with
+  itself. (Device locking, lock=on, prevents the collision entirely; this
+  is the safety net for runs that do not use it.)
+
++ keep= is validated when the device table is loaded: a value that is not
+  a positive integer (a typo, or an inherited default:) is rejected with a
+  clear error instead of being coerced to 0 and deleting every backup for
+  the device on the next run.
+
++ timeout, fetch_timeout, banner_timeout and prompt_settle_ms are
+  validated: a non-positive-integer value is ignored (with a warning) so
+  the documented default applies, rather than coercing to 0 - where
+  Net::Telnet's Timeout => 0 would block forever.
+
++ Fix a permission regression from 9.68: backup files and their directories
+  were being forced to owner-only (0600/0700), which broke an unprivileged
+  reader - fetchconfig-web runs fetchconfig as "nobody" for -l (list), -g
+  (read content) and -g -m (diff), and could no longer traverse the
+  directories or read the files. Repository permissions again follow the
+  process umask, as before 9.68 (a setgid repository root still propagates,
+  e.g. drwxr-sr-x). Only the parallel-fetch worker scratch files, which
+  live in a private temp dir and are never read that way, stay owner-only.
+  Restrict the repository directory yourself if the host is shared.
+
+## 9.68
+
++ on_fetch_run is run without a shell: the value is split into a program
+  plus literal arguments (quoting honoured) and executed directly, so
+  shell syntax like ";", "|" or "$(...)" is passed as plain text, not
+  interpreted. A start failure, signal or non-zero exit is logged. To run
+  a pipeline, put it in a script and name the script.
+
++ repository=, template_dir= and the on_fetch_run program may not be a
+  system directory (/bin, /sbin, /lib*, /usr/bin, /usr/sbin, /usr/lib*,
+  /usr/share, /usr/include, /etc, /boot, /dev, /proc, /sys, /run,
+  /var/run, /var/lock, the root "/", or anything under them). A device
+  value is rejected and the device skipped; a directory: allowlist line
+  that declares one is rejected at parse time.
+
++ A directory: allowlist that fails to parse (a bad or system-directory
+  path, a duplicate or malformed tag) now aborts the run before any fetch
+  or lookup, instead of continuing with a silently reduced allowlist.
+  Each error is logged as before; the run exits non-zero.
+  --list-allowed-dirs is exempt, so it can still report the errors.
+
++ Without a directory: allowlist, each distinct non-system repository=,
+  template_dir= and on_fetch_run directory in use is reported once per run
+  as a warning, so unrestricted paths are visible. (A system directory is
+  always rejected, as above - it never reaches this warning.) The
+  allowlist stays optional.
+
++ mask_secrets() masks by key prefix: password=, passphrase=, secret=,
+  key= and token= are masked as well as pass=, enable= and community=,
+  and a quoted value (commas/spaces included) is masked whole.
+
++ Parallel-fetch (-P) worker scratch files (in the private temp dir) are
+  created owner-only. Repository backup files and directories continue to
+  follow the process umask - an unprivileged reader such as fetchconfig-web
+  (running as "nobody" for -l/-g) must be able to read them, so a hardcoded
+  owner-only mode is wrong here; restrict the repository directory yourself
+  if the host is shared.
+
++ comware-ssh, hirschmann, procurve and procurve-ssh now quote the learned
+  prompt with regexp_quote_keep_bytes() like the other models, so a
+  non-ASCII hostname cannot produce a prompt that never matches.
+
++ Templates may declare the syntax of the config they produce with a
+  "# syntax_style: <token>" header comment (e.g. "# syntax_style:
+  cisco-ios"). It is a plain comment - the template parser and the backup
+  path ignore it entirely, so it is optional and backward-compatible and
+  cannot change how a device is backed up. It is metadata for a config
+  viewer (e.g. fetchconfig-web) to pick a syntax highlighter for a
+  generic-model backup, whose "generic" model name otherwise says nothing
+  about the output syntax. New option --template-syntax PATH reads one
+  template and prints its declared style to stdout (exit 0), or nothing
+  (exit 1) if undeclared, or an error (exit 2) if the file is unreadable;
+  log output stays on stderr so stdout carries only the value. The value
+  is a free-text token [A-Za-z0-9_-]+. The shipped cisco-ios.tmpl and
+  procurve.tmpl now declare their style as examples.
+
+
++ -z and -Z gained -D and -T, mirroring -o/-e: with -D the zero-byte
+  backups found are deleted (each by one plain unlink on its exact path -
+  only the files, not directories; run -e -D afterwards to prune any
+  emptied day/month dirs), and -T previews them ("would delete: unlink
+  ..."). Without -D the behaviour is unchanged (list only). The exit
+  status is still that of the check (1 if any zero-byte backups were
+  found, 0 otherwise), whether or not they were deleted. -D now accepts
+  -o, -e, -z or -Z; -T still requires -D.
+
+## 9.66
+
+
++ cisco-asa-ssh and cisco-asa: a rejected enable password no longer hangs
+  the fetch for the whole fetch_timeout. The ASA re-prompts "Password: "
+  when the enable secret is wrong; the models now detect that second
+  prompt and fail immediately with "enable failed: the device rejected
+  the enable password ..." (the message points at a likely cause - a
+  missing device-specific enable= falling back to a default: enable= that
+  does not apply). The successful path (enable accepted, "#" prompt) is
+  unchanged.
+
+
++ Change report: the Devices sidebar is hidden when the report is printed
+  (an @media print rule), so the printed page uses the full width.
+
++ New documented device option "site=": a free-text site/location tag, like
+  comment= (fetchconfig itself does not use it). It is intended for the
+  fetchconfig-web application, which uses it for per-site access control -
+  users see and edit only the devices whose site matches a site assigned in
+  their user record; a device with no site= is visible only to "all sites"
+  (site 0) users. Values should be single-byte characters. (The device-table
+  parser already accepted arbitrary key=value options, so no parser change
+  was needed - this documents site= as an official option.)
+
+## 9.65
+
++ Change report: the "Changes" count per device now counts diff hunks (the
+  number of places that differ) instead of old+new diff lines, which
+  double-counted each changed line (e.g. 2 changed lines showed as 4).
+
++ Report masking: added the Hirschmann "users passwd <user> :vN:<hash>:"
+  form - the username is kept and only the hash is masked (the generic
+  passwd rule no longer masks the username on these lines). The :vN:<hash>:
+  token is masked wherever it appears.
+
++ Report masking: added built-in masking for "wpa-passphrase <value>" and a
+  bare "key <hex>". New email: report_hide=<regex> option (one per line,
+  accumulating) masks the matched substring with **** for secrets the
+  built-ins do not cover; invalid patterns are logged and skipped. All
+  masking (built-in and custom) is governed by the mask_secrets master.
+  The report_hide value is taken verbatim (the whole rest of the line), so a
+  regex may contain commas (e.g. {m,n}), = and spaces with no quoting.
+
++ A first-ever backup is now reported as "initial" (not "changed") in the
+  e-mail summary (its own statistics row and the device row) and in the
+  change report. A first backup has no previous config to compare against,
+  so marking it "changed" was misleading; "initial" is detected from the
+  absence of a previous backup at save time.
+
++ Change report: a new device (one backup, no previous config) is now
+  detected from the backup count and reported as "New" without attempting a
+  diff - this removes the spurious, duplicated "requested backup 2 but only
+  1 available" error lines a first-ever backup produced.
+
++ Change reports. After a run fetchconfig can write an HTML change report (a
+  summary table plus a coloured diff per changed device) to an allowlisted
+  "report" directory, and embed up to email_max_diff device diffs in the summary
+  e-mail (email_max_diff defaults to 0 - no diffs unless set) with a link to the
+  full report. New "directory: report" and "directory: report none" allowlist
+  entries (the allowlist, when present, now covers four types). New email:
+  options report_dir, write_report, email_max_diff, web_report_url, report_logo
+  (embedded, 250x50), report_days
+  (prune, exact-name unlink) and mask_secrets. Secret masking is best effort
+  (common forms, after diffing, both sides) - reports remain sensitive. Each
+  report diff is an "armored" <div data-device=...> for fetchconfig-web. No
+  new libraries (MIME::Base64 is core). report_dir should be group-owned by
+  the web server group with the setgid bit (g+s) so reports inherit the group
+  for fetchconfig-web; fetchconfig does not change ownership itself.
+
++ procurve.tmpl: dropped the trailing space in the /Username:/ and
+  /Password:/ expects - on a VT100/telnet device the space can arrive in a
+  separate read, causing an intermittent login timeout. Validated over
+  telnet on R.11 (menu) and K.15 (direct-to-CLI) firmware.
+
++ SECURITY FIX: the directory: allowlist was bypassed when repository=,
+  template_dir= or on_fetch_run= was set only on a default: line - the
+  check read the device line only. Enforcement now validates the effective
+  value (default + device) via a new dev_option_raw accessor.
+
++ Template grammar: every state is now declared with the "state" keyword,
+  including the per-transport entry states (e.g. "state state_login_ssh"),
+  so a state header is always recognisable. An explicit "-> stay" transition
+  is accepted (a plain expect with no arrow still defaults to stay). The two
+  shipped templates and generate_template.pl were updated accordingly.
+
+  INCOMPATIBLE grammar change - a template written for 9.64 or earlier will
+  no longer parse. To migrate, add the "state" keyword before each bare
+  entry-state header:
+      state_login_ssh        ->  state state_login_ssh
+      state_password_ssh     ->  state state_password_ssh
+      state_login_telnet     ->  state state_login_telnet
+      state_password_telnet  ->  state state_password_telnet
+  (goto targets and other states are unchanged.) Verify with
+  "fetchconfig.pl --check-template PATH".
+
++ generate_template.pl no longer emits the removed
+  first_config_line_starts_with directive (it emits capture_from), and uses
+  the new state syntax.
+
++ Directory allowlist state is reset at each device-table load (safe for a
+  future long-lived process).
+
++ Documentation: reorganised the HTML manual into a clearer flow (front
+  matter, getting started, configuration, supported devices, features,
+  reference), added a Key concepts intro and a Security cross-reference to
+  the allowlist, and documented the template lexical conventions and the
+  stay transition. Silenced two harmless "used only once" compile warnings.
+
+## 9.64
+
++ directory: $TAG aliases are now expanded centrally in dev_option, so ALL
+  commands that read repository=/template_dir=/on_fetch_run= (fetch, -g, -l,
+  -z, -Z, -e, -o, -s, -S, -t, --list-allowed-dirs) resolve a $TAG to its
+  real path - previously only fetch and -t did, so e.g. -l reported "no
+  backups" when the table used repository=$REPO1. -t still shows the
+  configured value (the $TAG) in its template_dir column.
+
++ Fix -t/--list-template: a generic device that inherits template_dir from
+  the "default: generic" line was wrongly reported as a "device" entry
+  (duplicating the default directory). It is now correctly counted under the
+  default scope; only a device's OWN template_dir= makes a "device" entry.
+
++ Fix -t/--list-template with directory: $TAG aliases: a template_dir set to
+  a $TAG (as fetchconfig-web writes it) is now expanded to scan the real
+  directory instead of failing. The template_dir column shows the configured
+  value (the $TAG or literal path) so a consumer can match the device table;
+  full_path is always the real resolved path.
+
++ directory: allowlist extended with a third type, fetch_run, constraining
+  on_fetch_run= to programs in allowed directories ($TAG expanded in place;
+  "directory: fetch_run none" forbids on_fetch_run). A directory: section
+  must now cover all three types (repository, template, fetch_run).
+
++ New optional directory: allowlist in the device table. When present, a
+  device's repository= and template_dir= must name a listed directory (by
+  $TAG or exact path, trailing slash ignored, paths checked for /../, /./ and
+  illegal characters, typed repository/template); an off-list value is rejected
+  at fetch time and the device skipped. Absent section = no enforcement. New
+  --list-allowed-dirs prints AND lints the allowlist (exit 2 if an entry is
+  malformed or its directory is missing). Intended to let a less-trusted editor
+  (fetchconfig-web) change devices without widening the set of usable
+  directories.
+
++ -t/--list-template output changed to one TAB-separated row per template:
+  <id> <section> <full_path> <model> <template_dir>, where <section> is
+  "default" (the default: scope's directory, or the program default) or
+  "device" (a device-specific template_dir=), so a consumer can populate the
+  defaults editor and the device editor from one cached query. Device
+  directories are deduplicated by configured path; a model may appear under
+  both sections. Every directory to be scanned must exist - a missing
+  configured path now exits 2.
+
++ Fix -t/--list-template: template directories are now deduplicated by their
+  real (symlink-resolved) path, so the same physical templates directory
+  reached through different paths (e.g. an install-dir version symlink) is
+  scanned and listed once, not twice. Configured template_dir= paths are
+  listed before the default templates/ fallback.
+
++ README/HTML/device_table.example: clarified that the generic model's
+  model= (template selection) may be set on a "default: generic" line and is
+  inherited by all generic devices, with per-device override.
+
++ README: renamed the "OPTIONS" section to "DEVICE OPTIONS" and restored the
+  blank line before "PROCURVE SNMP BACKUPS".
+
++ README/HTML: the generic model is now the first entry in the per-model
+  options list (README OPTIONS section) and the first row of the HTML
+  per-model option matrix (was missing from the matrix, and listed last in
+  the README).
+
++ README/HTML: the command-line options are now grouped by purpose
+  (retrieval, housekeeping, template, fetching, output, generic) instead of
+  one flat list under "retrieving a config"; -t/--list-template and
+  --check-template are included in the reference. No behaviour change.
+
++ -v / --version now prints just the program version to stdout and exits 0
+  (previously -v exited after the startup banner without a clean version
+  line).
+
++ New -t / --list-template option: list the templates found in the default
+  templates/ directory (always scanned) and in every template_dir= a loaded
+  device configures, numbered, unique names; exit 0 if any found, 1 if none.
+  It reads template_dir from the generic model's "default: generic
+  template_dir=..." line as well as from individual devices, and logs each
+  scanned directory as "N. template dir: <path>".
+
++ Makefile.PL: new "make doc" target regenerates the .md-derived docs
+  (README.*, How-To-add-a-model) via tools/md2html.py.
+
++ New --check-template PATH option: structurally validate a generic-model
+  template (grammar plus the load-time validator) without a device, and
+  exit 0 (ok), 1 (errors) or 2 (file problem). PATH is the full path to the
+  .tmpl file (a bare name is not resolved, as the same name can exist in
+  different template_dir directories). It is a structural check only; it
+  does not verify the template against a real device.
+
++ make test now validates every shipped templates/*.tmpl
+  (t/41-shipped-templates.t), so a structurally broken template cannot be
+  released.
+
++ Orphaned-backup cleanup (-o) now also finds a removed device's
+  <dev_id>.status and <dev_id>.debug files at the repository root, not only
+  its dated backup directories. They are listed by -o and, with -D, deleted
+  with the orphaned backups (exact-name match, each file individually). This
+  clears a decommissioned device's debug log, which can contain credentials.
+
++ Documentation: clarified in the generic-model and template-engine notes
+  that the SAVED CONFIG itself contains credentials (encrypted or not),
+  independent of the debug-log password masking, so a backup is sensitive
+  even though the debug log masks the passwords sent during login.
+
++ Documentation: reworded the SECURITY NOTES in README and the HTML manual
+  to note that config secrets are not always hashed - SNMP communities and
+  some routing/VPN keys are cleartext, and Cisco type-7 passwords are
+  reversible - rather than implying everything is a one-way hash.
+
+
+## 9.63
+
++ The main README and fetchconfig-documentation.html now include a short
+  overview of the template-driven generic model, pointing to
+  README.generic-model, README.template_engine and README.record-session
+  (the HTML links to the .html versions).
+
++ Added a template-driven "generic" model: a device can be backed up from
+  a template file (templates/<name>.tmpl) instead of a hand-written Perl
+  module. The template describes the login, enable, show and logout
+  interaction as a small state machine - expect/send steps with the
+  transport, prompt, timeouts, interrupt screens and ignore-lines as data
+  - and the model fetchconfig/model/GenericTemplate.pm interprets it,
+  reusing the shared SSH transport, prompt handling and escape stripping.
+  A device selects it with model=<name>; transport is ssh or telnet. Per-
+  transport entry states (state_login_ssh, state_login_telnet and their
+  password states) let one template serve both transports. Verified
+  against Cisco IOS-XE over telnet and SSH. The engine is new; verify a
+  template against the target device before relying on it in production.
+
++ Added templates for two device families: cisco-ios.tmpl (clean CLI,
+  telnet and SSH) and procurve.tmpl (HP ProCurve menu/VT100 firmware,
+  using escape stripping, interrupt screens and menu navigation).
+
++ Added tools/generate_template.pl, which scaffolds a template from a
+  session captured with record-session.pl. It infers the transport,
+  prompt, show command and capture boundaries and marks the remaining
+  judgement calls; the output is a draft to review and test.
+
++ Added template directives to trim the saved configuration: capture_from
+  starts the file at the first line matching a regex, and skip_first drops
+  a fixed number of leading lines, so the echoed command and the
+  "Building configuration..." preamble are removed and the file starts at
+  the real configuration, as a direct TFTP backup would. The number of
+  lines dropped and the number saved are logged.
+
++ Added the send_match template action, which selects a menu item by its
+  shown number (the captured group of an expect regex) rather than a
+  hard-coded key, so a device that renumbers its menu still works.
+
++ Fixed clear-text passwords in the telnet session debug log: passwords
+  are now sent through a shared helper (print_secret) that suspends
+  dump_log around the write, so debug=on no longer records them. This
+  applies to every telnet-capable model, not only the generic one.
+
++ Documentation (README.template_engine, README.generic-model,
+  README.record-session) is now written in Markdown, with the plain-text
+  and HTML versions generated by tools/md2html.py; "md2html.py --all DIR"
+  converts a whole tree.
+
+## 9.62
+
++ Replaced the hand-rolled command-line parser with Getopt::Long. The
+  single-dash option syntax is unchanged, and "-g=value" is now accepted
+  alongside "-g value".
+
++ Added tools/record-session.pl, a standalone helper that records a telnet
+  or SSH session with a device as a byte-accurate hex dump and a readable,
+  VT100-emulated transcript, for developing models and gathering test
+  fixtures. Known secrets and password-prompt input are masked; see
+  README.record-session.
+
++ Added the DEPENDENCIES file, documenting which Perl modules are core and
+  which come from CPAN, per feature, for the supported Perl versions.
+
++ Added a LICENSE file (GPL-2.0-or-later, matching COPYING) and a
+  .gitignore.
+
++ Fixed the HTML manual's sidebar navigation to follow the document's
+  reading order.
+
+## 9.61
+
++ Moved the repository maintenance and lookup modes (-g, -l, -z, -Z, -o,
+  -e, -s, -S) out of fetchconfig.pl into a new module, fetchconfig/Tools.pm.
+  Behaviour is unchanged - every mode keeps its arguments and exit codes -
+  and fetchconfig.pl drops from about 1700 to under 600 lines.
+
++ Added a test suite under t/, run with "prove -I. t/" or "make test":
+  pure-function tests (escape stripping, prompt quoting, backup-filename
+  and timezone parsing, option handling) and filesystem tests against
+  temporary repositories (backup writing, latest-backup selection,
+  change comparison, directory maintenance). 178 assertions across eight
+  files; only core Perl is required.
+
++ Added Makefile.PL. "make test" runs the suite; "make" and "make install"
+  are placeholders (fetchconfig is installed by hand, see the README).
+
+## 9.60
+
++ Added the mediant-sbc model for AudioCodes Mediant SBCs and gateways
+  with the current Cisco-style CLI, over SSH (default) or telnet. It
+  drives the device's pager, enters enable mode, and reads the
+  configuration; an automatic transport fallback never downgrades a
+  credential from SSH to cleartext on an authentication failure.
+
++ Added shared wait_for_command_prompt() handling for full-screen and
+  menu-driven CLIs, with a per-model hook for the banners and menus a
+  device interposes before its prompt; ProCurve now uses it.
+
++ Added a "How to add a model" manual (Markdown and HTML) and a small,
+  dependency-free generator (tools/md2html.py) that produces the HTML
+  from the Markdown.
+
+## 9.59
+
++ Added a shared SSH transport (ssh_open) used by all SSH models, with a
+  per-model hook for the legacy key-exchange and cipher settings older
+  switches require. Removed the duplicated connection code from the
+  individual models.
+
++ Fixed the debug trace for SSH models so that debug=on records the SSH
+  client's own diagnostics followed by the session, in a 0600 file.
+
+## 9.58
+
++ Added shared expect_enable_prompt() handling with per-model hooks
+  (prompt prefix and suffix) for device-specific prompts, and migrated
+  the models to it, removing their private copies where no
+  model-specific behaviour was needed. Login and enable-mode behaviour
+  is unchanged.
+
++ Added shared ANSI/VT100 escape-sequence stripping and migrated the
+  ProCurve models to it.
+
++ Added parallel device fetching (-P N): independent devices are fetched
+  concurrently, with each device's output shown as one uninterrupted
+  block in completion order. -P 1 (the default) is unchanged.
+
++ Fixed ProCurve cursor-control and hide-cursor escape handling, and
+  stopped treating an empty configuration as valid data.
+
+- Fixed a race between parallel workers (-P) and the repository scan.
+
+## 9.57
+
++ Added the nexus-ssh model for Cisco Nexus (NX-OS) over SSH.
+
++ Made the per-device repository scan much faster by descending only
+  into the relevant directory instead of walking the whole tree.
+
++ Completed the model list in the README.
+
+## 9.56
+
+  This entry summarises how the 9.x fork differs from upstream 0.25.
+  Intermediate fork versions that were later superseded are not listed.
+
+MODELS AND TRANSPORTS
+
++ Added SSH counterparts of the telnet models where the device allows it
+  (Cisco IOS, Cisco ASA, Comware, ProCurve). These transports do not
+  verify the SSH host key; the limitation is documented.
+
++ Added new models and transports: Comware (SSH), Hirschmann, Zyxel,
+  PLANET (SSH), Aruba CX (SSH), TP-Link Easy Smart (web UI), ProCurve
+  1700 (web UI), and ProCurve ProVision (SNMP + TFTP).
+
++ Improved prompt handling for devices that change their prompt between
+  login, enable, configuration and command modes.
+
++ Added per-model handling of volatile configuration lines so that
+  values expected to change between fetches do not create spurious
+  differences.
+
++ A failed fetch no longer replaces a good backup with an empty file.
+
+BACKUP FILES AND COMPARISON
+
++ Preserved the trailing newline in saved configurations.
++ Parse backup timestamps and timezone tokens (numeric offset, AIX,
+  Solaris and Windows forms) and order backups by parsed time rather
+  than by filename.
++ Validated the filename suffix option (filename_append_suffix).
++ Gave operations a 30-second default timeout so they cannot wait
+  indefinitely.
+
+COMMAND-LINE OPTIONS
+
++ Added maintenance and lookup options for listing, retrieving,
+  comparing and cleaning up stored configurations (-g, -m, -n, -l, -z,
+  -Z, -s, -S, -o, -e, -D, -T), and -f to write results to a file.
++ Clearer errors for invalid option combinations and values.
+
+E-MAIL
+
++ Added an e-mail summary of each run, with options for recipients,
+  formatting and TLS, and without exposing passwords in diagnostics.
+
+STATUS
+
++ Added a per-device status file recording the outcome of the last run,
+  so a failed fetch does not leave misleading success information.
+
+SECURITY
+
++ Validated device identifiers and other externally supplied values.
++ Masked passwords and community strings in logs and e-mail.
++ Created debug files with restrictive (0600) permissions.
++ Used safer filesystem calls (three-argument open, File::Path).
++ Documented the security limitations of each transport.
+
+CORE
+
++ Reduced duplicated per-model code by moving common behaviour into
+  shared helpers.
++ Improved error propagation so failures are reported rather than
+  silently treated as success.
++ Preserved command-line and backup compatibility throughout.
+
+DOCUMENTATION
+
++ Updated the README, model documentation, command-line help and
+  configuration examples for the new models, transports and options.
+
+## 0.25
++ CiscoSG300.pm: support for Cisco SG300.
+
+## 0.24
++ Coriant8600.pm: support for Coriant 8600.
++ CiscoIOSXR.pm: support for Cisco IOS XR.
++ NECUnivergeIX.pm: support for NEC Univerge IX series.
+
+## 0.23
++ support for -line=string switch for passing device table lines
+  directly into the command-line.
++ option on_fetch_cat=1 issues current configuration to stdout.
++ Acme.pm: support for Oracle Acme Packet.
++ Mediant.pm: support for Audiocodes Mediant.
+
+## 0.22
++ JunOS.pm: support for Juniper JunOS.
+
+## 0.21
++ TellabsMSR.pm: support for Tellabs MSR Routers.
+
+## 0.20
++ CiscoPIX.pm: support for Cisco PIX.
+
+## 0.19
++ suport for Mikrotik RB800.
+
+## 0.18
++ support for 3Com MSR devices.
+
+## 0.17
++ bug #25475: Stuart Schneis added compatibility for Dell 6224P, 5324, 5424
+
+## 0.16
++ rip@devco.net added CiscoASA.pm sr #106606: Cisco ASA Support 
+
+## 0.15
++ support equal '=' character in values for options.
+
+## 0.14
++ option timezone=hide omits timezone name from file name.
++ added DmSwitch.pm for Datacom DmSwitch devices.
+
+## 0.13
++ resort to strftime -%Z for tz name in systems which
+  lack support for strftime %z for tz offset (Solaris 7).
++ added FETCHCONFIG_DEV_ID and FETCHCONFIG_DEV_HOST
+  environmental variables to external on_fetch_run program.
+
+## 0.12
++ option on_fetch_run to call an external program whenever
+  a config backup is fetched.
++ append timezone offset to backup filename.
++ Sergey Alexanov added Terayon.pm for Old Terayon 3200/3500 CMTS.
+
+## 0.11
++ add retrieval timing info into log.
+
+## 0.10
++ bug #21501: Problem if device-specific-options are not specified
+
+## 0.9
++ Slightly better device table parser in order to support
+  options with blank spaces. Example: show_cmd=show run
+
+## 0.8
++ Julien Louis added Dell.pm for Dell PowerConnect switches.
+
+## 0.7
++ added Riverstone.pm for Alcatel Ethernet Routers.
+
+## 0.6
++ added Parks.pm.
++ log program version. (cmd line option: -v)
+
+## 0.5
++ added show_cmd option for older routers in CiscoIOS.pm. (Task 6204)
++ added FortiGate.pm.  (Doug Schaapveld / Task 6205)
++ modified CiscoIOS.pm, FortiGate.pm to strip leading "show" commands
+  and other info.  This results in clean configs that can be used
+  as-is to restore a device.  (Doug Schaapveld)
++ added ProCurve.pm for HP Procurve switches.  (Doug Schaapveld)
+
+## 0.4
++ added CiscoCAT.pm contributed by Marcos Sandez.
+
+## 0.3
++ ported to Windows.
+
+## 0.2
++ new filesystem layout.
++ FSF address updated.
+
+## 0.1
++ notes about the device id.
++ copyright notice at beginning of source files.
++ added this CHANGES file.

@@ -395,11 +395,6 @@ exit 10 if fetchconfig::model::Detector->lock_dir_failed;
 
 exit;
 
-#
-# Usage text. usage() prints it to STDERR (used on errors, followed by
-# die); usage_stdout() prints it to STDOUT and is used for a deliberate
-# help request (-?, -h, --help), which exits 0.
-#
 sub check_template_file {
     my ($path) = @_;
     if (!defined($path) || $path eq '') {
@@ -541,9 +536,6 @@ sub usage_text {
     $t .= "                             be removed. A held lock is never removed. Honours -devices= for\n";
     $t .= "                             a custom lock_dir=.\n";
     $t .= "       --check-template PATH  structurally check the generic-model template at PATH\n";
-    $t .= "       --template-syntax PATH print the template's declared syntax style (the value of its\n";
-    $t .= "                      # syntax_style: <token> header comment) to stdout, for a config viewer;\n";
-    $t .= "                      exits 0 if declared, 1 if not. Backup behaviour is never affected\n";
     $t .= "                      (grammar + the load-time validator: self-loops, goto targets, capture\n";
     $t .= "                      markers, reachability, transport entry) and exit. PATH must be the full\n";
     $t .= "                      path to the .tmpl file (a bare template name is not resolved, since the\n";
@@ -551,6 +543,9 @@ sub usage_text {
     $t .= "                      device table. Prints ok or the errors; exits 0 ok, 1 errors, 2 file\n";
     $t .= "                      problem. This is a STRUCTURAL check only - it does not verify the\n";
     $t .= "                      template against a real device.\n";
+    $t .= "       --template-syntax PATH print the template's declared syntax style (the value of its\n";
+    $t .= "                      # syntax_style: <token> header comment) to stdout, for a config viewer;\n";
+    $t .= "                      exits 0 if declared, 1 if not. Backup behaviour is never affected.\n";
     $t .= "       -f file        write the result data (config/diff/listing rows) to file instead of stdout; log\n";
     $t .= "                      messages still go to stderr. A check that finds nothing writes an EMPTY file -\n";
     $t .= "                      that is the expected result; the outcome is in the exit status. Does NOT apply\n";
@@ -560,6 +555,11 @@ sub usage_text {
     $t;
 }
 
+#
+# Usage text. usage() prints it to STDERR (used on errors, followed by
+# die); usage_stdout() prints it to STDOUT and is used for a deliberate
+# help request (-?, -h, --help), which exits 0.
+#
 sub usage {
     warn usage_text();
 }
@@ -628,7 +628,6 @@ sub run_fetch_phase {
     $done_w->autoflush(1); $work_w->autoflush(1);
 
     my %child;        # pid => 1
-    my %holding;      # pid => dev_id currently being fetched (for crash accounting)
 
     my $shutdown = 0;
     local $SIG{INT} = local $SIG{TERM} = sub { $shutdown = 1; kill 'TERM', keys %child; };
@@ -675,15 +674,14 @@ sub run_fetch_phase {
     close $work_w;
 
     # Collect completions and replay each device's buffered output as
-    # one block. Also learn which worker holds which device.
+    # one block.
     my %pending = map { $_ => 1 } @devs;
-    my %started;
     while (%pending) {
 	my $line = <$done_r>;
 	if (!defined($line)) { last; }          # all workers gone
 	chomp $line;
 	my ($dev_id, $what) = split /\t/, $line, 2;
-	if ($what eq 'start') { $started{$dev_id} = 1; next; }
+	next if $what eq 'start';
 	replay_device_block($tmpdir, $dev_id);
 	delete $pending{$dev_id};
     }

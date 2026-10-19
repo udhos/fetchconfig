@@ -142,7 +142,7 @@ sub expect_enable_prompt_paging {
 	return undef;
     }
 
-    my $escaped_prompt = &escape_brackets($prompt);
+    my $escaped_prompt = $self->escape_brackets($prompt);
     $self->log_debug("regexp='$prompt' escaped_brackets='$escaped_prompt'");
 
     my $prompt_regexp = '/(' . $escaped_prompt . ')|(' . $paging_prompt . ')/';

@@ -428,6 +428,7 @@ sub do_fetch {
     my ($prompt, $sign) = $self->wait_for_prompt($t, $dev_opt_tab);
     return unless defined($prompt);
     $self->log_debug("found command prompt: [$prompt$sign ]");
+    $self->drain_until_idle($t, $self->{prompt_settle_ms}) if $used eq 'ssh';
 
     if ($sign eq '>') {
 	return if $self->chat_enable($t, $prompt, $dev_enable);

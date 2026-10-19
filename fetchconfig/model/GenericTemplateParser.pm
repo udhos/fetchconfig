@@ -29,7 +29,7 @@ use strict;
 use warnings;
 
 my %DIRECTIVE_SCALAR = map { $_ => 1 } qw(
-    banner_timeout fetch_timeout fetch_delay prompt_settle max_visits
+    banner_timeout fetch_timeout fetch_delay max_visits
     strip_ansi prompt_head prompt_tail ssh_extra_opts skip_first
 );
 
@@ -207,11 +207,6 @@ sub _parse_action {
 my @ENTRY_STATES = qw(state_login_ssh state_password_ssh
                       state_login_telnet state_password_telnet);
 my %IS_ENTRY = map { $_ => 1 } @ENTRY_STATES;
-
-sub entry_state {
-    my ($t, $transport) = @_;
-    return "state_login_$transport";
-}
 
 sub _validate {
     my ($t) = @_;

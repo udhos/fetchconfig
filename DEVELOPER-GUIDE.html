@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fetchconfig &mdash; Developer Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbfbf9;
+    --surface:#f1f4f4;
+    --surface-2:#e9edee;
+    --border:#dde3e3;
+    --text:#141a1f;
+    --text-muted:#5b6770;
+    --text-faint:#8a949b;
+    --accent:#0e7c8c;
+    --accent-bright:#22aabb;
+    --accent-soft:#e3f3f5;
+    --danger:#c4432b;
+    --danger-soft:#fbeae6;
+    --success:#1c8a5b;
+    --success-soft:#e8f5ee;
+    --changed:#2451c4;
+    --changed-soft:#e8edfb;
+    --code-bg:#10171c;
+    --code-text:#dce8ec;
+    --code-accent:#7fe0cc;
+    --code-muted:#7f929b;
+    --radius:6px;
+    --font-sans:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace;
+    --sidebar-w:280px;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    font-family:var(--font-sans);
+    color:var(--text);
+    background:var(--bg);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  a{color:var(--accent);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{
+    outline:2px solid var(--accent-bright);
+    outline-offset:2px;
+  }
+
+  code, kbd{
+    font-family:var(--font-mono);
+    font-size:0.88em;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:0.1em 0.4em;
+    color:var(--text);
+    white-space:nowrap;
+  }
+
+  pre{
+    font-family:var(--font-mono);
+    background:var(--code-bg);
+    color:var(--code-text);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    overflow-x:auto;
+    font-size:0.86rem;
+    line-height:1.65;
+    margin:16px 0;
+    border:1px solid #05090c;
+  }
+  pre code{
+    background:none;
+    border:none;
+    padding:0;
+    white-space:pre;
+    color:inherit;
+    font-size:1em;
+  }
+  pre .c{color:var(--code-muted);} /* comment */
+  pre .s{color:var(--code-accent);} /* string / value */
+  pre .k{color:#e8b95f;} /* keyword / flag */
+
+  h1,h2,h3,h4{
+    font-family:var(--font-sans);
+    font-weight:600;
+    line-height:1.25;
+    color:var(--text);
+    letter-spacing:-0.01em;
+  }
+
+  /* ---------- Layout ---------- */
+  .layout{
+    display:flex;
+    align-items:flex-start;
+    max-width:1600px;
+    margin:0 auto;
+  }
+
+  .sidebar{
+    position:sticky;
+    top:0;
+    height:100vh;
+    width:var(--sidebar-w);
+    flex:0 0 var(--sidebar-w);
+    overflow-y:auto;
+    padding:28px 22px 40px;
+    border-right:1px solid var(--border);
+    background:var(--surface);
+  }
+
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:4px;
+  }
+  .brand-mark{
+    width:30px;height:30px;border-radius:7px;
+    background:linear-gradient(155deg,var(--accent-bright),var(--accent));
+    display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;
+  }
+  .brand-mark svg{width:17px;height:17px;}
+  .brand-name{font-weight:700;font-size:1.05rem;letter-spacing:-0.01em;}
+
+  .brand-meta{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-muted);
+    margin:6px 0 22px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .pill{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:99px;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text-muted);
+  }
+
+  .nav-group{margin-bottom:4px;}
+  .nav-group-label{
+    font-size:0.68rem;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--text-faint);
+    margin:20px 0 6px;
+    font-weight:600;
+  }
+  .nav-group:first-of-type .nav-group-label{margin-top:0;}
+
+  .sidebar nav a{
+    display:block;
+    color:var(--text-muted);
+    font-size:0.885rem;
+    padding:6px 10px;
+    border-radius:5px;
+    text-decoration:none;
+    border-left:2px solid transparent;
+    transition:background 0.12s ease, color 0.12s ease;
+  }
+  .sidebar nav a:hover{background:var(--surface-2);color:var(--text);}
+  .sidebar nav a.active{
+    color:var(--accent);
+    background:var(--accent-soft);
+    border-left-color:var(--accent-bright);
+    font-weight:500;
+  }
+
+  .main-col{
+    flex:1 1 auto;
+    min-width:0;
+    padding:0 0 120px;
+  }
+
+  .content{
+    max-width:1200px;
+    margin:0 auto;
+    padding:0 48px;
+  }
+  /* Keep flowing prose at a comfortable reading measure, but let wide
+     elements (tables, code blocks, diagrams) use the full content width so
+     they don't need a horizontal scrollbar on a wide screen. */
+  .content > p,
+  .content > ul,
+  .content > ol,
+  .content > h2,
+  .content > h3,
+  .content > h4,
+  .content > blockquote{
+    max-width:820px;
+  }
+  .content > .table-wrap,
+  .content > pre,
+  .content > .callout{
+    max-width:100%;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding:64px 48px 48px;
+    max-width:1200px;
+    margin:0 auto;
+    border-bottom:1px solid var(--border);
+  }
+  .hero-eyebrow{
+    font-family:var(--font-mono);
+    font-size:0.78rem;
+    color:var(--accent);
+    margin-bottom:14px;
+  }
+  .hero h1{
+    font-size:2.6rem;
+    margin:0 0 14px;
+    letter-spacing:-0.02em;
+    color:var(--accent);
+  }
+  .mermaid{
+    /* A mermaid block is a <pre>, so it would otherwise inherit the dark code
+       background/border/padding. Render the diagram on the page background. */
+    margin:1.5rem 0;
+    text-align:center;
+    background:transparent;
+    color:inherit;
+    border:0;
+    padding:0;
+    overflow-x:auto;
+  }
+  /* Until mermaid.js has rendered a block (it stamps data-processed on success),
+     keep the raw diagram source hidden so it is never shown as a wall of text --
+     during the CDN load, or if the runtime is blocked/unavailable. mermaid still
+     measures and renders normally while it is hidden; the element reveals itself
+     the moment it is processed. */
+  figure.diagram{margin:1.5rem 0;text-align:center;}
+  .diagram-svg{display:block;}
+  .diagram-svg svg{max-width:100%;height:auto;}
+  /* keep raw mermaid source hidden until rendered */
+  .mermaid:not([data-processed]){display:none;}
+  .mermaid[data-processed]{display:block;}
+  /* once live mermaid has rendered, hide the embedded SVG fallback */
+  .mermaid[data-processed] + .diagram-svg{display:none;}
+  .hero p.lede{
+    font-size:1.13rem;
+    color:var(--text-muted);
+    max-width:640px;
+    margin:0 0 28px;
+    line-height:1.6;
+  }
+  .hero-stats{
+    display:flex;
+    gap:36px;
+    flex-wrap:wrap;
+    margin-top:8px;
+  }
+  .hero-stat .num{
+    font-family:var(--font-mono);
+    font-size:1.6rem;
+    font-weight:600;
+    color:var(--text);
+    display:block;
+  }
+  .hero-stat .label{
+    font-size:0.8rem;
+    color:var(--text-muted);
+  }
+
+  /* ---------- Sections ---------- */
+  section{
+    padding:56px 0 8px;
+    border-bottom:1px solid var(--border);
+  }
+  section:last-of-type{border-bottom:none;}
+
+  .section-kicker{
+    font-family:var(--font-mono);
+    font-size:0.75rem;
+    color:var(--text-faint);
+    margin-bottom:8px;
+  }
+  h2{
+    font-size:1.65rem;
+    margin:0 0 18px;
+    scroll-margin-top:24px;
+  }
+  h3{
+    font-size:1.18rem;
+    margin:34px 0 12px;
+    scroll-margin-top:24px;
+  }
+  h4{
+    font-size:0.98rem;
+    margin:22px 0 8px;
+    color:var(--text);
+    scroll-margin-top:24px;
+  }
+  p{margin:0 0 14px;color:var(--text);}
+  section p, section li{color:var(--text);}
+  ul,ol{padding-left:1.3em;margin:0 0 16px;}
+  li{margin-bottom:6px;}
+  .prose-muted{color:var(--text-muted);}
+
+  .file-label{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-faint);
+    margin:18px 0 -8px;
+    display:block;
+  }
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:18px 0;
+    border:1px solid var(--border);
+    background:var(--surface);
+    font-size:0.93rem;
+  }
+  .callout-title{
+    font-weight:600;
+    font-size:0.82rem;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    margin-bottom:6px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+  }
+  .callout.warn{background:var(--danger-soft);border-color:#f0c9bd;}
+  .callout.warn .callout-title{color:var(--danger);}
+  .callout.note{background:var(--accent-soft);border-color:#bfe4e9;}
+  .callout.note .callout-title{color:var(--accent);}
+  .callout p:last-child{margin-bottom:0;}
+
+  /* ---------- Tables ---------- */
+  .table-wrap{overflow-x:auto;margin:18px 0 26px;border:1px solid var(--border);border-radius:var(--radius);}
+  table{
+    border-collapse:collapse;
+    width:100%;
+    font-size:0.87rem;
+  }
+  caption{
+    text-align:left;
+    font-size:0.78rem;
+    color:var(--text-muted);
+    padding:8px 14px;
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+    caption-side:top;
+  }
+  th,td{
+    text-align:left;
+    padding:9px 14px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+  }
+  thead th{
+    background:var(--surface);
+    font-weight:600;
+    font-size:0.76rem;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--text-muted);
+    white-space:nowrap;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--surface);}
+  td code, th code{white-space:nowrap;}
+  .req-yes{color:var(--danger);font-weight:600;font-size:0.82rem;}
+  .req-opt{color:var(--text-faint);font-size:0.82rem;}
+  .req-dash{color:var(--border);}
+  .matrix th, .matrix td{text-align:center;}
+  .matrix td:first-child, .matrix th:first-child{text-align:left;}
+  .matrix{font-size:0.8rem;}
+  .matrix code{white-space:nowrap;}
+
+  /* ---------- Flag reference ---------- */
+  .flag-card{
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:14px 0;
+    background:var(--bg);
+  }
+  .flag-card + .flag-card{margin-top:10px;}
+  .flag-head{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:8px;
+  }
+  .flag-tag{
+    font-family:var(--font-mono);
+    font-weight:600;
+    background:var(--code-bg);
+    color:var(--code-accent);
+    border-radius:4px;
+    padding:3px 9px;
+    font-size:0.86rem;
+  }
+  .flag-req{
+    font-size:0.72rem;
+    font-family:var(--font-mono);
+    color:var(--text-faint);
+  }
+  .flag-card p{margin-bottom:8px;font-size:0.92rem;color:var(--text-muted);}
+  .flag-card p:last-child{margin-bottom:0;}
+  .exit-list{list-style:none;padding:0;margin:8px 0 0;font-family:var(--font-mono);font-size:0.82rem;}
+  .exit-list li{display:flex;gap:10px;margin-bottom:3px;}
+  .exit-list .code{color:var(--text);font-weight:600;min-width:1.6em;}
+
+  /* ---------- Footnotes ---------- */
+  sup.fnref{font-size:0.68em;line-height:0;vertical-align:super;}
+  sup.fnref a{color:var(--accent);text-decoration:none;font-weight:600;padding:0 1px;}
+  sup.fnref a:hover{text-decoration:underline;}
+  .footnotes{margin-top:1.4rem;padding-top:0.9rem;border-top:1px solid var(--border);
+             font-size:0.9rem;color:var(--text-muted);}
+  .footnote{margin:0 0 0.55rem 0;padding-left:1.9em;text-indent:-1.9em;line-height:1.5;}
+  .footnote:last-child{margin-bottom:0;}
+  .footnote .fnnum{display:inline-block;min-width:1.5em;text-indent:0;
+                   font-weight:600;color:var(--text);font-family:var(--font-mono);}
+
+  /* ---------- Color swatches (email notif) ---------- */
+  .swatches{display:flex;gap:14px;flex-wrap:wrap;margin:18px 0 22px;}
+  .swatch{
+    display:flex;align-items:center;gap:9px;
+    border:1px solid var(--border);border-radius:99px;
+    padding:5px 12px 5px 6px;font-size:0.82rem;background:var(--surface);
+  }
+  .swatch .dot{width:16px;height:16px;border-radius:50%;flex:0 0 auto;border:1px solid rgba(0,0,0,0.12);}
+
+  /* ---------- Toggle tabs (Installation) ---------- */
+  .tabs{margin:18px 0;}
+  input.tab-input{position:absolute;opacity:0;pointer-events:none;}
+  .tab-labels{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+  .tab-labels label{
+    font-size:0.88rem;font-weight:500;color:var(--text-muted);
+    padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;
+    margin-bottom:-1px;
+  }
+  .tab-panel{display:none;}
+  #tab-unix:checked ~ .tab-labels label[for="tab-unix"],
+  #tab-win:checked ~ .tab-labels label[for="tab-win"]{
+    color:var(--accent);border-bottom-color:var(--accent-bright);
+  }
+  #tab-unix:checked ~ .tab-panels #panel-unix,
+  #tab-win:checked ~ .tab-panels #panel-win{display:block;}
+
+  /* ---------- Device support grid ---------- */
+  .device-grid td:first-child code{font-weight:600;}
+
+  /* ---------- Footer ---------- */
+  .page-footer{
+    max-width:1200px;margin:0 auto;padding:40px 48px 60px;
+    color:var(--text-faint);font-size:0.82rem;
+  }
+  .page-footer a{color:var(--text-muted);}
+
+  /* ---------- Mobile nav ---------- */
+  .nav-toggle{display:none;}
+  .mobile-bar{display:none;}
+
+  @media (max-width: 900px){
+    .sidebar{
+      position:fixed;
+      inset:0 auto 0 0;
+      z-index:40;
+      transform:translateX(-100%);
+      transition:transform 0.2s ease;
+      box-shadow:2px 0 24px rgba(0,0,0,0.15);
+    }
+    .nav-toggle:checked ~ .layout .sidebar{transform:translateX(0);}
+    .mobile-bar{
+      display:flex;align-items:center;justify-content:space-between;
+      position:sticky;top:0;z-index:30;
+      background:var(--bg);border-bottom:1px solid var(--border);
+      padding:14px 20px;
+    }
+    .mobile-bar .brand{margin:0;}
+    .mobile-bar label{
+      font-family:var(--font-mono);font-size:0.8rem;
+      border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;
+    }
+    .content{padding:0 22px;}
+    .hero{padding:36px 22px 32px;}
+    .hero h1{font-size:2rem;}
+    .page-footer{padding:32px 22px 48px;}
+  }
+  @media (min-width:901px){
+    .mobile-bar{display:none !important;}
+  }
+
+  @media print{
+    .sidebar,.mobile-bar{display:none !important;}
+    .layout{display:block;}
+    a{color:inherit;text-decoration:none;}
+    pre{white-space:pre-wrap;}
+  }
+</style>
+
+</head>
+<body>
+
+<input type="checkbox" id="nav-toggle" class="nav-toggle">
+
+<div class="mobile-bar">
+  <div class="brand">
+    <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+    <span class="brand-name">fetchconfig</span>
+  </div>
+  <label for="nav-toggle">Menu</label>
+</div>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="brand-name">fetchconfig</span>
+    </div>
+    <div class="brand-meta">
+      <span class="pill">v9.72</span>
+      <span class="pill">GPL&#8209;2.0+</span>
+    </div>
+
+    <nav>
+<div class="nav-group"><a href="#1-what-fetchconfig-is">1. What fetchconfig is</a></div>
+<div class="nav-group"><div class="nav-group-label">2. Architecture and execution model</div><a href="#21-module-map">2.1 Module map</a><a href="#22-the-two-phases">2.2 The two phases</a><a href="#23-the-per-device-pipeline-fetch_device">2.3 The per-device pipeline (<code>fetch_device</code>)</a><a href="#231-sequence-diagram----one-device-through-fetch_device">2.3.1 Sequence diagram -- one device through <code>fetch_device</code></a><a href="#24-parallel-fetch--p-n">2.4 Parallel fetch (<code>-P N</code>)</a></div>
+<div class="nav-group"><div class="nav-group-label">3. Data structures</div><a href="#31-detectorpm----the-device-registry">3.1 Detector.pm -- the device registry</a><a href="#32-dev_opt_tab----the-per-device-option-hash">3.2 <code>$dev_opt_tab</code> -- the per-device option hash</a><a href="#33-mailerpm----the-result-record">3.3 Mailer.pm -- the result record</a><a href="#34-on-disk-structures">3.4 On-disk structures</a></div>
+<div class="nav-group"><div class="nav-group-label">4. The device table format</div><a href="#41-device-line">4.1 Device line</a><a href="#42-default-line">4.2 <code>default:</code> line</a><a href="#43-email-line">4.3 <code>email:</code> line</a><a href="#44-directory-line-the-allowlist">4.4 <code>directory:</code> line (the allowlist)</a><a href="#45-options-available-for-all-models">4.5 Options available for all models</a></div>
+<div class="nav-group"><div class="nav-group-label">5. Models and the model API</div><a href="#51-lifecycle">5.1 Lifecycle</a><a href="#52-the-shared-api-abstractpm">5.2 The shared API (Abstract.pm)</a><a href="#521-call-graph----core---model---abstract">5.2.1 Call graph -- core &lt;-&gt; model &lt;-&gt; Abstract</a><a href="#53-adding-a-model">5.3 Adding a model</a></div>
+<div class="nav-group"><a href="#6-debug-tracing-debugon">6. Debug tracing (<code>debug=on</code>)</a></div>
+<div class="nav-group"><a href="#7-maintenance--lookup-modes-toolspm">7. Maintenance / lookup modes (Tools.pm)</a></div>
+<div class="nav-group"><a href="#8-locking">8. Locking</a></div>
+<div class="nav-group"><div class="nav-group-label">9. Security mechanisms</div><a href="#91-trust-model-read-this-first">9.1 Trust model (read this first)</a><a href="#92-credential-handling">9.2 Credential handling</a><a href="#93-command-execution----on_fetch_run">9.3 Command execution -- <code>on_fetch_run</code></a><a href="#94-path-safety">9.4 Path safety</a><a href="#95-locking">9.5 Locking</a><a href="#96-file-permissions">9.6 File permissions</a><a href="#97-mail">9.7 Mail</a><a href="#98-deliberate-non-mitigations-do-not-fix-these-blindly">9.8 Deliberate NON-mitigations (do not &quot;fix&quot; these blindly)</a></div>
+<div class="nav-group"><a href="#10-notification-subsystem-mailer--report">10. Notification subsystem (Mailer / Report)</a></div>
+<div class="nav-group"><div class="nav-group-label">11. Extension recipes</div><a href="#111-add-a-device-option">11.1 Add a device option</a><a href="#112-add-a-new-model">11.2 Add a new model</a><a href="#113-add-a-maintenancelookup-mode">11.3 Add a maintenance/lookup mode</a><a href="#114-add-a-per-device-result-field-eg-a-new-mail-column">11.4 Add a per-device result field (e.g. a new mail column)</a></div>
+<div class="nav-group"><a href="#12-testing">12. Testing</a></div>
+<div class="nav-group"><a href="#13-conventions-and-gotchas">13. Conventions and gotchas</a></div>
+<div class="nav-group"><a href="#14-document-map">14. Document map</a></div>
+    </nav>
+  </aside>
+
+  <div class="main-col">
+
+    <div class="hero">
+      <div class="hero-eyebrow">Developer Guide</div>
+      <h1 class="hero-title">fetchconfig</h1>
+      <p class="lede">This guide documents how fetchconfig works internally, the data structures it uses, the device-table format, the security mechanisms in place, and how to extend it. It is written for an engineer who needs to add functionality.</p>
+      
+      
+    </div>
+
+    <div class="content">
+
+<p>It complements, and does not replace, the following existing documents, which remain authoritative for their topics and are referenced from here:</p>
+<ul><li><code>README</code> -- the user manual (installation, every option, email, the directory allowlist, command-line reference).</li><li><code>How-To-add-a-model</code> -- the step-by-step recipe for a new device model.</li><li><code>README.generic-model</code> -- the template-driven <code>generic</code> model.</li><li><code>README.template_engine</code> -- the template grammar and parser internals.</li><li><code>README.record-session</code> -- <code>tools/record-session.pl</code>, used to capture a device session when writing a new model.</li><li><code>DEPENDENCIES</code> -- the Perl module dependency matrix.</li></ul>
+<p>Where this guide found those documents lacking a detail an extender needs, that detail is added here and noted as such.</p>
+<p>Target version: 9.72. Perl floor: 5.26.</p>
+<hr>
+<section id="1-what-fetchconfig-is">
+<div class="section-kicker">01</div>
+<h2>1. What fetchconfig is</h2>
+<p>fetchconfig is a <strong>command-line tool</strong> (not a daemon) that logs in to network devices, retrieves their running configuration, and stores a timestamped copy in a per-device directory, keeping only the configs that differ from the previous run. It is normally invoked from cron. A separate project, fetchconfig-web, is a CGI front-end that reads the stored backups and can invoke fetchconfig to run a backup on demand.</p>
+<p>Key properties that shape the whole design:</p>
+<ul><li><strong>One shot per invocation.</strong> fetchconfig parses its device table, fetches, writes, mails, and exits. It holds no state between runs except what is on disk (the backups, <code>.status</code> files, lock files).</li><li><strong>Models never terminate the run.</strong> A device that fails to fetch is recorded as failed and the run continues to the next device. Only configuration errors in the device table or the directory allowlist abort before fetching.</li><li><strong>The device table is the trust boundary.</strong> Whoever can write the device table supplies every device credential and can cause code execution via <code>on_fetch_run</code>. See section 9 (Security).</li></ul>
+<hr>
+</section>
+<section id="2-architecture-and-execution-model">
+<div class="section-kicker">02</div>
+<h2>2. Architecture and execution model</h2>
+<h3 id="21-module-map">2.1 Module map</h3>
+<div class="table-wrap"><table><thead><tr><th>File</th><th>Role</th></tr></thead><tbody><tr><td><code>fetchconfig.pl</code></td><td>Driver: CLI option parsing, device-table loading, dispatch to a maintenance/lookup mode or the fetch phase, the parallel-fetch (<code>-P</code>) fork loop, final exit code.</td></tr><tr><td><code>fetchconfig/model/Detector.pm</code></td><td>The registry and the per-device pipeline. Holds the in-memory device table, parses <code>default:</code>/<code>email:</code>/<code>directory:</code>/device lines, enforces the directory allowlist, and runs <code>fetch_device()</code> per device.</td></tr><tr><td><code>fetchconfig/model/Abstract.pm</code></td><td>The base class for every model. Provides the shared API: SSH/telnet session helpers, prompt handling, backup write/compare/expire, option accessors, secret handling, the debug-file helpers, locking primitives.</td></tr><tr><td><code>fetchconfig/model/*.pm</code></td><td>The device models (34 device models + <code>AbstractHTTP</code> base + <code>GenericTemplate</code>/<code>GenericTemplateParser</code>). Each implements <code>do_fetch()</code> for its transport/CLI dialect.</td></tr><tr><td><code>fetchconfig/Tools.pm</code></td><td>The maintenance/lookup modes (<code>-g</code>, <code>-l</code>, <code>-z/-Z</code>, <code>-o</code>, <code>-e</code>, <code>-s/-S</code>, <code>--list-allowed-dirs</code>, <code>--clean-lock-dir</code>, etc.) and their shared filesystem helpers.</td></tr><tr><td><code>fetchconfig/Mailer.pm</code></td><td>SMTP delivery and the result record: <code>record_result()</code>, the per-recipient grouping, the HTML + plain-text summary mail.</td></tr><tr><td><code>fetchconfig/Report.pm</code></td><td>The on-disk HTML change report and the config-diff masking (<code>mask_line</code>).</td></tr><tr><td><code>fetchconfig/Constants.pm</code></td><td><code>version()</code> and a few constants.</td></tr><tr><td><code>fetchconfig/Logger.pm</code></td><td>The logger object (prefix, levels: debug/info/error).</td></tr></tbody></table></div>
+<h3 id="22-the-two-phases">2.2 The two phases</h3>
+<p>fetchconfig runs in two clearly separated phases. Keeping them separate is a deliberate design rule -- understand it before adding per-device behaviour.</p>
+<p><strong>Phase 1 -- parse and register (no fetching).</strong> <code>fetchconfig.pl</code> loads every <code>-devices=</code> file and every <code>-line=</code> argument and calls <code>Detector::parse()</code> on each line. <code>parse()</code>:</p>
+<ol><li value="1">recognises the line type (<code>email:</code>, <code>directory:</code>, <code>default:</code>, or a device line -- see section 4),</li><li value="2">for a device line, resolves the model, merges <code>default:</code> options with the device&#x27;s own options into a fresh <code>$dev_opt_tab</code>, validates (<code>dev_id</code> pattern, numeric <code>keep</code>), and records the device in <code>%dev_info_table</code> + <code>@dev_order</code>.</li></ol>
+<p>No device is contacted in phase 1. The lookup modes (<code>-g</code>, <code>-l</code>, ...) use exactly this registration and then operate on the stored backups without ever entering phase 2.</p>
+<p><strong>Phase 2 -- fetch.</strong> After phase 1, <code>fetchconfig.pl</code> either dispatches to a maintenance/lookup mode and exits, or calls <code>run_fetch_phase()</code>, which iterates <code>@dev_order</code> and calls <code>Detector::fetch_device($dev_id)</code> for each -- sequentially, or in forked workers under <code>-P</code> (section 2.4).</p>
+<h3 id="23-the-per-device-pipeline-fetch_device">2.3 The per-device pipeline (<code>fetch_device</code>)</h3>
+<p>For each device, <code>fetch_device()</code> performs, in order:</p>
+<ol><li value="1"><strong>Resolve options</strong> needed up front: <code>changes_only</code>, <code>on_fetch_run</code>, <code>on_fetch_cat</code>, and whether a previous backup must be located.</li><li value="2"><strong>Locate previous backup</strong> (only when <code>changes_only</code>, <code>on_fetch_run</code> or <code>on_fetch_cat</code> needs it): <code>find_latest</code> scans the repository for the most recent prior backup, by parsed timestamp; the result feeds the compare in step 8. A freshly added device has none -- that normal first-run state is logged at info, inside the device&#x27;s block. This runs before the guards below, so the scan happens even for a device a later guard will skip.</li><li value="3"><strong>System-directory check</strong> (always): reject a <code>repository=</code>, <code>template_dir=</code> or <code>on_fetch_run</code> program that points into a system directory; skip the device if so (section 9).</li><li value="4"><strong>No-allowlist warning</strong> (if no <code>directory:</code> section): warn once per run per distinct unrestricted directory.</li><li value="5"><strong>Directory-allowlist enforcement</strong> (only if a <code>directory:</code> section exists): <code>repository=</code>/<code>template_dir=</code> must resolve to an allowed path; <code>on_fetch_run</code>&#x27;s program directory must be allowed; a <code>$TAG</code> is expanded to its real path. Off-list -&gt; skip the device.</li><li value="6"><strong>Lock</strong> (if <code>lock=on</code>): acquire a per-device flock; on contention, retry, then record <code>skipped</code> and return (section 8).</li><li value="7"><strong>Fetch</strong>: <code>$mod-&gt;fetch(...)</code> -&gt; the model&#x27;s <code>do_fetch()</code> logs in, runs the show-config command, and returns the written backup path (or undef on failure). On <code>debug=on</code>, the session is captured to <code>&lt;dev_id&gt;.debug</code>.</li><li value="8"><strong>Compare</strong>: compare the just-written config against the previous latest backup located in step 2 (<code>config_equal</code>, ignoring volatile lines). If unchanged, <strong>discard</strong> the just-written file (<code>config_discard</code>) so only changes are kept.</li><li value="9"><strong>Expire</strong>: <code>purge_ancient</code> deletes the oldest backups beyond <code>keep=N</code>.</li><li value="10"><strong>Record</strong>: <code>Mailer::record_result(...)</code> logs the per-device outcome.</li><li value="11"><strong>on_fetch_run</strong>: if set, run the external program (shell-free; section 9).</li></ol>
+<p>The lock filehandle is held in a lexical for the whole of <code>fetch_device</code>, so it releases automatically when the sub returns, by any path.</p>
+<h3 id="231-sequence-diagram----one-device-through-fetch_device">2.3.1 Sequence diagram -- one device through <code>fetch_device</code></h3>
+<p>Time runs downward. <code>--&gt;</code> is a return. A model&#x27;s <code>do_fetch</code> is the only box that talks to the device; everything else is core. The three early guards (system-dir, allowlist, lock) can each end the device early with a recorded outcome.</p>
+<figure class="diagram"><pre class="mermaid">sequenceDiagram
+    autonumber
+    participant D as driver
+    participant F as Detector fetch_device
+    participant M as model do_fetch
+    participant S as Mailer and FS
+    D-&gt;&gt;F: fetch_device(dev_id)
+    F-&gt;&gt;F: read options
+    F-&gt;&gt;S: find_latest(dev_id) if needed
+    Note over F: system-dir check (always)
+    F--&gt;&gt;S: on reject, record skipped
+    Note over F: directory allowlist if present
+    F--&gt;&gt;S: off-list, record skipped
+    Note over F: acquire_device_lock if lock=on, retry N
+    F--&gt;&gt;S: still locked, record skipped
+    F-&gt;&gt;M: fetch then do_fetch
+    M-&gt;&gt;M: login via print_secret, open debug file, show-config
+    M-&gt;&gt;S: dump_config writes backup (O_EXCL)
+    M--&gt;&gt;F: config path or undef
+    F--&gt;&gt;S: if undef, record failed
+    F-&gt;&gt;F: config_equal(latest, new)
+    alt unchanged
+        F-&gt;&gt;S: config_discard, delete backup
+        F-&gt;&gt;S: record success, unchanged
+        F-&gt;&gt;S: purge_ancient, expire old
+    else changed or initial
+        F-&gt;&gt;S: record success, changed
+        F-&gt;&gt;S: purge_ancient
+        F-&gt;&gt;S: run on_fetch_run, shell-free
+    end
+    F--&gt;&gt;D: return, lock releases</pre><div class="diagram-svg"><svg id="dhe2r1fjantj" width="100%" xmlns="http://www.w3.org/2000/svg" style="max-width: 1000px;" viewBox="-50 -10 1000 1375" role="graphics-document document" aria-roledescription="sequence"><g><rect x="750" y="1289" fill="#eaeaea" stroke="#666" width="150" height="65" name="S" rx="3" ry="3" class="actor actor-bottom"></rect><text x="825" y="1321.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="825" dy="0">Mailer and FS</tspan></text></g><g><rect x="425" y="1289" fill="#eaeaea" stroke="#666" width="150" height="65" name="M" rx="3" ry="3" class="actor actor-bottom"></rect><text x="500" y="1321.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="500" dy="0">model do_fetch</tspan></text></g><g><rect x="200" y="1289" fill="#eaeaea" stroke="#666" width="175" height="65" name="F" rx="3" ry="3" class="actor actor-bottom"></rect><text x="287.5" y="1321.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="287.5" dy="0">Detector fetch_device</tspan></text></g><g><rect x="0" y="1289" fill="#eaeaea" stroke="#666" width="150" height="65" name="D" rx="3" ry="3" class="actor actor-bottom"></rect><text x="75" y="1321.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="75" dy="0">driver</tspan></text></g><g><line id="actor3" x1="825" y1="65" x2="825" y2="1289" class="actor-line 200" stroke-width="0.5px" stroke="#999" name="S"></line><g id="root-3"><rect x="750" y="0" fill="#eaeaea" stroke="#666" width="150" height="65" name="S" rx="3" ry="3" class="actor actor-top"></rect><text x="825" y="32.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="825" dy="0">Mailer and FS</tspan></text></g></g><g><line id="actor2" x1="500" y1="65" x2="500" y2="1289" class="actor-line 200" stroke-width="0.5px" stroke="#999" name="M"></line><g id="root-2"><rect x="425" y="0" fill="#eaeaea" stroke="#666" width="150" height="65" name="M" rx="3" ry="3" class="actor actor-top"></rect><text x="500" y="32.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="500" dy="0">model do_fetch</tspan></text></g></g><g><line id="actor1" x1="287.5" y1="65" x2="287.5" y2="1289" class="actor-line 200" stroke-width="0.5px" stroke="#999" name="F"></line><g id="root-1"><rect x="200" y="0" fill="#eaeaea" stroke="#666" width="175" height="65" name="F" rx="3" ry="3" class="actor actor-top"></rect><text x="287.5" y="32.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="287.5" dy="0">Detector fetch_device</tspan></text></g></g><g><line id="actor0" x1="75" y1="65" x2="75" y2="1289" class="actor-line 200" stroke-width="0.5px" stroke="#999" name="D"></line><g id="root-0"><rect x="0" y="0" fill="#eaeaea" stroke="#666" width="150" height="65" name="D" rx="3" ry="3" class="actor actor-top"></rect><text x="75" y="32.5" dominant-baseline="central" alignment-baseline="central" class="actor actor-box" style="text-anchor: middle; font-size: 16px; font-weight: 400;"><tspan x="75" dy="0">driver</tspan></text></g></g><style>#dhe2r1fjantj{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;fill:#000000;}#dhe2r1fjantj .error-icon{fill:#552222;}#dhe2r1fjantj .error-text{fill:#552222;stroke:#552222;}#dhe2r1fjantj .edge-thickness-normal{stroke-width:1px;}#dhe2r1fjantj .edge-thickness-thick{stroke-width:3.5px;}#dhe2r1fjantj .edge-pattern-solid{stroke-dasharray:0;}#dhe2r1fjantj .edge-thickness-invisible{stroke-width:0;fill:none;}#dhe2r1fjantj .edge-pattern-dashed{stroke-dasharray:3;}#dhe2r1fjantj .edge-pattern-dotted{stroke-dasharray:2;}#dhe2r1fjantj .marker{fill:#666;stroke:#666;}#dhe2r1fjantj .marker.cross{stroke:#666;}#dhe2r1fjantj svg{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;}#dhe2r1fjantj p{margin:0;}#dhe2r1fjantj .actor{stroke:hsl(0, 0%, 83%);fill:#eee;}#dhe2r1fjantj text.actor>tspan{fill:#333;stroke:none;}#dhe2r1fjantj .actor-line{stroke:hsl(0, 0%, 83%);}#dhe2r1fjantj .messageLine0{stroke-width:1.5;stroke-dasharray:none;stroke:#333;}#dhe2r1fjantj .messageLine1{stroke-width:1.5;stroke-dasharray:2,2;stroke:#333;}#dhe2r1fjantj #arrowhead path{fill:#333;stroke:#333;}#dhe2r1fjantj .sequenceNumber{fill:white;}#dhe2r1fjantj #sequencenumber{fill:#333;}#dhe2r1fjantj #crosshead path{fill:#333;stroke:#333;}#dhe2r1fjantj .messageText{fill:#333;stroke:none;}#dhe2r1fjantj .labelBox{stroke:hsl(0, 0%, 83%);fill:#eee;}#dhe2r1fjantj .labelText,#dhe2r1fjantj .labelText>tspan{fill:#333;stroke:none;}#dhe2r1fjantj .loopText,#dhe2r1fjantj .loopText>tspan{fill:#333;stroke:none;}#dhe2r1fjantj .loopLine{stroke-width:2px;stroke-dasharray:2,2;stroke:hsl(0, 0%, 83%);fill:hsl(0, 0%, 83%);}#dhe2r1fjantj .note{stroke:#999;fill:#666;}#dhe2r1fjantj .noteText,#dhe2r1fjantj .noteText>tspan{fill:#fff;stroke:none;}#dhe2r1fjantj .activation0{fill:#f4f4f4;stroke:#666;}#dhe2r1fjantj .activation1{fill:#f4f4f4;stroke:#666;}#dhe2r1fjantj .activation2{fill:#f4f4f4;stroke:#666;}#dhe2r1fjantj .actorPopupMenu{position:absolute;}#dhe2r1fjantj .actorPopupMenuPanel{position:absolute;fill:#eee;box-shadow:0px 8px 16px 0px rgba(0,0,0,0.2);filter:drop-shadow(3px 5px 2px rgb(0 0 0 / 0.4));}#dhe2r1fjantj .actor-man line{stroke:hsl(0, 0%, 83%);fill:#eee;}#dhe2r1fjantj .actor-man circle,#dhe2r1fjantj line{stroke:hsl(0, 0%, 83%);fill:#eee;stroke-width:2px;}#dhe2r1fjantj :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}</style><g></g><defs><symbol id="computer" width="24" height="24"><path transform="scale(.5)" d="M2 2v13h20v-13h-20zm18 11h-16v-9h16v9zm-10.228 6l.466-1h3.524l.467 1h-4.457zm14.228 3h-24l2-6h2.104l-1.33 4h18.45l-1.297-4h2.073l2 6zm-5-10h-14v-7h14v7z"></path></symbol></defs><defs><symbol id="database" fill-rule="evenodd" clip-rule="evenodd"><path transform="scale(.5)" d="M12.258.001l.256.004.255.005.253.008.251.01.249.012.247.015.246.016.242.019.241.02.239.023.236.024.233.027.231.028.229.031.225.032.223.034.22.036.217.038.214.04.211.041.208.043.205.045.201.046.198.048.194.05.191.051.187.053.183.054.18.056.175.057.172.059.168.06.163.061.16.063.155.064.15.066.074.033.073.033.071.034.07.034.069.035.068.035.067.035.066.035.064.036.064.036.062.036.06.036.06.037.058.037.058.037.055.038.055.038.053.038.052.038.051.039.05.039.048.039.047.039.045.04.044.04.043.04.041.04.04.041.039.041.037.041.036.041.034.041.033.042.032.042.03.042.029.042.027.042.026.043.024.043.023.043.021.043.02.043.018.044.017.043.015.044.013.044.012.044.011.045.009.044.007.045.006.045.004.045.002.045.001.045v17l-.001.045-.002.045-.004.045-.006.045-.007.045-.009.044-.011.045-.012.044-.013.044-.015.044-.017.043-.018.044-.02.043-.021.043-.023.043-.024.043-.026.043-.027.042-.029.042-.03.042-.032.042-.033.042-.034.041-.036.041-.037.041-.039.041-.04.041-.041.04-.043.04-.044.04-.045.04-.047.039-.048.039-.05.039-.051.039-.052.038-.053.038-.055.038-.055.038-.058.037-.058.037-.06.037-.06.036-.062.036-.064.036-.064.036-.066.035-.067.035-.068.035-.069.035-.07.034-.071.034-.073.033-.074.033-.15.066-.155.064-.16.063-.163.061-.168.06-.172.059-.175.057-.18.056-.183.054-.187.053-.191.051-.194.05-.198.048-.201.046-.205.045-.208.043-.211.041-.214.04-.217.038-.22.036-.223.034-.225.032-.229.031-.231.028-.233.027-.236.024-.239.023-.241.02-.242.019-.246.016-.247.015-.249.012-.251.01-.253.008-.255.005-.256.004-.258.001-.258-.001-.256-.004-.255-.005-.253-.008-.251-.01-.249-.012-.247-.015-.245-.016-.243-.019-.241-.02-.238-.023-.236-.024-.234-.027-.231-.028-.228-.031-.226-.032-.223-.034-.22-.036-.217-.038-.214-.04-.211-.041-.208-.043-.204-.045-.201-.046-.198-.048-.195-.05-.19-.051-.187-.053-.184-.054-.179-.056-.176-.057-.172-.059-.167-.06-.164-.061-.159-.063-.155-.064-.151-.066-.074-.033-.072-.033-.072-.034-.07-.034-.069-.035-.068-.035-.067-.035-.066-.035-.064-.036-.063-.036-.062-.036-.061-.036-.06-.037-.058-.037-.057-.037-.056-.038-.055-.038-.053-.038-.052-.038-.051-.039-.049-.039-.049-.039-.046-.039-.046-.04-.044-.04-.043-.04-.041-.04-.04-.041-.039-.041-.037-.041-.036-.041-.034-.041-.033-.042-.032-.042-.03-.042-.029-.042-.027-.042-.026-.043-.024-.043-.023-.043-.021-.043-.02-.043-.018-.044-.017-.043-.015-.044-.013-.044-.012-.044-.011-.045-.009-.044-.007-.045-.006-.045-.004-.045-.002-.045-.001-.045v-17l.001-.045.002-.045.004-.045.006-.045.007-.045.009-.044.011-.045.012-.044.013-.044.015-.044.017-.043.018-.044.02-.043.021-.043.023-.043.024-.043.026-.043.027-.042.029-.042.03-.042.032-.042.033-.042.034-.041.036-.041.037-.041.039-.041.04-.041.041-.04.043-.04.044-.04.046-.04.046-.039.049-.039.049-.039.051-.039.052-.038.053-.038.055-.038.056-.038.057-.037.058-.037.06-.037.061-.036.062-.036.063-.036.064-.036.066-.035.067-.035.068-.035.069-.035.07-.034.072-.034.072-.033.074-.033.151-.066.155-.064.159-.063.164-.061.167-.06.172-.059.176-.057.179-.056.184-.054.187-.053.19-.051.195-.05.198-.048.201-.046.204-.045.208-.043.211-.041.214-.04.217-.038.22-.036.223-.034.226-.032.228-.031.231-.028.234-.027.236-.024.238-.023.241-.02.243-.019.245-.016.247-.015.249-.012.251-.01.253-.008.255-.005.256-.004.258-.001.258.001zm-9.258 20.499v.01l.001.021.003.021.004.022.005.021.006.022.007.022.009.023.01.022.011.023.012.023.013.023.015.023.016.024.017.023.018.024.019.024.021.024.022.025.023.024.024.025.052.049.056.05.061.051.066.051.07.051.075.051.079.052.084.052.088.052.092.052.097.052.102.051.105.052.11.052.114.051.119.051.123.051.127.05.131.05.135.05.139.048.144.049.147.047.152.047.155.047.16.045.163.045.167.043.171.043.176.041.178.041.183.039.187.039.19.037.194.035.197.035.202.033.204.031.209.03.212.029.216.027.219.025.222.024.226.021.23.02.233.018.236.016.24.015.243.012.246.01.249.008.253.005.256.004.259.001.26-.001.257-.004.254-.005.25-.008.247-.011.244-.012.241-.014.237-.016.233-.018.231-.021.226-.021.224-.024.22-.026.216-.027.212-.028.21-.031.205-.031.202-.034.198-.034.194-.036.191-.037.187-.039.183-.04.179-.04.175-.042.172-.043.168-.044.163-.045.16-.046.155-.046.152-.047.148-.048.143-.049.139-.049.136-.05.131-.05.126-.05.123-.051.118-.052.114-.051.11-.052.106-.052.101-.052.096-.052.092-.052.088-.053.083-.051.079-.052.074-.052.07-.051.065-.051.06-.051.056-.05.051-.05.023-.024.023-.025.021-.024.02-.024.019-.024.018-.024.017-.024.015-.023.014-.024.013-.023.012-.023.01-.023.01-.022.008-.022.006-.022.006-.022.004-.022.004-.021.001-.021.001-.021v-4.127l-.077.055-.08.053-.083.054-.085.053-.087.052-.09.052-.093.051-.095.05-.097.05-.1.049-.102.049-.105.048-.106.047-.109.047-.111.046-.114.045-.115.045-.118.044-.12.043-.122.042-.124.042-.126.041-.128.04-.13.04-.132.038-.134.038-.135.037-.138.037-.139.035-.142.035-.143.034-.144.033-.147.032-.148.031-.15.03-.151.03-.153.029-.154.027-.156.027-.158.026-.159.025-.161.024-.162.023-.163.022-.165.021-.166.02-.167.019-.169.018-.169.017-.171.016-.173.015-.173.014-.175.013-.175.012-.177.011-.178.01-.179.008-.179.008-.181.006-.182.005-.182.004-.184.003-.184.002h-.37l-.184-.002-.184-.003-.182-.004-.182-.005-.181-.006-.179-.008-.179-.008-.178-.01-.176-.011-.176-.012-.175-.013-.173-.014-.172-.015-.171-.016-.17-.017-.169-.018-.167-.019-.166-.02-.165-.021-.163-.022-.162-.023-.161-.024-.159-.025-.157-.026-.156-.027-.155-.027-.153-.029-.151-.03-.15-.03-.148-.031-.146-.032-.145-.033-.143-.034-.141-.035-.14-.035-.137-.037-.136-.037-.134-.038-.132-.038-.13-.04-.128-.04-.126-.041-.124-.042-.122-.042-.12-.044-.117-.043-.116-.045-.113-.045-.112-.046-.109-.047-.106-.047-.105-.048-.102-.049-.1-.049-.097-.05-.095-.05-.093-.052-.09-.051-.087-.052-.085-.053-.083-.054-.08-.054-.077-.054v4.127zm0-5.654v.011l.001.021.003.021.004.021.005.022.006.022.007.022.009.022.01.022.011.023.012.023.013.023.015.024.016.023.017.024.018.024.019.024.021.024.022.024.023.025.024.024.052.05.056.05.061.05.066.051.07.051.075.052.079.051.084.052.088.052.092.052.097.052.102.052.105.052.11.051.114.051.119.052.123.05.127.051.131.05.135.049.139.049.144.048.147.048.152.047.155.046.16.045.163.045.167.044.171.042.176.042.178.04.183.04.187.038.19.037.194.036.197.034.202.033.204.032.209.03.212.028.216.027.219.025.222.024.226.022.23.02.233.018.236.016.24.014.243.012.246.01.249.008.253.006.256.003.259.001.26-.001.257-.003.254-.006.25-.008.247-.01.244-.012.241-.015.237-.016.233-.018.231-.02.226-.022.224-.024.22-.025.216-.027.212-.029.21-.03.205-.032.202-.033.198-.035.194-.036.191-.037.187-.039.183-.039.179-.041.175-.042.172-.043.168-.044.163-.045.16-.045.155-.047.152-.047.148-.048.143-.048.139-.05.136-.049.131-.05.126-.051.123-.051.118-.051.114-.052.11-.052.106-.052.101-.052.096-.052.092-.052.088-.052.083-.052.079-.052.074-.051.07-.052.065-.051.06-.05.056-.051.051-.049.023-.025.023-.024.021-.025.02-.024.019-.024.018-.024.017-.024.015-.023.014-.023.013-.024.012-.022.01-.023.01-.023.008-.022.006-.022.006-.022.004-.021.004-.022.001-.021.001-.021v-4.139l-.077.054-.08.054-.083.054-.085.052-.087.053-.09.051-.093.051-.095.051-.097.05-.1.049-.102.049-.105.048-.106.047-.109.047-.111.046-.114.045-.115.044-.118.044-.12.044-.122.042-.124.042-.126.041-.128.04-.13.039-.132.039-.134.038-.135.037-.138.036-.139.036-.142.035-.143.033-.144.033-.147.033-.148.031-.15.03-.151.03-.153.028-.154.028-.156.027-.158.026-.159.025-.161.024-.162.023-.163.022-.165.021-.166.02-.167.019-.169.018-.169.017-.171.016-.173.015-.173.014-.175.013-.175.012-.177.011-.178.009-.179.009-.179.007-.181.007-.182.005-.182.004-.184.003-.184.002h-.37l-.184-.002-.184-.003-.182-.004-.182-.005-.181-.007-.179-.007-.179-.009-.178-.009-.176-.011-.176-.012-.175-.013-.173-.014-.172-.015-.171-.016-.17-.017-.169-.018-.167-.019-.166-.02-.165-.021-.163-.022-.162-.023-.161-.024-.159-.025-.157-.026-.156-.027-.155-.028-.153-.028-.151-.03-.15-.03-.148-.031-.146-.033-.145-.033-.143-.033-.141-.035-.14-.036-.137-.036-.136-.037-.134-.038-.132-.039-.13-.039-.128-.04-.126-.041-.124-.042-.122-.043-.12-.043-.117-.044-.116-.044-.113-.046-.112-.046-.109-.046-.106-.047-.105-.048-.102-.049-.1-.049-.097-.05-.095-.051-.093-.051-.09-.051-.087-.053-.085-.052-.083-.054-.08-.054-.077-.054v4.139zm0-5.666v.011l.001.02.003.022.004.021.005.022.006.021.007.022.009.023.01.022.011.023.012.023.013.023.015.023.016.024.017.024.018.023.019.024.021.025.022.024.023.024.024.025.052.05.056.05.061.05.066.051.07.051.075.052.079.051.084.052.088.052.092.052.097.052.102.052.105.051.11.052.114.051.119.051.123.051.127.05.131.05.135.05.139.049.144.048.147.048.152.047.155.046.16.045.163.045.167.043.171.043.176.042.178.04.183.04.187.038.19.037.194.036.197.034.202.033.204.032.209.03.212.028.216.027.219.025.222.024.226.021.23.02.233.018.236.017.24.014.243.012.246.01.249.008.253.006.256.003.259.001.26-.001.257-.003.254-.006.25-.008.247-.01.244-.013.241-.014.237-.016.233-.018.231-.02.226-.022.224-.024.22-.025.216-.027.212-.029.21-.03.205-.032.202-.033.198-.035.194-.036.191-.037.187-.039.183-.039.179-.041.175-.042.172-.043.168-.044.163-.045.16-.045.155-.047.152-.047.148-.048.143-.049.139-.049.136-.049.131-.051.126-.05.123-.051.118-.052.114-.051.11-.052.106-.052.101-.052.096-.052.092-.052.088-.052.083-.052.079-.052.074-.052.07-.051.065-.051.06-.051.056-.05.051-.049.023-.025.023-.025.021-.024.02-.024.019-.024.018-.024.017-.024.015-.023.014-.024.013-.023.012-.023.01-.022.01-.023.008-.022.006-.022.006-.022.004-.022.004-.021.001-.021.001-.021v-4.153l-.077.054-.08.054-.083.053-.085.053-.087.053-.09.051-.093.051-.095.051-.097.05-.1.049-.102.048-.105.048-.106.048-.109.046-.111.046-.114.046-.115.044-.118.044-.12.043-.122.043-.124.042-.126.041-.128.04-.13.039-.132.039-.134.038-.135.037-.138.036-.139.036-.142.034-.143.034-.144.033-.147.032-.148.032-.15.03-.151.03-.153.028-.154.028-.156.027-.158.026-.159.024-.161.024-.162.023-.163.023-.165.021-.166.02-.167.019-.169.018-.169.017-.171.016-.173.015-.173.014-.175.013-.175.012-.177.01-.178.01-.179.009-.179.007-.181.006-.182.006-.182.004-.184.003-.184.001-.185.001-.185-.001-.184-.001-.184-.003-.182-.004-.182-.006-.181-.006-.179-.007-.179-.009-.178-.01-.176-.01-.176-.012-.175-.013-.173-.014-.172-.015-.171-.016-.17-.017-.169-.018-.167-.019-.166-.02-.165-.021-.163-.023-.162-.023-.161-.024-.159-.024-.157-.026-.156-.027-.155-.028-.153-.028-.151-.03-.15-.03-.148-.032-.146-.032-.145-.033-.143-.034-.141-.034-.14-.036-.137-.036-.136-.037-.134-.038-.132-.039-.13-.039-.128-.041-.126-.041-.124-.041-.122-.043-.12-.043-.117-.044-.116-.044-.113-.046-.112-.046-.109-.046-.106-.048-.105-.048-.102-.048-.1-.05-.097-.049-.095-.051-.093-.051-.09-.052-.087-.052-.085-.053-.083-.053-.08-.054-.077-.054v4.153zm8.74-8.179l-.257.004-.254.005-.25.008-.247.011-.244.012-.241.014-.237.016-.233.018-.231.021-.226.022-.224.023-.22.026-.216.027-.212.028-.21.031-.205.032-.202.033-.198.034-.194.036-.191.038-.187.038-.183.04-.179.041-.175.042-.172.043-.168.043-.163.045-.16.046-.155.046-.152.048-.148.048-.143.048-.139.049-.136.05-.131.05-.126.051-.123.051-.118.051-.114.052-.11.052-.106.052-.101.052-.096.052-.092.052-.088.052-.083.052-.079.052-.074.051-.07.052-.065.051-.06.05-.056.05-.051.05-.023.025-.023.024-.021.024-.02.025-.019.024-.018.024-.017.023-.015.024-.014.023-.013.023-.012.023-.01.023-.01.022-.008.022-.006.023-.006.021-.004.022-.004.021-.001.021-.001.021.001.021.001.021.004.021.004.022.006.021.006.023.008.022.01.022.01.023.012.023.013.023.014.023.015.024.017.023.018.024.019.024.02.025.021.024.023.024.023.025.051.05.056.05.06.05.065.051.07.052.074.051.079.052.083.052.088.052.092.052.096.052.101.052.106.052.11.052.114.052.118.051.123.051.126.051.131.05.136.05.139.049.143.048.148.048.152.048.155.046.16.046.163.045.168.043.172.043.175.042.179.041.183.04.187.038.191.038.194.036.198.034.202.033.205.032.21.031.212.028.216.027.22.026.224.023.226.022.231.021.233.018.237.016.241.014.244.012.247.011.25.008.254.005.257.004.26.001.26-.001.257-.004.254-.005.25-.008.247-.011.244-.012.241-.014.237-.016.233-.018.231-.021.226-.022.224-.023.22-.026.216-.027.212-.028.21-.031.205-.032.202-.033.198-.034.194-.036.191-.038.187-.038.183-.04.179-.041.175-.042.172-.043.168-.043.163-.045.16-.046.155-.046.152-.048.148-.048.143-.048.139-.049.136-.05.131-.05.126-.051.123-.051.118-.051.114-.052.11-.052.106-.052.101-.052.096-.052.092-.052.088-.052.083-.052.079-.052.074-.051.07-.052.065-.051.06-.05.056-.05.051-.05.023-.025.023-.024.021-.024.02-.025.019-.024.018-.024.017-.023.015-.024.014-.023.013-.023.012-.023.01-.023.01-.022.008-.022.006-.023.006-.021.004-.022.004-.021.001-.021.001-.021-.001-.021-.001-.021-.004-.021-.004-.022-.006-.021-.006-.023-.008-.022-.01-.022-.01-.023-.012-.023-.013-.023-.014-.023-.015-.024-.017-.023-.018-.024-.019-.024-.02-.025-.021-.024-.023-.024-.023-.025-.051-.05-.056-.05-.06-.05-.065-.051-.07-.052-.074-.051-.079-.052-.083-.052-.088-.052-.092-.052-.096-.052-.101-.052-.106-.052-.11-.052-.114-.052-.118-.051-.123-.051-.126-.051-.131-.05-.136-.05-.139-.049-.143-.048-.148-.048-.152-.048-.155-.046-.16-.046-.163-.045-.168-.043-.172-.043-.175-.042-.179-.041-.183-.04-.187-.038-.191-.038-.194-.036-.198-.034-.202-.033-.205-.032-.21-.031-.212-.028-.216-.027-.22-.026-.224-.023-.226-.022-.231-.021-.233-.018-.237-.016-.241-.014-.244-.012-.247-.011-.25-.008-.254-.005-.257-.004-.26-.001-.26.001z"></path></symbol></defs><defs><symbol id="clock" width="24" height="24"><path transform="scale(.5)" d="M12 2c5.514 0 10 4.486 10 10s-4.486 10-10 10-10-4.486-10-10 4.486-10 10-10zm0-2c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.848 12.459c.202.038.202.333.001.372-1.907.361-6.045 1.111-6.547 1.111-.719 0-1.301-.582-1.301-1.301 0-.512.77-5.447 1.125-7.445.034-.192.312-.181.343.014l.985 6.238 5.394 1.011z"></path></symbol></defs><defs><marker id="arrowhead" refX="7.9" refY="5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto-start-reverse"><path d="M -1 0 L 10 5 L 0 10 z"></path></marker></defs><defs><marker id="crosshead" markerWidth="15" markerHeight="8" orient="auto" refX="4" refY="4.5"><path fill="none" stroke="#000000" stroke-width="1pt" d="M 1,2 L 6,7 M 6,2 L 1,7" style="stroke-dasharray: 0, 0;"></path></marker></defs><defs><marker id="filled-head" refX="15.5" refY="7" markerWidth="20" markerHeight="28" orient="auto"><path d="M 18,7 L9,13 L14,7 L9,1 Z"></path></marker></defs><defs><marker id="sequencenumber" refX="15" refY="15" markerWidth="60" markerHeight="40" orient="auto"><circle cx="15" cy="15" r="6"></circle></marker></defs><g><rect x="193.5" y="243" fill="#EDF2AE" stroke="#666" width="188" height="38" class="note"></rect><text x="288" y="248" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="noteText" dy="1em" style="font-size: 16px; font-weight: 400;"><tspan x="288">system-dir check (always)</tspan></text></g><g><rect x="187" y="337" fill="#EDF2AE" stroke="#666" width="201" height="38" class="note"></rect><text x="288" y="342" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="noteText" dy="1em" style="font-size: 16px; font-weight: 400;"><tspan x="288">directory allowlist if present</tspan></text></g><g><rect x="149" y="431" fill="#EDF2AE" stroke="#666" width="277" height="38" class="note"></rect><text x="288" y="436" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="noteText" dy="1em" style="font-size: 16px; font-weight: 400;"><tspan x="288">acquire_device_lock if lock=on, retry N</tspan></text></g><g><line x1="276.5" y1="859" x2="836" y2="859" class="loopLine"></line><line x1="836" y1="859" x2="836" y2="1225" class="loopLine"></line><line x1="276.5" y1="1225" x2="836" y2="1225" class="loopLine"></line><line x1="276.5" y1="859" x2="276.5" y2="1225" class="loopLine"></line><line x1="276.5" y1="1047" x2="836" y2="1047" class="loopLine" style="stroke-dasharray: 3, 3;"></line><polygon points="276.5,859 326.5,859 326.5,872 318.1,879 276.5,879" class="labelBox"></polygon><text x="302" y="872" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="labelText" style="font-size: 16px; font-weight: 400;">alt</text><text x="581.25" y="877" text-anchor="middle" class="loopText" style="font-size: 16px; font-weight: 400;"><tspan x="581.25">[unchanged]</tspan></text><text x="556.25" y="1065" text-anchor="middle" class="loopText" style="font-size: 16px; font-weight: 400;">[changed or initial]</text></g><text x="180" y="80" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">fetch_device(dev_id)</text><line x1="76" y1="111" x2="283.5" y2="111" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="fill: none;"></line><text x="76" y="115" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">1</text><text x="289" y="126" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">read options</text><path d="M 288.5,157 C 348.5,147 348.5,187 288.5,177" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="fill: none;"></path><text x="288.5" y="161" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">2</text><text x="555" y="202" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">find_latest(dev_id) if needed</text><line x1="288.5" y1="233" x2="821" y2="233" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="fill: none;"></line><text x="288.5" y="237" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">3</text><text x="555" y="296" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">on reject, record skipped</text><line x1="288.5" y1="327" x2="821" y2="327" class="messageLine1" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="stroke-dasharray: 3, 3; fill: none;"></line><text x="288.5" y="331" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">4</text><text x="555" y="390" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">off-list, record skipped</text><line x1="288.5" y1="421" x2="821" y2="421" class="messageLine1" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="stroke-dasharray: 3, 3; fill: none;"></line><text x="288.5" y="425" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">5</text><text x="555" y="484" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">still locked, record skipped</text><line x1="288.5" y1="515" x2="821" y2="515" class="messageLine1" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="stroke-dasharray: 3, 3; fill: none;"></line><text x="288.5" y="519" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">6</text><text x="392" y="530" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">fetch then do_fetch</text><line x1="288.5" y1="561" x2="496" y2="561" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="fill: none;"></line><text x="288.5" y="565" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">7</text><text x="501" y="576" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">login via print_secret, open debug file, show-config</text><path d="M 501,607 C 561,597 561,637 501,627" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="fill: none;"></path><text x="501" y="611" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">8</text><text x="661" y="652" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">dump_config writes backup (O_EXCL)</text><line x1="501" y1="683" x2="821" y2="683" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="fill: none;"></line><text x="501" y="687" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">9</text><text x="395" y="698" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">config path or undef</text><line x1="499" y1="729" x2="291.5" y2="729" class="messageLine1" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="stroke-dasharray: 3, 3; fill: none;"></line><text x="499" y="733" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">10</text><text x="555" y="744" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">if undef, record failed</text><line x1="288.5" y1="773" x2="821" y2="773" class="messageLine1" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="stroke-dasharray: 3, 3; fill: none;"></line><text x="288.5" y="777" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">11</text><text x="289" y="788" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">config_equal(latest, new)</text><path d="M 288.5,819 C 348.5,809 348.5,849 288.5,839" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="fill: none;"></path><text x="288.5" y="823" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">12</text><text x="555" y="909" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">config_discard, delete backup</text><line x1="288.5" y1="940" x2="821" y2="940" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="fill: none;"></line><text x="288.5" y="944" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">13</text><text x="555" y="955" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">record success, unchanged</text><line x1="288.5" y1="986" x2="821" y2="986" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="fill: none;"></line><text x="288.5" y="990" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">14</text><text x="555" y="1001" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">purge_ancient, expire old</text><line x1="288.5" y1="1032" x2="821" y2="1032" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="fill: none;"></line><text x="288.5" y="1036" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">15</text><text x="555" y="1092" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">record success, changed</text><line x1="288.5" y1="1123" x2="821" y2="1123" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="fill: none;"></line><text x="288.5" y="1127" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">16</text><text x="555" y="1138" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">purge_ancient</text><line x1="288.5" y1="1169" x2="821" y2="1169" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="fill: none;"></line><text x="288.5" y="1173" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">17</text><text x="555" y="1184" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">run on_fetch_run, shell-free</text><line x1="288.5" y1="1215" x2="821" y2="1215" class="messageLine0" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="fill: none;"></line><text x="288.5" y="1219" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">18</text><text x="183" y="1240" text-anchor="middle" dominant-baseline="middle" alignment-baseline="middle" class="messageText" dy="1em" style="font-size: 16px; font-weight: 400;">return, lock releases</text><line x1="286.5" y1="1269" x2="79" y2="1269" class="messageLine1" stroke-width="2" stroke="none" marker-end="url(#arrowhead)" marker-start="url(#sequencenumber)" style="stroke-dasharray: 3, 3; fill: none;"></line><text x="286.5" y="1273" font-family="sans-serif" font-size="12px" text-anchor="middle" class="sequenceNumber">19</text></svg></div></figure>
+<p>Under <code>-P</code>, the whole column from <code>fetch_device</code> down runs inside a forked worker; the <code>record_result</code> payloads travel back to the parent through the result sink (section 2.4), not shared memory.</p>
+<h3 id="24-parallel-fetch--p-n">2.4 Parallel fetch (<code>-P N</code>)</h3>
+<p><code>run_fetch_phase($parallel)</code> runs devices concurrently when <code>-P N</code> is given (N &gt;= 1 worker processes). The model is <strong>fork-per-device-batch</strong>:</p>
+<ul><li>The parent creates a private <code>File::Temp</code> work directory (0700, auto-cleaned).</li><li>It forks up to N workers; each worker runs <code>fetch_device</code> for its assigned device and writes its stdout/stderr to <code>&lt;tmpdir&gt;/&lt;dev_id&gt;.out</code>/<code>.err</code> (created under <code>umask(077)</code>), and its <code>record_result</code> payload to a result sink the parent reads back.</li><li><code>%email_config</code>, the device table, and the result list live in the parent; each worker is an independent process, so per-package globals are isolated by the fork -- a worker cannot see another worker&#x27;s state.</li><li>The parent installs <code>SIG{INT}</code>/<code>SIG{TERM}</code> handlers that forward the signal to the workers, so a killed parent does not orphan them.</li></ul>
+<p><strong>Implication for extenders:</strong> anything a worker produces that the parent needs (a new per-device result field, a summary counter) must travel through the <strong>result sink</strong> (the serialized <code>record_result</code> payload), not a package variable -- a package variable set in a worker is lost when the worker exits. <code>Mailer::record_result</code> already serialises every key you pass it, so new result fields propagate automatically if you add them as <code>record_result</code> arguments.</p>
+<hr>
+</section>
+<section id="3-data-structures">
+<div class="section-kicker">03</div>
+<h2>3. Data structures</h2>
+<p>All of these are file-scoped (<code>my</code>) package variables unless noted. &quot;File&quot; = the <code>.pm</code> that declares them.</p>
+<h3 id="31-detectorpm----the-device-registry">3.1 Detector.pm -- the device registry</h3>
+<ul><li><strong><code>%model_table</code></strong> : <code>label</code> -&gt; model object. Populated by <code>Detector::register($mod)</code> at startup (each model&#x27;s <code>.pm</code> registers itself when loaded). <code>label</code> is the device-table name (<code>cisco-ios</code>, <code>generic</code>, ...).</li></ul>
+<ul><li><strong><code>@dev_order</code></strong> : ordered list of <code>dev_id</code>s in device-table order. The sequential fetch phase iterates this; the maintenance modes use it to list devices deterministically.</li></ul>
+<ul><li><strong><code>%dev_id_table</code></strong> : <code>dev_id</code> -&gt; source line number. Used to detect and report a duplicate <code>dev_id</code>.</li></ul>
+<ul><li><strong><code>%dev_info_table</code></strong> : <code>dev_id</code> -&gt; a hashref describing the device:</li></ul>
+<span class="file-label">perl</span>
+<pre><code>{
+  model       =&gt; $mod,          # the model object (from %model_table)
+  dev_host    =&gt; $dev_host,     # hostname or IP (2nd field of the device line)
+  dev_opt_tab =&gt; $dev_opt_tab,  # the merged per-device option hash (see 3.2)
+  file        =&gt; $file,         # source device-table file (for messages)
+  num         =&gt; $num,          # source line number
+  line        =&gt; $line,         # the raw source line (for messages, masked)
+}</code></pre>
+<ul><li><strong>The directory-allowlist structures</strong> (populated from <code>directory:</code> lines):</li><li><strong><code>%dir_allow_tag</code></strong> : <code>$TAG</code> -&gt; <code>{ type =&gt; repository|template|fetch_run|lock, path =&gt; &lt;abs path&gt; }</code>. The <code>$TAG</code> indirection a device value uses.</li><li><strong><code>%dir_allow_path</code></strong> : normalised allowed path -&gt; type, for membership tests.</li><li><strong><code>$dir_allow_present</code></strong> : true once any <code>directory:</code> line has been seen (switches the allowlist from &quot;off/opt-in&quot; to &quot;enforced&quot;).</li><li><strong><code>@dir_allow_rows</code></strong> : ordered <code>[type, tag, path]</code> for <code>--list-allowed-dirs</code>.</li><li><strong><code>@dir_allow_errors</code></strong> : <code>[reason, ...]</code> for each rejected <code>directory:</code> line; a non-empty list aborts the run before any fetch (section 9) and is what <code>--list-allowed-dirs</code> lints.</li><li><strong><code>$dir_allow_fetch_run_none</code></strong> / <strong><code>$dir_allow_report_none</code></strong> : set by <code>directory: fetch_run none</code> / <code>directory: report none</code> (disable that capability).</li><li><strong><code>%warned_unlisted_dir</code></strong> : dedup set for the &quot;no allowlist entry&quot; warning, reset per device-table load.</li></ul>
+<ul><li><strong><code>@SYSTEM_DIRS</code></strong> : the list of directories (<code>/bin</code>, <code>/etc</code>, <code>/usr/lib</code>, ...) that are never acceptable as a repository/template/fetch_run directory, tested by <code>_system_dir_path()</code>.</li></ul>
+<ul><li><strong><code>$DEV_ID_RE</code></strong> = <code>qr/^[\w.-]+$/</code> : the allowed <code>dev_id</code> character set. A <code>dev_id</code> is also rejected if it is only dots.</li></ul>
+<ul><li><strong><code>$default_lock_dir</code></strong> : <code>&lt;canonical dir of fetchconfig.pl&gt;/.lock</code>, set by <code>Detector::init($log, $lock_dir)</code> from the driver.</li></ul>
+<ul><li><strong><code>$lock_dir_failed</code></strong> : set if any device&#x27;s lock dir could not be created or used; the driver turns this into exit 10 after the run.</li></ul>
+<h3 id="32-dev_opt_tab----the-per-device-option-hash">3.2 <code>$dev_opt_tab</code> -- the per-device option hash</h3>
+<p>The single most important structure for an extender. It is a flat hashref: option name -&gt; string value, built in phase 1 by merging the model&#x27;s <code>default:</code> options under the device line&#x27;s own options (device wins). Every option in section 4 appears here by its bare name (<code>repository</code>, <code>pass</code>, <code>keep</code>, <code>debug</code>, <code>lock</code>, <code>to</code>, ...). Models and the pipeline read it <strong>only</strong> through the Abstract accessors, never by direct hash access:</p>
+<ul><li><code>dev_option($tab, $name)</code> -- the effective value, with a <code>$TAG</code> expanded to its real path for directory-valued options, and with timeout-family options validated (a non-positive-integer <code>timeout</code>/<code>fetch_timeout</code>/<code>banner_timeout</code>/ <code>prompt_settle_ms</code> is ignored so the documented default applies).</li><li><code>dev_option_raw($tab, $name)</code> -- the effective value with <strong>no</strong> <code>$TAG</code> expansion (used by the allowlist enforcement, which must see the raw value).</li><li><code>dev_option_flag($tab, $name, $default)</code> -- a boolean option (<code>on</code>/<code>off</code>), e.g. <code>debug</code>, <code>lock</code>, <code>changes_only</code> (where applicable).</li><li><code>dev_option_posint($tab, $name, $default, $allow_zero)</code> -- a validated non-negative/positive integer, e.g. <code>lock_retry</code> (0 allowed), <code>lock_retry_time</code> (&gt;=1).</li></ul>
+<p><strong>To add an option:</strong> decide whether it is directory-valued (add it to <code>%DIR_VALUED_OPTION</code> in Abstract so <code>$TAG</code> expands), numeric (read with <code>dev_option_posint</code>), boolean (<code>dev_option_flag</code>), or plain (<code>dev_option</code>). No parse change is needed -- <code>parse_options</code> accepts any <code>key=value</code>; the option &quot;exists&quot; as soon as something reads it.</p>
+<h3 id="33-mailerpm----the-result-record">3.3 Mailer.pm -- the result record</h3>
+<ul><li><strong><code>@results</code></strong> : one hashref per device outcome, pushed by <code>record_result(%args)</code>. The fields (every one is also written to the <code>.status</code> file and, under <code>-P</code>, serialised through the result sink):</li></ul>
+<span class="file-label">perl</span>
+<pre><code>{
+  dev_id     =&gt; ...,   # device id
+  dev_host   =&gt; ...,   # hostname/IP
+  ts         =&gt; ...,   # epoch of the fetch start (for Date/Time columns)
+  elapsed    =&gt; ...,   # seconds the fetch took
+  success    =&gt; 0|1,   # hard success/failure (undef on a 'skipped' row)
+  size       =&gt; ...,   # backup size in bytes, or undef
+  changed    =&gt; 'changed'|'unchanged'|'initial'|'n/a',
+  state      =&gt; 'skipped' (optional; explicit state wins over success)
+  repository =&gt; ...,   # so the per-device .status file can be written
+  to         =&gt; ...,   # device-specific recipient override (the `to=` option)
+}</code></pre>
+<p>  The effective State shown in the mail is computed by <code>row_state($row)</code>:   an explicit <code>state</code> (currently only <code>&#x27;skipped&#x27;</code>) wins; otherwise   <code>success ? &#x27;success&#x27; : &#x27;failed&#x27;</code>.</p>
+<ul><li><strong><code>%email_config</code></strong> : the parsed <code>email:</code> options (<code>from</code>, <code>to</code>, <code>smtp</code>, <code>user</code>, <code>password</code>, <code>tls</code>, <code>report_dir</code>, <code>write_report</code>, <code>email_max_diff</code>, <code>web_report_url</code>, <code>report_logo</code>, <code>report_days</code>, <code>mask_secrets</code>, <code>footer</code>).</li></ul>
+<ul><li><strong><code>$rep_url</code>, <code>$rep_email_diffs</code>, <code>$rep_max_diff</code>, <code>$rep_mask</code></strong> : material carried from <code>send_summaries</code> into the HTML/text builders (the report link, the diffs to embed, the diff cap, the masking flag).</li></ul>
+<ul><li><strong><code>$MAIL_LOGO_B64</code></strong> : the inline e-mail header logo (base64 PNG), embedded as a <code>multipart/related</code> <code>Content-ID: &lt;fcwlogo&gt;</code> part. Independent of the on-disk report&#x27;s <code>report_logo=</code>.</li></ul>
+<h3 id="34-on-disk-structures">3.4 On-disk structures</h3>
+<ul><li><strong>Backup file</strong> : <code>&lt;repository&gt;/&lt;dev_id&gt;/&lt;dev_id&gt;.run.YYYYMMDD.HHMMSS[tz]</code> (optionally plus <code>filename_append_suffix</code>). <code>parse_backup_filename()</code> and <code>sort_backups_desc()</code> parse and order these by the <strong>parsed timestamp</strong> <code>YYYYMMDD.HHMMSS</code>, never by a plain string sort of the whole name (so the timezone token and a suffix cannot disturb the order). Written with <code>O_EXCL</code> so two runs completing in the same second cannot silently overwrite one another (section 9).</li></ul>
+<ul><li><strong><code>.status</code> file</strong> : <code>&lt;repository&gt;/.&lt;dev_id&gt;.status</code> -- the last-run result for that device (written atomically via a dotfile temp + rename), consumed by fetchconfig-web and the maintenance modes.</li></ul>
+<ul><li><strong><code>.debug</code> file</strong> : <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code> -- the full session trace when <code>debug=on</code> (0600; section 6). Overwritten each run.</li></ul>
+<ul><li><strong>Lock file</strong> : <code>&lt;lock_dir&gt;/&lt;sha256(dev_id)&gt;.lock</code> -- a flock holder, never unlinked on release (section 8).</li></ul>
+<hr>
+</section>
+<section id="4-the-device-table-format">
+<div class="section-kicker">04</div>
+<h2>4. The device table format</h2>
+<p>The device table is a line-oriented text file (one or more, via <code>-devices=</code>; individual lines can also be injected with <code>-line=</code>). Blank lines and <code>#</code> comment lines are ignored. There are four line types, recognised by prefix.</p>
+<h3 id="41-device-line">4.1 Device line</h3>
+<pre><code>&lt;model&gt;  &lt;dev_id&gt;  &lt;host&gt;  &lt;opt1=val1,opt2=val2,...&gt;</code></pre>
+<ul><li><code>&lt;model&gt;</code> -- a registered model label (e.g. <code>cisco-ios</code>, <code>generic</code>).</li><li><code>&lt;dev_id&gt;</code> -- the unique device id. Must match <code>^[\w.-]+$</code> and must not be only dots. It is the directory name under the repository and the key in every status/lock/result structure. <strong>A device id is never user-free-form: it is validated at load time.</strong></li><li><code>&lt;host&gt;</code> -- hostname or IP used to connect.</li><li>the option list -- comma-separated <code>key=value</code> pairs. A value may be double-quoted to contain a comma or spaces (e.g. <code>pass=&quot;a,b c&quot;</code>). A value of the form <code>$TAG</code> is a directory-allowlist tag, expanded for directory-valued options.</li></ul>
+<p>Example:</p>
+<pre><code>cisco-ios  rtr01  10.0.0.1  user=backup,pass=<span class="s">"s3cr3t"</span>,enable=en,repository=$REPO1,keep=30</code></pre>
+<h3 id="42-default-line">4.2 <code>default:</code> line</h3>
+<pre><code><span class="k">default:</span>  &lt;model&gt;  &lt;opt1=val1,...&gt;</code></pre>
+<p>Sets per-model default options. A device line of that model inherits these unless it overrides them. Merging is per-option (device value wins). A bad value inherited from a <code>default:</code> line (e.g. a non-numeric <code>keep</code>) rejects every device that inherits it.</p>
+<h3 id="43-email-line">4.3 <code>email:</code> line</h3>
+<pre><code><span class="k">email:</span>  from=...,to=...,smtp=...,...</code></pre>
+<p>Configures the summary e-mail. If no <code>email:</code> line is present, no SMTP connection is ever attempted. Options: <code>from</code>, <code>to</code>, <code>smtp</code> (<code>host</code> or <code>host:port</code>), <code>user</code>, <code>password</code>, <code>tls</code> (<code>off|starttls|ssl</code>), <code>report_dir</code>, <code>write_report</code> (<code>on</code>), <code>email_max_diff</code>, <code>web_report_url</code>, <code>report_logo</code></p>
+<p>(<code>FILE|none</code>), <code>report_days</code>, <code>mask_secrets</code> (<code>off</code> to disable), <code>footer</code>. See <code>README</code> -&gt; EMAIL NOTIFICATIONS for each.</p>
+<h3 id="44-directory-line-the-allowlist">4.4 <code>directory:</code> line (the allowlist)</h3>
+<pre><code>directory:  &lt;type&gt;  &lt;$TAG|none&gt;  [&lt;abs-path&gt;]</code></pre>
+<p><code>&lt;type&gt;</code> is <code>repository</code>, <code>template</code>, <code>fetch_run</code>, <code>report</code>, or <code>lock</code>. Presence of <strong>any</strong> <code>directory:</code> line turns the allowlist on; thereafter a device&#x27;s <code>repository=</code>, <code>template_dir=</code>, <code>lock_dir=</code>, and the <code>on_fetch_run</code> program directory must resolve to an allowed path (directly or via a <code>$TAG</code>). <code>directory: fetch_run none</code> / <code>directory: report none</code> disable that capability. A <code>directory:</code> line that names a system directory, or is otherwise malformed, is recorded in <code>@dir_allow_errors</code> and <strong>aborts the run</strong> before any fetch. See <code>README</code> -&gt; DIRECTORY ALLOWLIST for the full semantics and <code>--list-allowed-dirs</code> for the linter.</p>
+<h3 id="45-options-available-for-all-models">4.5 Options available for all models</h3>
+<p><code>debug</code>, <code>to</code>, <code>on_fetch_run</code>, <code>on_fetch_cat</code>, <code>timezone</code>, <code>filename_append_suffix</code>, <code>comment</code>, <code>site</code>, and the locking options (<code>lock</code>, <code>lock_dir</code>, <code>lock_retry</code>, <code>lock_retry_time</code>) are available for every model. Model-specific options (<code>user</code>, <code>pass</code>, <code>enable</code>, <code>timeout</code>, <code>repository</code>, <code>keep</code>, <code>fetch_timeout</code>, <code>changes_only</code>, ...) vary by model -- see the per-model options tables and the model sections in <code>README</code> (the DEVICE OPTIONS section).</p>
+<hr>
+</section>
+<section id="5-models-and-the-model-api">
+<div class="section-kicker">05</div>
+<h2>5. Models and the model API</h2>
+<h3 id="51-lifecycle">5.1 Lifecycle</h3>
+<p>Each model is a subclass of <code>fetchconfig::model::Abstract</code>. At <code>use</code>-time it constructs one instance and calls <code>Detector-&gt;register($self)</code>, which puts it in <code>%model_table</code> under <code>$self-&gt;label</code>. The driver loads all models via <code>Detector</code> at startup.</p>
+<p>Per device, <code>Detector::fetch_device</code> calls <code>$mod-&gt;fetch(...)</code>, whose default implementation in Abstract delegates to the model&#x27;s <code>do_fetch(...)</code>. A model therefore implements <strong><code>do_fetch</code></strong> (and <code>label</code>), and overrides prompt/login hooks as needed; everything else is inherited.</p>
+<h3 id="52-the-shared-api-abstractpm">5.2 The shared API (Abstract.pm)</h3>
+<p>The methods a model (or an extender) relies on. Signatures are indicative; read <code>Abstract.pm</code> for exact argument lists.</p>
+<p><strong>Session / transport</strong></p>
+<ul><li><code>ssh_open($dev_host, $dev_user, $dev_pass, $dev_timeout, $debug_fh, $dev_opt_tab)</code> -- open a Net::OpenSSH session (SSH models). Host-key policy is set here (section 9, deliberate non-mitigation).</li><li><code>open_ssh_debug_file(...)</code> / <code>open_telnet_debug_file($t, $dev_opt_tab, $repo, $dev_id, $dev_host)</code> -- when <code>debug=on</code>, open <code>&lt;dev_id&gt;.debug</code> (0600) and attach it as the SSH/telnet session log. The telnet helper (9.71) is what gives every telnet model <code>debug=</code>; call it right after the connection opens and <code>close()</code> the returned handle at session end.</li><li><code>wait_for_command_prompt(...)</code>, <code>expect_enable_prompt(...)</code>, <code>expect_enable_prompt_paging_auto(...)</code>, <code>drain_until_idle(...)</code>, <code>chat_banner(...)</code>, <code>chat_show_conf(...)</code> -- prompt and login helpers. Models override <code>prompt_head()</code> / <code>prompt_tail()</code> / <code>interrupt_screens()</code> / <code>ssh_extra_opts()</code> to tune behaviour.</li></ul>
+<p><strong>Backup write / compare / expire</strong></p>
+<ul><li><code>dump_config($dev_id, $dev_opt_tab, \@lines)</code> -- write the backup (<code>O_EXCL</code>, umask-driven perms, repository dir auto-created), returns <code>($dir, $file)</code>.</li><li><code>find_latest($dev_id, $dev_opt_tab)</code> -- locate the most recent prior backup.</li><li><code>config_equal(...)</code> / <code>config_equal_ignoring_lines(...)</code> -- compare two configs, ignoring volatile lines.</li><li><code>config_discard($dir, $file)</code> -- remove the just-written backup when it equals the previous one, and prune the dir if emptied.</li><li><code>purge_ancient($dev_id, $dev_opt_tab)</code> -- delete backups beyond <code>keep=N</code> (validates <code>keep</code>; section 9).</li></ul>
+<p><strong>Options / secrets / text</strong></p>
+<ul><li><code>dev_option*</code> accessors (section 3.2).</li><li><code>print_secret($t, $secret)</code> -- send a password/secret to the device <strong>without logging it</strong> (suspends the debug log around the send, writes a masked marker). Every model sends credentials through this; a new model MUST too.</li><li><code>mask_secrets($line)</code> -- redact <code>pass=</code>/<code>enable=</code>/<code>community=</code>/<code>password=</code>/ <code>secret=</code>/<code>key=</code>/<code>token=</code>-style values before echoing a device-table line to the log.</li><li><code>stripansi($s)</code>, <code>regexp_quote_keep_bytes($s)</code>, <code>escape_brackets($s)</code>, <code>dequote_value($s)</code> -- text helpers (ANSI stripping, byte-preserving regex quoting for learned prompts, etc.).</li></ul>
+<p><strong>Locking</strong></p>
+<ul><li><code>lock_dir_resolve</code>, <code>device_lock_path</code>, <code>acquire_device_lock</code> (section 8).</li></ul>
+<h3 id="521-call-graph----core---model---abstract">5.2.1 Call graph -- core &lt;-&gt; model &lt;-&gt; Abstract</h3>
+<p>How control flows into a model and what the model calls back. <code>( )</code> = a hook the model overrides; <code>[ ]</code> = a shared helper the model calls. Arrows point from caller to callee.</p>
+<figure class="diagram"><pre class="mermaid">flowchart TD
+    FD[&quot;Detector::fetch_device&quot;] --&gt; AF[&quot;Abstract::fetch&quot;]
+    AF --&gt; DO[&quot;Model.do_fetch - model implements this&quot;]
+    subgraph H[&quot;shared helpers the model calls&quot;]
+        T[&quot;ssh_open or Net::Telnet new&quot;]
+        DBG[&quot;open_ssh_debug_file or open_telnet_debug_file&quot;]
+        PR[&quot;wait_for_command_prompt, expect_enable_prompt&quot;]
+        LOG[&quot;chat_banner, chat_login, chat_show_conf&quot;]
+        PS[&quot;print_secret for every credential&quot;]
+        TX[&quot;stripansi, regexp_quote_keep_bytes, escape_brackets&quot;]
+        OPT[&quot;dev_option, _flag, _raw, _posint&quot;]
+        DC[&quot;dump_config, O_EXCL&quot;]
+    end
+    DO --&gt; T &amp; DBG &amp; PR &amp; LOG &amp; PS &amp; TX &amp; OPT &amp; DC
+    DC --&gt; OUT[&quot;returns config path or undef&quot;]
+    subgraph C[&quot;core-driven, calls Abstract directly&quot;]
+        FL[&quot;find_latest&quot;]
+        CE[&quot;config_equal&quot;]
+        CD[&quot;config_discard&quot;]
+        PA[&quot;purge_ancient&quot;]
+        LK[&quot;lock_dir_resolve, device_lock_path, acquire_device_lock&quot;]
+    end
+    OUT --&gt; CE
+    FL --&gt; CE
+    CE --&gt; CD --&gt; PA
+    subgraph O[&quot;model hooks it MAY override&quot;]
+        H1[&quot;label - required&quot;]
+        H2[&quot;do_fetch - required&quot;]
+        H3[&quot;prompt_head and prompt_tail defaults&quot;]
+        H4[&quot;interrupt_screens and ssh_extra_opts&quot;]
+    end</pre><div class="diagram-svg"><svg id="dptca2xl0xb" width="100%" xmlns="http://www.w3.org/2000/svg" class="flowchart" style="max-width: 3048.6171875px;" viewBox="0 0 3048.6171875 1117" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#dptca2xl0xb{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;fill:#000000;}#dptca2xl0xb .error-icon{fill:#552222;}#dptca2xl0xb .error-text{fill:#552222;stroke:#552222;}#dptca2xl0xb .edge-thickness-normal{stroke-width:1px;}#dptca2xl0xb .edge-thickness-thick{stroke-width:3.5px;}#dptca2xl0xb .edge-pattern-solid{stroke-dasharray:0;}#dptca2xl0xb .edge-thickness-invisible{stroke-width:0;fill:none;}#dptca2xl0xb .edge-pattern-dashed{stroke-dasharray:3;}#dptca2xl0xb .edge-pattern-dotted{stroke-dasharray:2;}#dptca2xl0xb .marker{fill:#666;stroke:#666;}#dptca2xl0xb .marker.cross{stroke:#666;}#dptca2xl0xb svg{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;}#dptca2xl0xb p{margin:0;}#dptca2xl0xb .label{font-family:"trebuchet ms",verdana,arial,sans-serif;color:#000000;}#dptca2xl0xb .cluster-label text{fill:#333;}#dptca2xl0xb .cluster-label span{color:#333;}#dptca2xl0xb .cluster-label span p{background-color:transparent;}#dptca2xl0xb .label text,#dptca2xl0xb span{fill:#000000;color:#000000;}#dptca2xl0xb .node rect,#dptca2xl0xb .node circle,#dptca2xl0xb .node ellipse,#dptca2xl0xb .node polygon,#dptca2xl0xb .node path{fill:#eee;stroke:#999;stroke-width:1px;}#dptca2xl0xb .rough-node .label text,#dptca2xl0xb .node .label text,#dptca2xl0xb .image-shape .label,#dptca2xl0xb .icon-shape .label{text-anchor:middle;}#dptca2xl0xb .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#dptca2xl0xb .rough-node .label,#dptca2xl0xb .node .label,#dptca2xl0xb .image-shape .label,#dptca2xl0xb .icon-shape .label{text-align:center;}#dptca2xl0xb .node.clickable{cursor:pointer;}#dptca2xl0xb .root .anchor path{fill:#666!important;stroke-width:0;stroke:#666;}#dptca2xl0xb .arrowheadPath{fill:#333333;}#dptca2xl0xb .edgePath .path{stroke:#666;stroke-width:2.0px;}#dptca2xl0xb .flowchart-link{stroke:#666;fill:none;}#dptca2xl0xb .edgeLabel{background-color:white;text-align:center;}#dptca2xl0xb .edgeLabel p{background-color:white;}#dptca2xl0xb .edgeLabel rect{opacity:0.5;background-color:white;fill:white;}#dptca2xl0xb .labelBkg{background-color:rgba(255, 255, 255, 0.5);}#dptca2xl0xb .cluster rect{fill:hsl(0, 0%, 98.9215686275%);stroke:#707070;stroke-width:1px;}#dptca2xl0xb .cluster text{fill:#333;}#dptca2xl0xb .cluster span{color:#333;}#dptca2xl0xb div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:12px;background:hsl(-160, 0%, 93.3333333333%);border:1px solid #707070;border-radius:2px;pointer-events:none;z-index:100;}#dptca2xl0xb .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#000000;}#dptca2xl0xb rect.text{fill:none;stroke-width:0;}#dptca2xl0xb .icon-shape,#dptca2xl0xb .image-shape{background-color:white;text-align:center;}#dptca2xl0xb .icon-shape p,#dptca2xl0xb .image-shape p{background-color:white;padding:2px;}#dptca2xl0xb .icon-shape rect,#dptca2xl0xb .image-shape rect{opacity:0.5;background-color:white;fill:white;}#dptca2xl0xb :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}</style><g><marker id="dptca2xl0xb_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="dptca2xl0xb_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="dptca2xl0xb_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="dptca2xl0xb_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="dptca2xl0xb_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="dptca2xl0xb_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><g class="root"><g class="clusters"><g class="cluster " id="C" data-look="classic"><rect style="" x="2498.3203125" y="645" width="542.296875" height="464"></rect><g class="cluster-label " transform="translate(2669.46875, 645)"><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>core-driven, calls Abstract directly</p></span></div></foreignObject></g></g><g class="cluster " id="H" data-look="classic"><rect style="" x="15.8828125" y="443" width="2466.421875" height="152"></rect><g class="cluster-label " transform="translate(1149.09375, 443)"><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>shared helpers the model calls</p></span></div></foreignObject></g></g></g><g class="edgePaths"><path d="M1268.648,111.5L1268.648,123.917C1268.648,136.333,1268.648,161.167,1268.648,177.083C1268.648,193,1268.648,200,1268.648,203.5L1268.648,207" id="L_FD_AF_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M1268.648,265L1268.648,269.167C1268.648,273.333,1268.648,281.667,1268.648,289.333C1268.648,297,1268.648,304,1268.648,307.5L1268.648,311" id="L_AF_DO_1" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M1138.648,361.649L979.021,371.041C819.393,380.432,500.138,399.216,340.51,412.775C180.883,426.333,180.883,434.667,180.883,444.333C180.883,454,180.883,465,180.883,470.5L180.883,476" id="L_DO_T_2" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M1138.648,364.697L1030.688,373.581C922.727,382.465,706.805,400.232,598.844,413.283C490.883,426.333,490.883,434.667,490.883,444.333C490.883,454,490.883,465,490.883,470.5L490.883,476" id="L_DO_DBG_3" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M1138.648,371.839L1082.585,379.533C1026.521,387.226,914.393,402.613,858.329,414.473C802.266,426.333,802.266,434.667,802.266,444.333C802.266,454,802.266,465,802.266,470.5L802.266,476" id="L_DO_PR_4" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M1174.195,393L1164.104,397.167C1154.013,401.333,1133.831,409.667,1123.74,418C1113.648,426.333,1113.648,434.667,1113.648,444.333C1113.648,454,1113.648,465,1113.648,470.5L1113.648,476" id="L_DO_LOG_5" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M1363.102,393L1373.193,397.167C1383.284,401.333,1403.466,409.667,1413.557,418C1423.648,426.333,1423.648,434.667,1423.648,444.333C1423.648,454,1423.648,465,1423.648,470.5L1423.648,476" id="L_DO_PS_6" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M1398.648,371.892L1454.482,379.577C1510.315,387.262,1621.982,402.631,1677.815,414.482C1733.648,426.333,1733.648,434.667,1733.648,442.333C1733.648,450,1733.648,457,1733.648,460.5L1733.648,464" id="L_DO_TX_7" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M1398.648,364.735L1506.148,373.613C1613.648,382.49,1828.648,400.245,1936.148,413.289C2043.648,426.333,2043.648,434.667,2043.648,444.333C2043.648,454,2043.648,465,2043.648,470.5L2043.648,476" id="L_DO_OPT_8" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M1398.648,361.799L1554.786,371.166C1710.924,380.533,2023.201,399.266,2179.339,412.8C2335.477,426.333,2335.477,434.667,2335.477,446.333C2335.477,458,2335.477,473,2335.477,480.5L2335.477,488" id="L_DO_DC_9" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M2335.477,546L2335.477,554.167C2335.477,562.333,2335.477,578.667,2335.477,591C2335.477,603.333,2335.477,611.667,2335.477,620C2335.477,628.333,2335.477,636.667,2335.477,644.333C2335.477,652,2335.477,659,2335.477,662.5L2335.477,666" id="L_DC_OUT_10" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M2455.49,724L2474.01,728.167C2492.531,732.333,2529.572,740.667,2551.509,748.512C2573.445,756.356,2580.277,763.713,2583.693,767.391L2587.109,771.069" id="L_OUT_CE_11" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M2777.027,724L2777.027,728.167C2777.027,732.333,2777.027,740.667,2763.204,749.267C2749.382,757.867,2721.736,766.735,2707.913,771.168L2694.09,775.602" id="L_FL_CE_12" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M2614.906,828L2614.906,832.167C2614.906,836.333,2614.906,844.667,2614.906,852.333C2614.906,860,2614.906,867,2614.906,870.5L2614.906,874" id="L_CE_CD_13" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path><path d="M2614.906,932L2614.906,936.167C2614.906,940.333,2614.906,948.667,2614.906,960.333C2614.906,972,2614.906,987,2614.906,994.5L2614.906,1002" id="L_CD_PA_14" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style="" marker-end="url(#dptca2xl0xb_flowchart-v2-pointEnd)"></path></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g></g><g class="nodes"><g class="root" transform="translate(0, 0)"><g class="clusters"><g class="cluster " id="O" data-look="classic"><rect style="" x="8" y="8" width="1101.046875" height="153"></rect><g class="cluster-label " transform="translate(458.5234375, 8)"><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>model hooks it MAY override</p></span></div></foreignObject></g></g></g><g class="edgePaths"></g><g class="edgeLabels"></g><g class="nodes"><g class="node default  " id="flowchart-H1-35" transform="translate(126.3671875, 84.5)"><rect class="basic label-container" style="" x="-83.3671875" y="-27" width="166.734375" height="54"></rect><g class="label" style="" transform="translate(-53.3671875, -12)"><rect></rect><foreignObject width="106.734375" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>label - required</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-H2-36" transform="translate(356.890625, 84.5)"><rect class="basic label-container" style="" x="-97.15625" y="-27" width="194.3125" height="54"></rect><g class="label" style="" transform="translate(-67.15625, -12)"><rect></rect><foreignObject width="134.3125" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>do_fetch - required</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-H3-37" transform="translate(634.046875, 84.5)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"></rect><g class="label" style="" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>prompt_head and prompt_tail defaults</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-H4-38" transform="translate(944.046875, 84.5)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"></rect><g class="label" style="" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>interrupt_screens and ssh_extra_opts</p></span></div></foreignObject></g></g></g></g><g class="node default  " id="flowchart-FD-0" transform="translate(1268.6484375, 84.5)"><rect class="basic label-container" style="" x="-109.6015625" y="-27" width="219.203125" height="54"></rect><g class="label" style="" transform="translate(-79.6015625, -12)"><rect></rect><foreignObject width="159.203125" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Detector::fetch_device</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-AF-1" transform="translate(1268.6484375, 238)"><rect class="basic label-container" style="" x="-81.1328125" y="-27" width="162.265625" height="54"></rect><g class="label" style="" transform="translate(-51.1328125, -12)"><rect></rect><foreignObject width="102.265625" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Abstract::fetch</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-DO-3" transform="translate(1268.6484375, 354)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"></rect><g class="label" style="" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>Model.do_fetch - model implements this</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-T-4" transform="translate(180.8828125, 519)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"></rect><g class="label" style="" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>ssh_open or Net::Telnet new</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-DBG-5" transform="translate(490.8828125, 519)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"></rect><g class="label" style="" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>open_ssh_debug_file or open_telnet_debug_file</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-PR-6" transform="translate(802.265625, 519)"><rect class="basic label-container" style="" x="-131.3828125" y="-39" width="262.765625" height="78"></rect><g class="label" style="" transform="translate(-101.3828125, -24)"><rect></rect><foreignObject width="202.765625" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>wait_for_command_prompt, expect_enable_prompt</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-LOG-7" transform="translate(1113.6484375, 519)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"></rect><g class="label" style="" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>chat_banner, chat_login, chat_show_conf</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-PS-8" transform="translate(1423.6484375, 519)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"></rect><g class="label" style="" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>print_secret for every credential</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-TX-9" transform="translate(1733.6484375, 519)"><rect class="basic label-container" style="" x="-130" y="-51" width="260" height="102"></rect><g class="label" style="" transform="translate(-100, -36)"><rect></rect><foreignObject width="200" height="72"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>stripansi, regexp_quote_keep_bytes, escape_brackets</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-OPT-10" transform="translate(2043.6484375, 519)"><rect class="basic label-container" style="" x="-130" y="-39" width="260" height="78"></rect><g class="label" style="" transform="translate(-100, -24)"><rect></rect><foreignObject width="200" height="48"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>dev_option, _flag, _raw, _posint</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-DC-11" transform="translate(2335.4765625, 519)"><rect class="basic label-container" style="" x="-111.828125" y="-27" width="223.65625" height="54"></rect><g class="label" style="" transform="translate(-81.828125, -12)"><rect></rect><foreignObject width="163.65625" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>dump_config, O_EXCL</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-OUT-22" transform="translate(2335.4765625, 697)"><rect class="basic label-container" style="" x="-127.84375" y="-27" width="255.6875" height="54"></rect><g class="label" style="" transform="translate(-97.84375, -12)"><rect></rect><foreignObject width="195.6875" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>returns config path or undef</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-FL-23" transform="translate(2777.02734375, 697)"><rect class="basic label-container" style="" x="-66.46875" y="-27" width="132.9375" height="54"></rect><g class="label" style="" transform="translate(-36.46875, -12)"><rect></rect><foreignObject width="72.9375" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>find_latest</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-CE-24" transform="translate(2614.90625, 801)"><rect class="basic label-container" style="" x="-75.375" y="-27" width="150.75" height="54"></rect><g class="label" style="" transform="translate(-45.375, -12)"><rect></rect><foreignObject width="90.75" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>config_equal</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-CD-25" transform="translate(2614.90625, 905)"><rect class="basic label-container" style="" x="-81.5859375" y="-27" width="163.171875" height="54"></rect><g class="label" style="" transform="translate(-51.5859375, -12)"><rect></rect><foreignObject width="103.171875" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>config_discard</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-PA-26" transform="translate(2614.90625, 1033)"><rect class="basic label-container" style="" x="-80.7109375" y="-27" width="161.421875" height="54"></rect><g class="label" style="" transform="translate(-50.7109375, -12)"><rect></rect><foreignObject width="101.421875" height="24"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>purge_ancient</p></span></div></foreignObject></g></g><g class="node default  " id="flowchart-LK-27" transform="translate(2875.6171875, 1033)"><rect class="basic label-container" style="" x="-130" y="-51" width="260" height="102"></rect><g class="label" style="" transform="translate(-100, -36)"><rect></rect><foreignObject width="200" height="72"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>lock_dir_resolve, device_lock_path, acquire_device_lock</p></span></div></foreignObject></g></g></g></g></g></svg></div></figure>
+<p>Rule of thumb: a model <strong>implements</strong> <code>label</code> + <code>do_fetch</code> and <strong>overrides</strong> only the prompt/transport hooks it needs; it <strong>calls</strong> the <code>[ ]</code> helpers for everything else and never reimplements them. These core-driven helpers -- <code>config_equal</code>, <code>config_discard</code>, <code>purge_ancient</code>, locking, and <code>find_latest</code> (which core calls before the fetch) -- run in core, not the model; a model just returns the written path.</p>
+<h3 id="53-adding-a-model">5.3 Adding a model</h3>
+<p>Follow <code>How-To-add-a-model</code> (the authoritative recipe) together with the data-flow context in section 2.3/section 5.2. In short: create <code>fetchconfig/model/Yours.pm</code> as an <code>Abstract</code> subclass, implement <code>label</code> and <code>do_fetch</code>, send credentials with <code>print_secret</code>, call <code>open_telnet_debug_file</code>/<code>open_ssh_debug_file</code> so <code>debug=</code> works, write the config with <code>dump_config</code>, and register the model. Add it to <code>t/00-compile.t</code>&#x27;s expectations and the per-model matrix in the HTML docs. Capture a real session first with <code>tools/record-session.pl</code> (<code>README.record-session</code>).</p>
+<p>For a device that speaks a config-template rather than a bespoke dialect, prefer the <code>generic</code> model and a template -- see <code>README.generic-model</code> and <code>README.template_engine</code>; no Perl is needed.</p>
+<hr>
+</section>
+<section id="6-debug-tracing-debugon">
+<div class="section-kicker">06</div>
+<h2>6. Debug tracing (<code>debug=on</code>)</h2>
+<p><code>debug=on</code> writes a 0600 <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code> session trace, available for <strong>every</strong> model (since 9.71). Three mechanisms, all producing the same file contract:</p>
+<ul><li><strong>SSH models</strong> -&gt; <code>open_ssh_debug_file</code> (records the ssh <code>-v</code> trace + session).</li><li><strong>Telnet models</strong> -&gt; <code>open_telnet_debug_file</code> (attaches the Net::Telnet <code>dump_log</code>).</li><li><strong>HTTP / SNMP models</strong> -&gt; their own implementation (HTTP request/response; SNMP operations + TFTP transfer).</li></ul>
+<p>Credentials never reach the log because models send them via <code>print_secret</code>, which suspends the log around the send. The file still contains configuration secrets (hashes, community strings), so it is 0600 and should be deleted after troubleshooting.</p>
+<hr>
+</section>
+<section id="7-maintenance--lookup-modes-toolspm">
+<div class="section-kicker">07</div>
+<h2>7. Maintenance / lookup modes (Tools.pm)</h2>
+<p>These are standalone modes: they use phase-1 registration, operate on the stored backups (never fetch), and exit. Summary (see <code>README</code> command-line reference for exact behaviour):</p>
+<div class="table-wrap"><table><thead><tr><th>Flag</th><th>Purpose</th></tr></thead><tbody><tr><td><code>-g dev</code></td><td>print the latest backup of <code>dev</code> to stdout (<code>-f file</code> to write it).</td></tr><tr><td><code>-l dev</code></td><td>list the backups of <code>dev</code>.</td></tr><tr><td><code>-z dev</code> / <code>-Z</code></td><td>find zero-byte backups for one device / all devices; <code>-D</code> also deletes the files, <code>-T</code> previews.</td></tr><tr><td><code>-o</code> / <code>-e</code></td><td>orphaned-device / empty-directory report; <code>-D</code> deletes, <code>-T</code> previews.</td></tr><tr><td><code>-s dev</code> / <code>-S</code></td><td>suffix check for one / all devices.</td></tr><tr><td><code>--check-template PATH</code></td><td>structural check of a generic-model template; exits 0 ok / 1 errors / 2 file problem. No device table needed; no allowlist applied.</td></tr><tr><td><code>--template-syntax PATH</code></td><td>print a template&#x27;s <code># syntax_style:</code> value for a config viewer.</td></tr><tr><td><code>--list-allowed-dirs</code></td><td>print and lint the <code>directory:</code> allowlist.</td></tr><tr><td><code>--clean-lock-dir [N]</code></td><td>remove lock files older than N days (default 30, min 1); <code>-T</code> previews; flock-first so a held lock is never removed.</td></tr></tbody></table></div>
+<p>Exit codes of note: <code>0</code> success; <code>2</code> usage/allowlist-abort/bad-argument; <code>10</code> lock directory unusable; <code>255</code> fatal die; lookup modes also use <code>1</code> (e.g. zero-byte/orphan found).</p>
+<hr>
+</section>
+<section id="8-locking">
+<div class="section-kicker">08</div>
+<h2>8. Locking</h2>
+<p><code>lock=on</code> serialises concurrent backups of the same device (overlapping cron, or a web &quot;Backup Now&quot; over a cron run). Mechanism:</p>
+<ul><li><strong>Key</strong>: <code>sha256_hex(dev_id)</code>; <strong>path</strong>: <code>&lt;lock_dir&gt;/&lt;hash&gt;.lock</code>.</li><li><strong>Lock dir</strong>: <code>lock_dir=</code> (a <code>directory: lock</code> <code>$TAG</code> or a path), else the default <code>&lt;dir of fetchconfig.pl&gt;/.lock</code>, created 0700. If it cannot be created/used, the run exits <strong>10</strong> at the end.</li><li><strong>Acquire</strong>: <code>sysopen(..., O_RDWR|O_CREAT|O_NOFOLLOW, 0600)</code> then <code>flock(LOCK_EX|LOCK_NB)</code>. On contention, retry <code>lock_retry</code> times (default 5; 0 = skip immediately) at <code>lock_retry_time</code>-second intervals (default 10), then record the device as <strong><code>skipped</code></strong> and continue. The process exit code is <strong>not</strong> changed by a lock-skip.</li><li><strong>Release</strong>: automatic when the holding process exits (even on crash). The lock file is <strong>never unlinked</strong> on release (unlinking would open a two-holders race). <code>--clean-lock-dir</code> removes stale files flock-first.</li></ul>
+<p>Works across the forked <code>-P</code> workers and across separate invocations. Requires a <strong>local</strong> filesystem (flock over NFS on AIX is unreliable) -- a documented operator responsibility.</p>
+<hr>
+</section>
+<section id="9-security-mechanisms">
+<div class="section-kicker">09</div>
+<h2>9. Security mechanisms</h2>
+<h3 id="91-trust-model-read-this-first">9.1 Trust model (read this first)</h3>
+<ul><li><strong>The device table is the credential store and a code-execution surface.</strong> Whoever can write it already holds every device password and, via <code>on_fetch_run</code>, can run a program as the fetchconfig user. The security mechanisms below defend against <em>content</em> mistakes and <em>external</em> attackers, not against a hostile table author -- that is out of scope by construction.</li><li><strong>fetchconfig-web split.</strong> In the fetchconfig-web deployment, content is read as the unprivileged <code>nobody</code> user (<code>-l</code>/<code>-g</code>) and backups are written as root via sudo (<code>-g</code>/<code>-o</code>). This is why repository files/directories are <strong>deliberately umask-readable</strong>, not owner-only (see 9.6) -- an unprivileged reader must be able to read them.</li></ul>
+<h3 id="92-credential-handling">9.2 Credential handling</h3>
+<ul><li><strong><code>print_secret</code></strong> sends passwords to the device without logging them (suspends the session log around the send, leaves a masked marker). Every model uses it.</li><li><strong><code>mask_secrets</code></strong> (Abstract, for device-table lines echoed to the log; Detector has a matching one) redacts <code>pass=</code>/<code>enable=</code>/<code>community=</code>/ <code>password=</code>/<code>passphrase=</code>/<code>secret=</code>/<code>key=</code>/<code>token=</code>-prefixed values, quoted values included, so a malformed table line in an error message does not leak a credential.</li><li><strong><code>mask_line</code></strong> (Report, for config <em>content</em> in the HTML report and the mailed diffs) redacts <code>secret N &lt;hash&gt;</code> / <code>password N &lt;hash&gt;</code> forms. It is best-effort and biases toward masking (a false positive hides a non-secret in the diff view; never the reverse).</li></ul>
+<h3 id="93-command-execution----on_fetch_run">9.3 Command execution -- <code>on_fetch_run</code></h3>
+<p><code>on_fetch_run</code> is executed <strong>without a shell</strong>: the configured value is split into argv with <code>Text::ParseWords::shellwords</code> and run with the list form of <code>system</code> (<code>system { $argv[0] } @argv</code>), which goes to <code>execvp()</code> directly. Shell metacharacters (<code>;</code>, <code>|</code>, <code>$(...)</code>, backticks, <code>&gt;</code>) are passed to the program as literal text, not interpreted. The program must not live in a system directory. A start failure, signal, or non-zero exit is logged.</p>
+<h3 id="94-path-safety">9.4 Path safety</h3>
+<ul><li><strong><code>dev_id</code> whitelist</strong> <code>^[\w.-]+$</code> (dots-only rejected) -- prevents a device id from escaping the repository via <code>../</code>.</li><li><strong>Directory allowlist</strong> -- when a <code>directory:</code> section exists, <code>repository=</code>, <code>template_dir=</code>, <code>lock_dir=</code>, and the <code>on_fetch_run</code> program directory must resolve under an allowed path; paths are checked for <code>/../</code>, <code>/./</code>, absolute form, and legal characters; a <code>$TAG</code> is expanded. Off-list -&gt; device skipped.</li><li><strong>System-directory rejection</strong> (<code>_system_dir_path</code>) -- those four directory uses may never be <code>/bin</code>, <code>/etc</code>, <code>/usr/lib</code>, ... or the root, with or without an allowlist. A <code>directory:</code> line that declares one is rejected at parse time.</li><li><strong>Abort on a broken allowlist</strong> -- if any <code>directory:</code> line failed to parse, the run aborts (exit 2) before any fetch, rather than continuing with a silently reduced allowlist (fail-closed).</li><li><strong><code>O_EXCL</code> backup write</strong> -- <code>dump_config</code> creates the backup exclusively, so two runs finishing in the same one-second filename window cannot silently overwrite each other (the second is refused and reported).</li></ul>
+<h3 id="95-locking">9.5 Locking</h3>
+<p>See section 8 -- <code>O_NOFOLLOW</code> on the lock file, 0600 lock files, 0700 lock dir, flock-based, never-unlink-on-release, flock-first cleanup.</p>
+<h3 id="96-file-permissions">9.6 File permissions</h3>
+<p>Backup files and their directories, and the <code>.status</code> file, are created with the <strong>process umask</strong> -- deliberately not forced owner-only, because the fetchconfig-web <code>nobody</code> reader must read them (9.1). Restrict the repository directory yourself if the host is shared. The <code>.debug</code> file is <strong>0600</strong> (it can contain secrets even though passwords are masked). Parallel-fetch worker scratch files are owner-only (they live in a private temp dir).</p>
+<h3 id="97-mail">9.7 Mail</h3>
+<ul><li><strong>SMTP header-injection</strong> -- <code>from</code>, <code>subject</code>, and every recipient have CR/LF stripped before the headers are written.</li><li><strong>No plaintext fallback</strong> -- <code>tls=starttls|ssl</code> never silently downgrades to an unencrypted send; if TLS fails the mail is skipped and logged.</li></ul>
+<h3 id="98-deliberate-non-mitigations-do-not-fix-these-blindly">9.8 Deliberate NON-mitigations (do not &quot;fix&quot; these blindly)</h3>
+<ul><li><strong>SSH host-key verification is OFF</strong> (<code>StrictHostKeyChecking=no</code>, <code>UserKnownHostsFile=/dev/null</code>). This is a known, deferred exposure (audit finding F3) traded off against switch-key churn on hardware swaps. A design for TOFU verification plus a <code>--forget-host</code> operator command is specified in <code>fetchconfig-F3-ssh-hostkey-plan.md</code> for when it is addressed. Turning verification on without that operator tooling would break the hardware-swap workflow.</li><li><strong>Repository is umask-readable by design</strong> (9.6) -- not a permissions bug.</li></ul>
+<hr>
+</section>
+<section id="10-notification-subsystem-mailer--report">
+<div class="section-kicker">10</div>
+<h2>10. Notification subsystem (Mailer / Report)</h2>
+<ul><li><strong><code>send_summaries</code></strong> builds <code>@global_rows</code> from <code>@results</code> and sends the global summary to the <code>email: to=</code> recipient, then groups devices by their <code>to=</code> override and sends each distinct override recipient <strong>one</strong> mail with only its own devices (dedup). The global recipient is never double-mailed.</li><li><strong>The mail is multipart</strong>: a <code>multipart/related</code> wrapping a <code>multipart/alternative</code> (a plain-text summary built by <code>build_report_text</code> -- the stats and device tables in text, no diffs -- and an HTML part built by <code>build_report_html</code>), plus the inline logo image. The MIME emission matches the fetchconfig-web mailer byte-structure (folded boundaries, CRLF, 12-byte random boundaries) so the inline logo renders.</li><li><strong><code>web_report_url</code></strong> is the base fetchconfig-web CGI URL; the mailer appends <code>?action=view_report&amp;file=&lt;basename&gt;</code> to build the &quot;full report&quot; button link.</li><li><strong><code>Report.pm</code></strong> writes the on-disk HTML change report (a summary table plus a coloured, masked diff per changed device) to the <code>report</code> directory; the mail embeds up to <code>email_max_diff</code> diffs and links to the full report.</li></ul>
+<hr>
+</section>
+<section id="11-extension-recipes">
+<div class="section-kicker">11</div>
+<h2>11. Extension recipes</h2>
+<p>Concrete &quot;how to add X&quot;. Each assumes you have read the relevant section above.</p>
+<h3 id="111-add-a-device-option">11.1 Add a device option</h3>
+<ol><li value="1">Choose the accessor by type: directory-valued (register in <code>%DIR_VALUED_OPTION</code>), numeric (<code>dev_option_posint</code>), boolean (<code>dev_option_flag</code>), plain (<code>dev_option</code>). section 3.2.</li><li value="2">Read it where it applies (a model&#x27;s <code>do_fetch</code>, the pipeline, or a maintenance mode). No parser change is needed.</li><li value="3">If it is universal, document it in the README &quot;available for all models&quot; block and the HTML matrix intro; if model-specific, in that model&#x27;s section and matrix row.</li><li value="4">Add a test under <code>t/</code> (see section 12).</li></ol>
+<h3 id="112-add-a-new-model">11.2 Add a new model</h3>
+<p>See section 5.3 + <code>How-To-add-a-model</code>.</p>
+<h3 id="113-add-a-maintenancelookup-mode">11.3 Add a maintenance/lookup mode</h3>
+<ol><li value="1">Add the CLI option in <code>fetchconfig.pl</code> <code>GetOptions</code> and a dispatch block (model it on <code>--list-allowed-dirs</code>/<code>--clean-lock-dir</code>: it runs after phase-1 load, does its job on the stored backups, and exits). Add it to the <code>$lookup_only</code> set so no fetch phase runs.</li><li value="2">Implement the work in <code>Tools.pm</code>, reusing its filesystem helpers (<code>parse_backup_filename</code>, <code>sort_backups_desc</code>, <code>dir_is_empty</code>, ...).</li><li value="3">Pick an exit code consistent with section 7; document in README + HTML + usage.</li><li value="4">Add a test.</li></ol>
+<h3 id="114-add-a-per-device-result-field-eg-a-new-mail-column">11.4 Add a per-device result field (e.g. a new mail column)</h3>
+<ol><li value="1">Pass it as a new <code>record_result</code> argument where the outcome is known (<code>fetch_device</code>). It is then automatically in <code>@results</code>, the <code>.status</code> file, and (under <code>-P</code>) the result sink -- see section 2.4.</li><li value="2">Render it in <code>build_report_html</code> and <code>build_report_text</code> (keep the two in sync) and, if appropriate, in the statistics tally (<code>row_state</code>).</li><li value="3">Add a test asserting it appears in both mail parts.</li></ol>
+<hr>
+</section>
+<section id="12-testing">
+<div class="section-kicker">12</div>
+<h2>12. Testing</h2>
+<p>The test suite is in <code>t/</code> (TAP, run with <code>prove -I. t/</code> or <code>make test</code>). Files are numbered by area: <code>00-compile</code> (every model + the driver compile), <code>10</code>/<code>11</code>/<code>12</code>/<code>14</code> (text/quote/filename/option helpers), <code>30</code>/<code>31</code>/<code>32</code> (repository/compare/tools filesystem behaviour), <code>40</code>/<code>41</code> (template parser and shipped templates), <code>42</code>-<code>44</code> (directory allowlist, system-dir deny, allowlist abort), <code>45</code> (numeric option validation), <code>46</code>/<code>47</code> (locking, skipped-state), <code>48</code>/<code>49</code>/<code>50</code> (web report URL, mail style, mail text), <code>51</code> (telnet debug).</p>
+<p>Conventions for a new test:</p>
+<ul><li>Prefer <strong>pure</strong> tests that exercise one function without a live device (mock <code>Net::Telnet</code>/<code>Net::SMTP</code> where needed; see <code>t/46</code>, <code>t/49</code>, <code>t/51</code>).</li><li>Use <code>File::Temp</code> for filesystem tests.</li><li><code>plan skip_all</code> if a model needs a transport module that may be absent.</li></ul>
+<p><strong>Sandbox vs AIX caveat:</strong> some tests require transport modules (<code>HTTP::Request::Common</code>, <code>Net::SNMP</code>, <code>Net::Telnet</code>, ...) that may not be installed on a development box. <code>t/00-compile</code>, <code>t/32-tools</code>, and <code>t/42-directory-allowlist</code> in particular pull in the full model set. Run the complete suite on the target (AIX) host, where all modules are present, before tagging a release. On a bare dev box, test the pure helpers directly.</p>
+<hr>
+</section>
+<section id="13-conventions-and-gotchas">
+<div class="section-kicker">13</div>
+<h2>13. Conventions and gotchas</h2>
+<ul><li><strong>Phases are sacred.</strong> Never fetch in phase 1 (parse/register); never rely on parse-time side effects in phase 2.</li><li><strong>Models never abort the run.</strong> Return failure from <code>do_fetch</code>; let the pipeline record it and continue. Only table/allowlist errors abort, and only before fetching.</li><li><strong>Package <code>my</code> lexicals limit external testability.</strong> Several Mailer structures (<code>%email_config</code>, <code>$rep_url</code>, <code>@results</code>) are file-scoped lexicals; a test can only reach them through the module&#x27;s own entry points (hence the small <code>_test_set_rep</code> hook used by the mail tests). If you add a structure that a test must drive, expose it through an entry point rather than expecting external assignment to work.</li><li><strong><code>-P</code> isolates package state.</strong> A value a worker must return to the parent goes through <code>record_result</code> (the result sink), not a package variable (section 2.4).</li><li><strong>MIME is byte-sensitive.</strong> The summary mail&#x27;s MIME must match the fetchconfig-web mailer exactly (CRLF, folded boundaries, 12-byte random boundaries, base64 wrapped at 76). Do not &quot;tidy&quot; the <code>send_mail</code> emission.</li><li><strong>Secrets.</strong> Any new code that sends a credential uses <code>print_secret</code>; any new code that logs a device-table line uses <code>mask_secrets</code>; any new code that renders config content in a report uses <code>mask_line</code>.</li><li><strong>Timeouts and <code>keep</code> are validated.</strong> A non-positive-integer <code>timeout</code>/<code>fetch_timeout</code>/<code>banner_timeout</code>/<code>prompt_settle_ms</code> falls back to the default (via <code>dev_option_posint</code>/the <code>dev_option</code> numeric guard); a non-positive-integer <code>keep</code> is rejected at load time (it would otherwise delete every backup).</li><li><strong>Version/CHANGES discipline.</strong> Bump <code>Constants.pm</code>, add a CHANGES entry (&lt;=80-char lines, LF-only), and keep README + the HTML manual in step with the code -- the HTML is generated from its <code>.md</code> via <code>tools/md2html.py</code>.</li></ul>
+<hr>
+</section>
+<section id="14-document-map">
+<div class="section-kicker">14</div>
+<h2>14. Document map</h2>
+<div class="table-wrap"><table><thead><tr><th>To learn...</th><th>Read...</th></tr></thead><tbody><tr><td>How to use fetchconfig, every option</td><td><code>README</code></td></tr><tr><td>Internals, data structures, security, how to extend</td><td>this guide</td></tr><tr><td>How to add a device model (recipe)</td><td><code>How-To-add-a-model</code></td></tr><tr><td>The template-driven <code>generic</code> model</td><td><code>README.generic-model</code></td></tr><tr><td>The template grammar and parser</td><td><code>README.template_engine</code></td></tr><tr><td>Capturing a device session for a new model</td><td><code>README.record-session</code></td></tr><tr><td>The Perl module dependency matrix</td><td><code>DEPENDENCIES</code></td></tr><tr><td>The SSH host-key verification design (deferred)</td><td><code>fetchconfig-F3-ssh-hostkey-plan.md</code></td></tr></tbody></table></div>
+<div class="callout note"><p>The two diagrams in this guide are ASCII in the Markdown (readable on GitHub and offline) and rendered Mermaid in the generated HTML. The HTML loads Mermaid from a pinned CDN (<code>mermaid@11.6.0</code>), so an internet connection is needed to draw the diagrams when viewing the HTML; the surrounding text needs no network.</p></div>
+</section>
+
+    </div>
+
+    <div class="page-footer">
+      Generated from the fetchconfig README &middot; Rainer Tammer &middot; GPL&#8209;2.0-or-later
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Scroll-spy: highlight the sidebar link matching the section in view.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a'));
+    // Resolve by id, not by CSS selector: section ids can start with a digit
+    // (version numbers in CHANGES, numbered sections in DEVELOPER), which is a
+    // valid HTML id but an invalid CSS id selector, so passing the href to
+    // querySelector would throw. getElementById has no such restriction.
+    var sections = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); }).filter(Boolean);
+    if (!('IntersectionObserver' in window) || !sections.length) return;
+    var current = null;
+    function setActive(id){
+      if (id === current) return;
+      current = id;
+      links.forEach(function(a){ a.classList.toggle('active', a.getAttribute('href') === '#' + id); });
+    }
+    var observer = new IntersectionObserver(function(entries){
+      var visible = entries.filter(function(e){ return e.isIntersecting; });
+      if (visible.length){
+        visible.sort(function(a,b){ return a.boundingClientRect.top - b.boundingClientRect.top; });
+        setActive(visible[0].target.id);
+      }
+    }, { rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+    sections.forEach(function(s){ observer.observe(s); });
+    setActive(sections[0].id);
+    var toggle = document.getElementById('nav-toggle');
+    links.forEach(function(a){ a.addEventListener('click', function(){ if (toggle) toggle.checked = false; }); });
+  })();
+</script>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral" });
+</script>
+</body>
+</html>

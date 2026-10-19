@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fetchconfig &mdash; Dependencies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbfbf9;
+    --surface:#f1f4f4;
+    --surface-2:#e9edee;
+    --border:#dde3e3;
+    --text:#141a1f;
+    --text-muted:#5b6770;
+    --text-faint:#8a949b;
+    --accent:#0e7c8c;
+    --accent-bright:#22aabb;
+    --accent-soft:#e3f3f5;
+    --danger:#c4432b;
+    --danger-soft:#fbeae6;
+    --success:#1c8a5b;
+    --success-soft:#e8f5ee;
+    --changed:#2451c4;
+    --changed-soft:#e8edfb;
+    --code-bg:#10171c;
+    --code-text:#dce8ec;
+    --code-accent:#7fe0cc;
+    --code-muted:#7f929b;
+    --radius:6px;
+    --font-sans:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace;
+    --sidebar-w:280px;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    font-family:var(--font-sans);
+    color:var(--text);
+    background:var(--bg);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  a{color:var(--accent);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{
+    outline:2px solid var(--accent-bright);
+    outline-offset:2px;
+  }
+
+  code, kbd{
+    font-family:var(--font-mono);
+    font-size:0.88em;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:0.1em 0.4em;
+    color:var(--text);
+    white-space:nowrap;
+  }
+
+  pre{
+    font-family:var(--font-mono);
+    background:var(--code-bg);
+    color:var(--code-text);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    overflow-x:auto;
+    font-size:0.86rem;
+    line-height:1.65;
+    margin:16px 0;
+    border:1px solid #05090c;
+  }
+  pre code{
+    background:none;
+    border:none;
+    padding:0;
+    white-space:pre;
+    color:inherit;
+    font-size:1em;
+  }
+  pre .c{color:var(--code-muted);} /* comment */
+  pre .s{color:var(--code-accent);} /* string / value */
+  pre .k{color:#e8b95f;} /* keyword / flag */
+
+  h1,h2,h3,h4{
+    font-family:var(--font-sans);
+    font-weight:600;
+    line-height:1.25;
+    color:var(--text);
+    letter-spacing:-0.01em;
+  }
+
+  /* ---------- Layout ---------- */
+  .layout{
+    display:flex;
+    align-items:flex-start;
+    max-width:1600px;
+    margin:0 auto;
+  }
+
+  .sidebar{
+    position:sticky;
+    top:0;
+    height:100vh;
+    width:var(--sidebar-w);
+    flex:0 0 var(--sidebar-w);
+    overflow-y:auto;
+    padding:28px 22px 40px;
+    border-right:1px solid var(--border);
+    background:var(--surface);
+  }
+
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:4px;
+  }
+  .brand-mark{
+    width:30px;height:30px;border-radius:7px;
+    background:linear-gradient(155deg,var(--accent-bright),var(--accent));
+    display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;
+  }
+  .brand-mark svg{width:17px;height:17px;}
+  .brand-name{font-weight:700;font-size:1.05rem;letter-spacing:-0.01em;}
+
+  .brand-meta{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-muted);
+    margin:6px 0 22px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .pill{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:99px;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text-muted);
+  }
+
+  .nav-group{margin-bottom:4px;}
+  .nav-group-label{
+    font-size:0.68rem;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--text-faint);
+    margin:20px 0 6px;
+    font-weight:600;
+  }
+  .nav-group:first-of-type .nav-group-label{margin-top:0;}
+
+  .sidebar nav a{
+    display:block;
+    color:var(--text-muted);
+    font-size:0.885rem;
+    padding:6px 10px;
+    border-radius:5px;
+    text-decoration:none;
+    border-left:2px solid transparent;
+    transition:background 0.12s ease, color 0.12s ease;
+  }
+  .sidebar nav a:hover{background:var(--surface-2);color:var(--text);}
+  .sidebar nav a.active{
+    color:var(--accent);
+    background:var(--accent-soft);
+    border-left-color:var(--accent-bright);
+    font-weight:500;
+  }
+
+  .main-col{
+    flex:1 1 auto;
+    min-width:0;
+    padding:0 0 120px;
+  }
+
+  .content{
+    max-width:1200px;
+    margin:0 auto;
+    padding:0 48px;
+  }
+  /* Keep flowing prose at a comfortable reading measure, but let wide
+     elements (tables, code blocks, diagrams) use the full content width so
+     they don't need a horizontal scrollbar on a wide screen. */
+  .content > p,
+  .content > ul,
+  .content > ol,
+  .content > h2,
+  .content > h3,
+  .content > h4,
+  .content > blockquote{
+    max-width:820px;
+  }
+  .content > .table-wrap,
+  .content > pre,
+  .content > .callout{
+    max-width:100%;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding:64px 48px 48px;
+    max-width:1200px;
+    margin:0 auto;
+    border-bottom:1px solid var(--border);
+  }
+  .hero-eyebrow{
+    font-family:var(--font-mono);
+    font-size:0.78rem;
+    color:var(--accent);
+    margin-bottom:14px;
+  }
+  .hero h1{
+    font-size:2.6rem;
+    margin:0 0 14px;
+    letter-spacing:-0.02em;
+    color:var(--accent);
+  }
+  .mermaid{
+    /* A mermaid block is a <pre>, so it would otherwise inherit the dark code
+       background/border/padding. Render the diagram on the page background. */
+    margin:1.5rem 0;
+    text-align:center;
+    background:transparent;
+    color:inherit;
+    border:0;
+    padding:0;
+    overflow-x:auto;
+  }
+  /* Until mermaid.js has rendered a block (it stamps data-processed on success),
+     keep the raw diagram source hidden so it is never shown as a wall of text --
+     during the CDN load, or if the runtime is blocked/unavailable. mermaid still
+     measures and renders normally while it is hidden; the element reveals itself
+     the moment it is processed. */
+  figure.diagram{margin:1.5rem 0;text-align:center;}
+  .diagram-svg{display:block;}
+  .diagram-svg svg{max-width:100%;height:auto;}
+  /* keep raw mermaid source hidden until rendered */
+  .mermaid:not([data-processed]){display:none;}
+  .mermaid[data-processed]{display:block;}
+  /* once live mermaid has rendered, hide the embedded SVG fallback */
+  .mermaid[data-processed] + .diagram-svg{display:none;}
+  .hero p.lede{
+    font-size:1.13rem;
+    color:var(--text-muted);
+    max-width:640px;
+    margin:0 0 28px;
+    line-height:1.6;
+  }
+  .hero-stats{
+    display:flex;
+    gap:36px;
+    flex-wrap:wrap;
+    margin-top:8px;
+  }
+  .hero-stat .num{
+    font-family:var(--font-mono);
+    font-size:1.6rem;
+    font-weight:600;
+    color:var(--text);
+    display:block;
+  }
+  .hero-stat .label{
+    font-size:0.8rem;
+    color:var(--text-muted);
+  }
+
+  /* ---------- Sections ---------- */
+  section{
+    padding:56px 0 8px;
+    border-bottom:1px solid var(--border);
+  }
+  section:last-of-type{border-bottom:none;}
+
+  .section-kicker{
+    font-family:var(--font-mono);
+    font-size:0.75rem;
+    color:var(--text-faint);
+    margin-bottom:8px;
+  }
+  h2{
+    font-size:1.65rem;
+    margin:0 0 18px;
+    scroll-margin-top:24px;
+  }
+  h3{
+    font-size:1.18rem;
+    margin:34px 0 12px;
+    scroll-margin-top:24px;
+  }
+  h4{
+    font-size:0.98rem;
+    margin:22px 0 8px;
+    color:var(--text);
+    scroll-margin-top:24px;
+  }
+  p{margin:0 0 14px;color:var(--text);}
+  section p, section li{color:var(--text);}
+  ul,ol{padding-left:1.3em;margin:0 0 16px;}
+  li{margin-bottom:6px;}
+  .prose-muted{color:var(--text-muted);}
+
+  .file-label{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-faint);
+    margin:18px 0 -8px;
+    display:block;
+  }
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:18px 0;
+    border:1px solid var(--border);
+    background:var(--surface);
+    font-size:0.93rem;
+  }
+  .callout-title{
+    font-weight:600;
+    font-size:0.82rem;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    margin-bottom:6px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+  }
+  .callout.warn{background:var(--danger-soft);border-color:#f0c9bd;}
+  .callout.warn .callout-title{color:var(--danger);}
+  .callout.note{background:var(--accent-soft);border-color:#bfe4e9;}
+  .callout.note .callout-title{color:var(--accent);}
+  .callout p:last-child{margin-bottom:0;}
+
+  /* ---------- Tables ---------- */
+  .table-wrap{overflow-x:auto;margin:18px 0 26px;border:1px solid var(--border);border-radius:var(--radius);}
+  table{
+    border-collapse:collapse;
+    width:100%;
+    font-size:0.87rem;
+  }
+  caption{
+    text-align:left;
+    font-size:0.78rem;
+    color:var(--text-muted);
+    padding:8px 14px;
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+    caption-side:top;
+  }
+  th,td{
+    text-align:left;
+    padding:9px 14px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+  }
+  thead th{
+    background:var(--surface);
+    font-weight:600;
+    font-size:0.76rem;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--text-muted);
+    white-space:nowrap;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--surface);}
+  td code, th code{white-space:nowrap;}
+  .req-yes{color:var(--danger);font-weight:600;font-size:0.82rem;}
+  .req-opt{color:var(--text-faint);font-size:0.82rem;}
+  .req-dash{color:var(--border);}
+  .matrix th, .matrix td{text-align:center;}
+  .matrix td:first-child, .matrix th:first-child{text-align:left;}
+  .matrix{font-size:0.8rem;}
+  .matrix code{white-space:nowrap;}
+
+  /* ---------- Flag reference ---------- */
+  .flag-card{
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:14px 0;
+    background:var(--bg);
+  }
+  .flag-card + .flag-card{margin-top:10px;}
+  .flag-head{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:8px;
+  }
+  .flag-tag{
+    font-family:var(--font-mono);
+    font-weight:600;
+    background:var(--code-bg);
+    color:var(--code-accent);
+    border-radius:4px;
+    padding:3px 9px;
+    font-size:0.86rem;
+  }
+  .flag-req{
+    font-size:0.72rem;
+    font-family:var(--font-mono);
+    color:var(--text-faint);
+  }
+  .flag-card p{margin-bottom:8px;font-size:0.92rem;color:var(--text-muted);}
+  .flag-card p:last-child{margin-bottom:0;}
+  .exit-list{list-style:none;padding:0;margin:8px 0 0;font-family:var(--font-mono);font-size:0.82rem;}
+  .exit-list li{display:flex;gap:10px;margin-bottom:3px;}
+  .exit-list .code{color:var(--text);font-weight:600;min-width:1.6em;}
+
+  /* ---------- Footnotes ---------- */
+  sup.fnref{font-size:0.68em;line-height:0;vertical-align:super;}
+  sup.fnref a{color:var(--accent);text-decoration:none;font-weight:600;padding:0 1px;}
+  sup.fnref a:hover{text-decoration:underline;}
+  .footnotes{margin-top:1.4rem;padding-top:0.9rem;border-top:1px solid var(--border);
+             font-size:0.9rem;color:var(--text-muted);}
+  .footnote{margin:0 0 0.55rem 0;padding-left:1.9em;text-indent:-1.9em;line-height:1.5;}
+  .footnote:last-child{margin-bottom:0;}
+  .footnote .fnnum{display:inline-block;min-width:1.5em;text-indent:0;
+                   font-weight:600;color:var(--text);font-family:var(--font-mono);}
+
+  /* ---------- Color swatches (email notif) ---------- */
+  .swatches{display:flex;gap:14px;flex-wrap:wrap;margin:18px 0 22px;}
+  .swatch{
+    display:flex;align-items:center;gap:9px;
+    border:1px solid var(--border);border-radius:99px;
+    padding:5px 12px 5px 6px;font-size:0.82rem;background:var(--surface);
+  }
+  .swatch .dot{width:16px;height:16px;border-radius:50%;flex:0 0 auto;border:1px solid rgba(0,0,0,0.12);}
+
+  /* ---------- Toggle tabs (Installation) ---------- */
+  .tabs{margin:18px 0;}
+  input.tab-input{position:absolute;opacity:0;pointer-events:none;}
+  .tab-labels{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+  .tab-labels label{
+    font-size:0.88rem;font-weight:500;color:var(--text-muted);
+    padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;
+    margin-bottom:-1px;
+  }
+  .tab-panel{display:none;}
+  #tab-unix:checked ~ .tab-labels label[for="tab-unix"],
+  #tab-win:checked ~ .tab-labels label[for="tab-win"]{
+    color:var(--accent);border-bottom-color:var(--accent-bright);
+  }
+  #tab-unix:checked ~ .tab-panels #panel-unix,
+  #tab-win:checked ~ .tab-panels #panel-win{display:block;}
+
+  /* ---------- Device support grid ---------- */
+  .device-grid td:first-child code{font-weight:600;}
+
+  /* ---------- Footer ---------- */
+  .page-footer{
+    max-width:1200px;margin:0 auto;padding:40px 48px 60px;
+    color:var(--text-faint);font-size:0.82rem;
+  }
+  .page-footer a{color:var(--text-muted);}
+
+  /* ---------- Mobile nav ---------- */
+  .nav-toggle{display:none;}
+  .mobile-bar{display:none;}
+
+  @media (max-width: 900px){
+    .sidebar{
+      position:fixed;
+      inset:0 auto 0 0;
+      z-index:40;
+      transform:translateX(-100%);
+      transition:transform 0.2s ease;
+      box-shadow:2px 0 24px rgba(0,0,0,0.15);
+    }
+    .nav-toggle:checked ~ .layout .sidebar{transform:translateX(0);}
+    .mobile-bar{
+      display:flex;align-items:center;justify-content:space-between;
+      position:sticky;top:0;z-index:30;
+      background:var(--bg);border-bottom:1px solid var(--border);
+      padding:14px 20px;
+    }
+    .mobile-bar .brand{margin:0;}
+    .mobile-bar label{
+      font-family:var(--font-mono);font-size:0.8rem;
+      border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;
+    }
+    .content{padding:0 22px;}
+    .hero{padding:36px 22px 32px;}
+    .hero h1{font-size:2rem;}
+    .page-footer{padding:32px 22px 48px;}
+  }
+  @media (min-width:901px){
+    .mobile-bar{display:none !important;}
+  }
+
+  @media print{
+    .sidebar,.mobile-bar{display:none !important;}
+    .layout{display:block;}
+    a{color:inherit;text-decoration:none;}
+    pre{white-space:pre-wrap;}
+  }
+</style>
+
+</head>
+<body>
+
+<input type="checkbox" id="nav-toggle" class="nav-toggle">
+
+<div class="mobile-bar">
+  <div class="brand">
+    <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+    <span class="brand-name">fetchconfig</span>
+  </div>
+  <label for="nav-toggle">Menu</label>
+</div>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="brand-name">fetchconfig</span>
+    </div>
+    <div class="brand-meta">
+      <span class="pill">v9.72</span>
+      <span class="pill">GPL&#8209;2.0+</span>
+    </div>
+
+    <nav>
+<div class="nav-group"><div class="nav-group-label">Runtime dependencies by feature (Perl core vs CPAN)</div><a href="#base-always----core-except-nettelnet">Base (always) -- core except Net::Telnet</a><a href="#e-mail-summary-mailer----all-core">E-mail summary (Mailer) -- all core</a><a href="#ssh-models-cisco-ios-ssh-cisco-asa-ssh-comware-ssh-procurve-ssh-planet-ssh-aruba-cx-ssh-nexus-ssh-mediant-sbc">SSH models (cisco-ios-ssh, cisco-asa-ssh, comware-ssh, procurve-ssh, planet-ssh, aruba-cx-ssh, nexus-ssh, mediant-sbc)</a><a href="#web-ui-models-tplink-web-sg105e-procurve-web-1700">Web-UI models (tplink-web-sg105e, procurve-web-1700)</a><a href="#snmptftp-model-procurve-snmp">SNMP+TFTP model (procurve-snmp)</a></div>
+<div class="nav-group"><div class="nav-group-label">OS packages by feature (RHEL 9 / SLES 15 / Ubuntu 24.04 LTS)</div><a href="#base-perl-package-per-distro">Base perl package per distro</a></div>
+<div class="nav-group"><div class="nav-group-label">AIX 7.2</div><a href="#option-a----system-perl-usrbinperl-perlrte-528">Option A -- system Perl (/usr/bin/perl, perl.rte 5.28)</a><a href="#option-b----aix-toolbox-perl-dnf-perl-530">Option B -- AIX Toolbox Perl (dnf perl, 5.30+)</a></div>
+<div class="nav-group"><a href="#install-commands-layered">Install commands (layered)</a></div>
+<div class="nav-group"><a href="#development-only-not-needed-to-run-fetchconfig">Development only (not needed to run fetchconfig)</a></div>
+<div class="nav-group"><a href="#summary-minimum-cpan-modules-to-install">Summary: minimum CPAN modules to install</a></div>
+    </nav>
+  </aside>
+
+  <div class="main-col">
+
+    <div class="hero">
+      <div class="hero-eyebrow">Dependencies</div>
+      <h1 class="hero-title">fetchconfig</h1>
+      <p class="lede">Two views are given: Perl core-vs-CPAN status per Perl release, and the distribution package to install on RHEL 9, SLES 15 and Ubuntu 24.04 LTS.</p>
+      
+      
+    </div>
+
+    <div class="content">
+
+<p>Perl releases used as reference points:</p>
+<div class="table-wrap"><table><thead><tr><th>Perl</th><th>Platform</th></tr></thead><tbody><tr><td>5.26</td><td>SLES 15 SP7</td></tr><tr><td>5.28</td><td>AIX 7.2 TL5</td></tr><tr><td>5.40</td><td>current</td></tr></tbody></table></div>
+<p>&quot;core&quot; = ships with that Perl; &quot;CPAN&quot; = install separately. None of the CPAN modules below has ever been core, and none becomes core in 5.40 -- the network/web/SNMP transport libraries are CPAN in every release. Everything fetchconfig needs that is NOT a transport is core in all three releases, unchanged between 5.26 and 5.40.</p>
+<p>fetchconfig loads a model&#x27;s transport module only when that model is used (one &quot;use&quot; per model file), so a site installs only what its device types require. The base install (telnet models) needs exactly one CPAN module, Net::Telnet.</p>
+<section id="runtime-dependencies-by-feature-perl-core-vs-cpan">
+<div class="section-kicker">01</div>
+<h2>Runtime dependencies by feature (Perl core vs CPAN)</h2>
+<h3 id="base-always----core-except-nettelnet">Base (always) -- core except Net::Telnet</h3>
+<div class="table-wrap"><table><thead><tr><th>Module</th><th>5.26</th><th>5.28</th><th>5.40</th><th>Used for</th></tr></thead><tbody><tr><td><code>Net::Telnet</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>every telnet model, and the pty for every SSH model (31 models)</td></tr><tr><td><code>POSIX</code></td><td>core</td><td>core</td><td>core</td><td>strftime (timestamps)</td></tr><tr><td><code>Text::ParseWords</code></td><td>core</td><td>core</td><td>core</td><td>quoted device-table values</td></tr><tr><td><code>File::Path</code></td><td>core</td><td>core</td><td>core</td><td>make_path (repository dirs)</td></tr><tr><td><code>File::Compare</code></td><td>core</td><td>core</td><td>core</td><td>default config comparison</td></tr><tr><td><code>File::Basename</code></td><td>core</td><td>core</td><td>core</td><td>path handling</td></tr><tr><td><code>File::Temp</code></td><td>core</td><td>core</td><td>core</td><td>parallel-fetch temp files</td></tr><tr><td><code>FindBin</code></td><td>core</td><td>core</td><td>core</td><td>locate the library tree</td></tr><tr><td><code>IO::Handle</code></td><td>core</td><td>core</td><td>core</td><td>autoflush</td></tr><tr><td><code>Time::HiRes</code></td><td>core</td><td>core</td><td>core</td><td>prompt_settle_ms (sub-second)</td></tr><tr><td><code>Getopt::Long</code></td><td>core</td><td>core</td><td>core</td><td>command-line option parsing</td></tr><tr><td><code>Digest::SHA</code></td><td>core</td><td>core</td><td>core</td><td>sha256_hex (change detection / lock keys)</td></tr></tbody></table></div>
+<p>Net::Telnet in turn uses only core modules (Socket, IO::Socket::INET, Errno, Fcntl).</p>
+<h3 id="e-mail-summary-mailer----all-core">E-mail summary (Mailer) -- all core</h3>
+<p>The reporting code is loaded on every run (it writes the per-device status file even when no e-mail is configured), so Net::SMTP must be present regardless of whether <code>email:</code> is set. No SMTP connection is made unless an <code>email:</code> line is configured.</p>
+<div class="table-wrap"><table><thead><tr><th>Module</th><th>5.26</th><th>5.28</th><th>5.40</th><th>Used for</th></tr></thead><tbody><tr><td><code>Net::SMTP</code></td><td>core</td><td>core</td><td>core</td><td>sending the summary mail (libnet)</td></tr><tr><td><code>MIME::Base64</code></td><td>core</td><td>core</td><td>core</td><td>mail encoding</td></tr></tbody></table></div>
+<p>STARTTLS/SSL additionally needs <code>IO::Socket::SSL</code> + <code>Net::SSLeay</code> (CPAN), only when <code>email: tls=starttls</code> or <code>tls=ssl</code> is configured.</p>
+<h3 id="ssh-models-cisco-ios-ssh-cisco-asa-ssh-comware-ssh-procurve-ssh-planet-ssh-aruba-cx-ssh-nexus-ssh-mediant-sbc">SSH models (cisco-ios-ssh, cisco-asa-ssh, comware-ssh, procurve-ssh, planet-ssh, aruba-cx-ssh, nexus-ssh, mediant-sbc)</h3>
+<div class="table-wrap"><table><thead><tr><th>Module</th><th>5.26</th><th>5.28</th><th>5.40</th><th>Used for</th></tr></thead><tbody><tr><td><code>Net::OpenSSH</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>SSH transport</td></tr><tr><td><code>IO::Pty</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>pseudo-terminal (Net::OpenSSH dependency)</td></tr></tbody></table></div>
+<p>Also the <code>ssh</code> client binary at runtime; core File::Spec/POSIX/Fcntl.</p>
+<h3 id="web-ui-models-tplink-web-sg105e-procurve-web-1700">Web-UI models (tplink-web-sg105e, procurve-web-1700)</h3>
+<div class="table-wrap"><table><thead><tr><th>Module</th><th>5.26</th><th>5.28</th><th>5.40</th><th>Used for</th></tr></thead><tbody><tr><td><code>LWP::UserAgent</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>HTTP client</td></tr><tr><td><code>HTTP::Request::Common</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>request construction</td></tr></tbody></table></div>
+<p>Pulls in (all CPAN): HTTP::Request, HTTP::Response, HTTP::Headers, HTTP::Message, HTTP::Date, HTTP::Cookies, URI, LWP::Protocol, Try::Tiny (HTTP::Tiny is core). HTTPS additionally needs <code>LWP::Protocol::https</code>, <code>IO::Socket::SSL</code>, <code>Net::SSLeay</code> (all CPAN).</p>
+<h3 id="snmptftp-model-procurve-snmp">SNMP+TFTP model (procurve-snmp)</h3>
+<div class="table-wrap"><table><thead><tr><th>Module</th><th>5.26</th><th>5.28</th><th>5.40</th><th>Used for</th></tr></thead><tbody><tr><td><code>Net::SNMP</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>SNMP (arm the TFTP export)</td></tr><tr><td><code>Net::TFTP</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>fetch the exported file</td></tr></tbody></table></div>
+<p>Net::SNMP&#x27;s own prerequisites: Carp, Errno, Exporter, IO::Socket, Math::BigInt, Digest::MD5 are core. SNMPv3 is loaded at runtime only: <code>Crypt::DES</code> (DES privacy) and <code>Digest::HMAC</code> (HMAC auth) are CPAN; AES privacy additionally needs <code>Crypt::Rijndael</code> (CPAN). SNMP v1/v2c load none of them. Net::SNMP 6.x uses core <code>Digest::SHA</code> for SNMPv3 SHA auth, so the old <code>Digest::SHA1</code> module is not required (and is no longer packaged on Debian/Ubuntu). <code>Crypt::DES</code>/<code>Crypt::Rijndael</code> are loaded by name -- CryptX does not provide those namespaces and cannot substitute for them.</p>
+</section>
+<section id="os-packages-by-feature-rhel-9--sles-15--ubuntu-2404-lts">
+<div class="section-kicker">02</div>
+<h2>OS packages by feature (RHEL 9 / SLES 15 / Ubuntu 24.04 LTS)</h2>
+<p>Core modules (everything marked &quot;core&quot; above) are pulled in by the default meta <code>perl</code> package on all three distros -- see the base-package note below. Only the CPAN modules need their own package:</p>
+<div class="table-wrap"><table><thead><tr><th>Module</th><th>RHEL 9 (repo)</th><th>SLES 15 (repo)</th><th>Ubuntu 24.04 (component)</th></tr></thead><tbody><tr><td><code>Net::Telnet</code></td><td>perl-Net-Telnet (EPEL)</td><td>perl-Net-Telnet (PackageHub)</td><td>libnet-telnet-perl (universe)</td></tr><tr><td><code>Net::OpenSSH</code></td><td>perl-Net-OpenSSH (EPEL)</td><td>perl-Net-OpenSSH (PackageHub)</td><td>libnet-openssh-perl (universe)</td></tr><tr><td><code>IO::Pty</code></td><td>perl-IO-Tty (CRB)</td><td>perl-IO-Tty (PackageHub)</td><td>libio-pty-perl (main)</td></tr><tr><td><code>LWP::UserAgent</code></td><td>perl-libwww-perl (AppStream)</td><td>perl-libwww-perl (Basesystem)</td><td>libwww-perl (main)</td></tr><tr><td><code>HTTP::Request::Common</code></td><td>perl-HTTP-Message (AppStream)</td><td>perl-HTTP-Message (Basesystem)</td><td>libhttp-message-perl (main)</td></tr><tr><td><code>LWP::Protocol::https</code></td><td>perl-LWP-Protocol-https (AppStream)</td><td>perl-LWP-Protocol-https (Basesystem)</td><td>liblwp-protocol-https-perl (main)</td></tr><tr><td><code>IO::Socket::SSL</code></td><td>perl-IO-Socket-SSL (AppStream)</td><td>perl-IO-Socket-SSL (Basesystem)</td><td>libio-socket-ssl-perl (main)</td></tr><tr><td><code>Net::SSLeay</code></td><td>perl-Net-SSLeay (AppStream)</td><td>perl-Net-SSLeay (Basesystem)</td><td>libnet-ssleay-perl (main)</td></tr><tr><td><code>Net::SNMP</code></td><td>perl-Net-SNMP (EPEL)</td><td>perl-Net-SNMP (PackageHub)</td><td>libnet-snmp-perl (universe)</td></tr><tr><td><code>Net::TFTP</code></td><td>not packaged -- CPAN</td><td>perl-Net-TFTP (PackageHub)</td><td>libnet-tftp-perl (universe)</td></tr><tr><td><code>Crypt::DES</code></td><td>perl-Crypt-DES (EPEL)</td><td>perl-Crypt-DES (PackageHub)</td><td>libcrypt-des-perl (universe)</td></tr><tr><td><code>Crypt::Rijndael</code></td><td>perl-Crypt-Rijndael (EPEL)</td><td>perl-Crypt-Rijndael (PackageHub)</td><td>libcrypt-rijndael-perl (universe)</td></tr><tr><td><code>Digest::HMAC</code></td><td>perl-Digest-HMAC (AppStream)</td><td>perl-Digest-HMAC (PackageHub)</td><td>libdigest-hmac-perl (main)</td></tr></tbody></table></div>
+<p>Notes:</p>
+<ul><li>RHEL 9 / Rocky 9 / Alma 9: the CPAN transport modules are split across EPEL and CRB (CodeReady Builder). Net::Telnet, Net::OpenSSH, Net::SNMP and the SNMPv3 crypto are in EPEL; IO::Pty (perl-IO-Tty) is in CRB, not EPEL. Net::TFTP is not packaged for RHEL at all -- install it from CPAN for the procurve-snmp model.</li><li>SLES 15: register SUSE Package Hub for the CPAN set. The LWP/TLS stack (libwww-perl, HTTP-Message, LWP-Protocol-https, IO-Socket-SSL, Net-SSLeay) is in the Basesystem Module and needs no Package Hub.</li><li>Ubuntu 24.04: &quot;universe&quot; is enabled by default. Net::SNMP&#x27;s SNMPv3 SHA auth uses core Digest::SHA; libdigest-sha1-perl does not exist on Ubuntu.</li></ul>
+<h3 id="base-perl-package-per-distro">Base perl package per distro</h3>
+<p>Installing the default meta <code>perl</code> package pulls in every &quot;core&quot; module above on all three distros:</p>
+<pre><code>RHEL 9     dnf install perl       (full meta package; perl-interpreter is minimal)
+SLES 15    zypper install perl
+Ubuntu     apt install perl       (perl-base + perl-modules-5.38)</code></pre>
+<p>RHEL caveat: if something pulled the minimal <code>perl-interpreter</code> instead of <code>perl</code>, the split core subpackages are missing and must be added explicitly: perl-PathTools, perl-libnet, perl-Getopt-Long, perl-Time-HiRes, perl-MIME-Base64, perl-Digest-MD5, perl-Digest-SHA, perl-File-Path, perl-File-Temp, perl-Text-ParseWords.</p>
+</section>
+<section id="aix-72">
+<div class="section-kicker">03</div>
+<h2>AIX 7.2</h2>
+<p>Two Perls exist on AIX, and the choice decides how modules install:</p>
+<ul><li>System Perl (<code>perl.rte</code>): the default <code>/usr/bin/perl</code>. On AIX 7.2 TL5 this is Perl 5.28 -- the interpreter fetchconfig uses out of the box.</li><li>AIX Toolbox Perl (<code>dnf install perl</code>): a separate, newer Perl (5.30+) under <code>/opt/freeware</code>, managed by dnf.</li></ul>
+<p>They do NOT share a module path: the Toolbox <code>perl-*</code> RPMs install into the Toolbox perl&#x27;s @INC (<code>/opt/freeware/lib/perl5/...</code>), which <code>perl.rte</code> does not search. A Toolbox <code>perl-Net-SSLeay</code> is therefore invisible to <code>/usr/bin/perl</code>. Pick one interpreter and install all non-core modules for that one (and make fetchconfig&#x27;s <code>#!</code> line point at it).</p>
+<p>All &quot;core&quot; modules above ship with both Perls; only the non-core modules below need installing (same set as the Linux matrix):</p>
+<div class="table-wrap"><table><thead><tr><th>Module</th><th>Type</th><th>Feature</th></tr></thead><tbody><tr><td><code>Net::Telnet</code></td><td>pure-Perl</td><td>base (telnet + SSH pty)</td></tr><tr><td><code>Net::OpenSSH</code></td><td>pure-Perl</td><td>SSH models (+ <code>ssh</code> binary)</td></tr><tr><td><code>IO::Pty</code> (<code>IO::Tty</code>)</td><td>XS</td><td>SSH models</td></tr><tr><td><code>LWP::UserAgent</code> + <code>HTTP::Request::Common</code></td><td>pure-Perl</td><td>web models</td></tr><tr><td><code>LWP::Protocol::https</code></td><td>pure-Perl</td><td>web models (HTTPS)</td></tr><tr><td><code>IO::Socket::SSL</code></td><td>pure-Perl</td><td>web HTTPS, SMTP TLS</td></tr><tr><td><code>Net::SSLeay</code></td><td>XS</td><td>web HTTPS, SMTP TLS</td></tr><tr><td><code>Net::SNMP</code></td><td>pure-Perl</td><td>procurve-snmp</td></tr><tr><td><code>Net::TFTP</code></td><td>pure-Perl</td><td>procurve-snmp</td></tr><tr><td><code>Digest::HMAC</code></td><td>pure-Perl</td><td>procurve-snmp (SNMPv3 auth)</td></tr><tr><td><code>Crypt::DES</code></td><td>XS</td><td>procurve-snmp (SNMPv3 DES)</td></tr><tr><td><code>Crypt::Rijndael</code></td><td>XS</td><td>procurve-snmp (SNMPv3 AES)</td></tr></tbody></table></div>
+<p>XS modules must be compiled; pure-Perl modules install without a compiler. Net::SMTP (libnet) and Digest::SHA are core in both Perls, so the e-mail summary needs no extra module -- only TLS adds Net::SSLeay + IO::Socket::SSL.</p>
+<h3 id="option-a----system-perl-usrbinperl-perlrte-528">Option A -- system Perl (/usr/bin/perl, perl.rte 5.28)</h3>
+<p>The Toolbox <code>perl-*</code> RPMs do not apply here; install every non-core module from CPAN against the system perl. XS modules need a C compiler (IBM XL C, or gcc from the AIX Toolbox) and, for Net::SSLeay, OpenSSL development headers (IBM <code>openssl.base</code>, or <code>openssl-devel</code> from the Toolbox).</p>
+<pre><code><span class="c"># one-time: compiler + OpenSSL headers for the XS modules</span>
+dnf install gcc make openssl-devel           # Toolbox; or use IBM XL C
+
+<span class="c"># telnet-only (minimum)</span>
+cpan install Net::Telnet
+<span class="c"># + SSH models                                (IO::Tty provides IO::Pty, XS)</span>
+cpan install Net::OpenSSH IO::Tty
+<span class="c"># + web-UI models (HTTPS)</span>
+cpan install LWP::UserAgent LWP::Protocol::https IO::Socket::SSL Net::SSLeay
+<span class="c"># + procurve-snmp (SNMPv3 crypto as needed)</span>
+cpan install Net::SNMP Net::TFTP Digest::HMAC Crypt::DES Crypt::Rijndael
+<span class="c"># + SMTP over TLS: IO::Socket::SSL + Net::SSLeay (as above)</span></code></pre>
+<h3 id="option-b----aix-toolbox-perl-dnf-perl-530">Option B -- AIX Toolbox Perl (dnf perl, 5.30+)</h3>
+<p>Run fetchconfig with the Toolbox perl (point the <code>#!</code> line at <code>/opt/freeware/bin/perl</code>, or invoke it explicitly). The Toolbox can supply the TLS XS modules precompiled, so the hardest XS build (Net::SSLeay) needs no compiler; the transport modules still come from CPAN, built with gcc.</p>
+<pre><code>dnf install perl gcc make
+
+<span class="c"># TLS stack precompiled from the Toolbox (avoids building Net::SSLeay)</span>
+dnf install perl-Net-SSLeay perl-IO-Socket-SSL
+<span class="c">#   perl-libwww-perl / perl-LWP-Protocol-https too if your Toolbox has them,</span>
+<span class="c">#   otherwise add them via cpan below.</span>
+
+<span class="c"># telnet-only (minimum)</span>
+cpan install Net::Telnet
+<span class="c"># + SSH models                                (IO::Tty is XS -&gt; needs gcc)</span>
+cpan install Net::OpenSSH IO::Tty
+<span class="c"># + web-UI models (HTTPS)</span>
+cpan install LWP::UserAgent LWP::Protocol::https
+<span class="c"># + procurve-snmp (SNMPv3 crypto as needed)</span>
+cpan install Net::SNMP Net::TFTP Digest::HMAC Crypt::DES Crypt::Rijndael</code></pre>
+</section>
+<section id="install-commands-layered">
+<div class="section-kicker">04</div>
+<h2>Install commands (layered)</h2>
+<p>Prerequisites (run once):</p>
+<pre><code><span class="c"># RHEL 9 / Rocky 9 / Alma 9 -- enable EPEL and CRB</span>
+dnf install -y epel-release
+dnf config-manager --set-enabled crb        # Rocky/Alma: 'crb enable'
+
+<span class="c"># SLES 15 -- register Package Hub (use 15.7 on SP7)</span>
+SUSEConnect -p PackageHub/15.6/x86_64
+
+<span class="c"># Ubuntu 24.04 -- 'universe' is default; enable if missing</span>
+add-apt-repository universe &amp;&amp; apt update</code></pre>
+<p>RHEL 9 / Rocky 9 / Alma 9:</p>
+<pre><code><span class="c"># (a) telnet-only</span>
+dnf install perl perl-Net-Telnet
+<span class="c"># (b) + SSH models</span>
+dnf install perl-Net-OpenSSH perl-IO-Tty
+<span class="c"># (c) + web-UI models (HTTPS)</span>
+dnf install perl-libwww-perl perl-HTTP-Message perl-LWP-Protocol-https perl-IO-Socket-SSL perl-Net-SSLeay
+<span class="c"># (d) + SNMP model (Net::TFTP from CPAN; SNMPv3 crypto as needed)</span>
+dnf install perl-Net-SNMP perl-Crypt-DES perl-Digest-HMAC perl-Crypt-Rijndael
+cpan install Net::TFTP
+<span class="c"># (e) + SMTP over TLS (Net::SMTP is core; add the TLS stack)</span>
+dnf install perl-IO-Socket-SSL perl-Net-SSLeay</code></pre>
+<p>SLES 15 SP6/SP7:</p>
+<pre><code><span class="c"># (a) telnet-only</span>
+zypper install perl perl-Net-Telnet
+<span class="c"># (b) + SSH models</span>
+zypper install perl-Net-OpenSSH perl-IO-Tty
+<span class="c"># (c) + web-UI models (HTTPS) -- from the Basesystem Module</span>
+zypper install perl-libwww-perl perl-HTTP-Message perl-LWP-Protocol-https perl-IO-Socket-SSL perl-Net-SSLeay
+<span class="c"># (d) + SNMP model (SNMPv3 crypto as needed)</span>
+zypper install perl-Net-SNMP perl-Net-TFTP perl-Crypt-DES perl-Digest-HMAC perl-Crypt-Rijndael
+<span class="c"># (e) + SMTP over TLS</span>
+zypper install perl-IO-Socket-SSL perl-Net-SSLeay</code></pre>
+<p>Ubuntu 24.04:</p>
+<pre><code><span class="c"># (a) telnet-only</span>
+apt install perl libnet-telnet-perl
+<span class="c"># (b) + SSH models</span>
+apt install libnet-openssh-perl libio-pty-perl
+<span class="c"># (c) + web-UI models (HTTPS)</span>
+apt install libwww-perl libhttp-message-perl liblwp-protocol-https-perl libio-socket-ssl-perl libnet-ssleay-perl
+<span class="c"># (d) + SNMP model (SNMPv3 crypto as needed)</span>
+apt install libnet-snmp-perl libnet-tftp-perl libcrypt-des-perl libdigest-hmac-perl libcrypt-rijndael-perl
+<span class="c"># (e) + SMTP over TLS</span>
+apt install libio-socket-ssl-perl libnet-ssleay-perl</code></pre>
+<p><code>Crypt::Rijndael</code> is only needed for SNMPv3 AES privacy; drop it for DES-only or v1/v2c.</p>
+</section>
+<section id="development-only-not-needed-to-run-fetchconfig">
+<div class="section-kicker">05</div>
+<h2>Development only (not needed to run fetchconfig)</h2>
+<div class="table-wrap"><table><thead><tr><th>Tool</th><th>5.26</th><th>5.28</th><th>5.40</th><th>Used for</th></tr></thead><tbody><tr><td><code>Test::More</code> / <code>prove</code></td><td>core</td><td>core</td><td>core</td><td>the t/ test suite</td></tr><tr><td><code>ExtUtils::MakeMaker</code></td><td>--</td><td>--</td><td>--</td><td>NOT used; Makefile.PL writes the Makefile itself (no dependency)</td></tr></tbody></table></div>
+<p>tools/md2html.py and tools/render-doc.py are Python (2.7/3.x), unrelated to the Perl runtime.</p>
+</section>
+<section id="summary-minimum-cpan-modules-to-install">
+<div class="section-kicker">06</div>
+<h2>Summary: minimum CPAN modules to install</h2>
+<pre><code>telnet-only site     Net::Telnet
++ SSH models         Net::OpenSSH, IO::Pty          (+ ssh binary)
++ web models         LWP::UserAgent stack           (libwww-perl, URI, ...)
++ web models HTTPS   LWP::Protocol::https, IO::Socket::SSL, Net::SSLeay
++ procurve-snmp      Net::SNMP, Net::TFTP           (+ Crypt::DES, Digest::HMAC,
+                                                     Crypt::Rijndael for SNMPv3)
++ SMTP over TLS      IO::Socket::SSL, Net::SSLeay</code></pre>
+</section>
+
+    </div>
+
+    <div class="page-footer">
+      Generated from the fetchconfig README &middot; Rainer Tammer &middot; GPL&#8209;2.0-or-later
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Scroll-spy: highlight the sidebar link matching the section in view.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a'));
+    // Resolve by id, not by CSS selector: section ids can start with a digit
+    // (version numbers in CHANGES, numbered sections in DEVELOPER), which is a
+    // valid HTML id but an invalid CSS id selector, so passing the href to
+    // querySelector would throw. getElementById has no such restriction.
+    var sections = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); }).filter(Boolean);
+    if (!('IntersectionObserver' in window) || !sections.length) return;
+    var current = null;
+    function setActive(id){
+      if (id === current) return;
+      current = id;
+      links.forEach(function(a){ a.classList.toggle('active', a.getAttribute('href') === '#' + id); });
+    }
+    var observer = new IntersectionObserver(function(entries){
+      var visible = entries.filter(function(e){ return e.isIntersecting; });
+      if (visible.length){
+        visible.sort(function(a,b){ return a.boundingClientRect.top - b.boundingClientRect.top; });
+        setActive(visible[0].target.id);
+      }
+    }, { rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+    sections.forEach(function(s){ observer.observe(s); });
+    setActive(sections[0].id);
+    var toggle = document.getElementById('nav-toggle');
+    links.forEach(function(a){ a.addEventListener('click', function(){ if (toggle) toggle.checked = false; }); });
+  })();
+</script>
+
+</body>
+</html>

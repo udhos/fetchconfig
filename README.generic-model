@@ -1,5 +1,5 @@
-The template-driven "generic" model
-===================================
+fetchconfig -- Generic Model
+============================
 
 What it is
 ==========
@@ -49,7 +49,6 @@ transport ssh telnet     allowed transports, in preference order
 banner_timeout N         wait for the first prompt, seconds (30)
 fetch_timeout N          wait for the show output, seconds (base)
 fetch_delay N            pause after connect, seconds (0)
-prompt_settle N          prompt settle time, ms (Abstract default)
 max_visits N             global self-loop cap (8)
 strip_ansi yes|no        strip VT100 escapes from output (no)
 prompt_head 'REGEX'      matched before the learned hostname (empty)
@@ -57,6 +56,10 @@ prompt_tail 'REGEX'      matched after it (#)
 ssh_extra_opts 'STRING'  extra ssh options (legacy crypto)
 capture_from /REGEX/     start the saved config at the first matching line
 skip_first N             drop the first N captured lines
+
+Removed in 9.72: the prompt_settle directive -- parsed but never used by
+the generic engine (timing is governed by the per-state timeouts and
+fetch_delay). The SSH-model device option prompt_settle_ms is unaffected.
 
 Global (checked in every state):
 
@@ -79,7 +82,7 @@ Inside a state:
 
 - expect PATTERN -> ACTION [-> goto STATE | -> done] - PATTERN is /regex/
   or the bareword prompt (the learned prompt: prompt_head + quoted hostname
-  - prompt_tail). Multiple expects in one state are tried in order, FIRST
+  + prompt_tail). Multiple expects in one state are tried in order, FIRST
   MATCH WINS - order the most specific first. A self-loop (goto the same state)
   must be bounded by max_visits.
 - send "text" | send user|pass|enable - send WITH newline. As a standalone
@@ -128,20 +131,20 @@ templates/procurve.tmpl.
 Declaring the output syntax (for config viewers)
 ================================================
 
-A "generic"-model backup can be in any syntax (Cisco-like, JSON, XML, INI,
-plain text), and the "generic" model name does not say which. A template may
+A generic-model backup can be in any syntax (Cisco-like, JSON, XML, INI,
+plain text), and the generic model name does not say which. A template may
 therefore declare the syntax of the config it produces, so a viewer (such as
 fetchconfig-web) can pick a highlighter:
 
     # syntax_style: cisco-ios
 
 Put it in the template's header comment block. It is a plain # comment: the
-parser and the backup path ignore it completely, so it is optional,
-backward-compatible, and cannot change how a device is backed up. The value
-is a free-text token [A-Za-z0-9_-]+. fetchconfig-web currently recognises
-cisco-ios, procurve, comware, zyxel, aruba-cx, nexus, mediant, template,
-json, xml and generic; the set is open, and any other or absent value falls
-back to plain text.
+parser and the backup path ignore it completely, so it is optional, backward-
+compatible, and cannot change how a device is backed up. The value is a free-
+text token [A-Za-z0-9_-]+. fetchconfig-web currently recognises cisco-ios,
+procurve, comware, zyxel, aruba-cx, nexus, mediant, template,
+json, xml and generic; the set is open, and any other or absent value
+falls back to plain text.
 
 Read it without parsing the template yourself:
 

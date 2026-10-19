@@ -60,12 +60,21 @@
 #     prints (Cisco "password 7 ...", "secret 5 ...", "snmp-server
 #     community X", keys), replaced with same-length "x".
 #
-# Masking is applied on LINE boundaries, so a secret echoed split across
-# two network reads is still masked as a whole.
+# Masking is finalized ONCE at the end of the session, on COMPLETE lines, so a
+# secret (or a -m token, or a typed password) split across two network reads is
+# still masked as a whole. Because every mask is same-length, the .hex keeps the
+# original per-read framing.
 #
 # Masking of hashes/communities/keys in device output is BEST EFFORT and
 # WILL MISS THINGS. Review both files before sharing them. The tool prints
 # this reminder when it finishes.
+#
+# TELNET NEGOTIATION
+#   Over telnet the tool answers the device's option negotiation (accepts the
+#   device's ECHO and SGA, offers TTYPE and NAWS) so the session behaves like a
+#   real client. The raw IAC (0xff) bytes are still recorded in the .hex so
+#   generate_template can detect a telnet capture; they are kept out of the
+#   live view and the .txt.
 #
 # Usage:
 #   record-session.pl -h HOST [-t ssh|telnet] [-u USER] [-p PASS]
@@ -90,13 +99,19 @@ my $show_version;
 # Kept in step with fetchconfig's version by hand. NOT imported from
 # fetchconfig::Constants, so this tool is self-contained and can be copied
 # and run on its own.
-my $VERSION = '9.66';
+my $VERSION = '9.72';
 
 # Password-prompt masking state. Declared here (before the relay runs) so
 # the value exists when record_raw is first called - a "my" initialiser
 # further down the file would not have executed yet.
 my $pw_mode = 0;
 my $pw_raw = "";   # rolling raw device tail, for split-safe prompt detection
+
+# Modulino guard: when this file is require()d (by the test suite) rather than
+# run directly, define the subs but do not open a session. caller() is true
+# only under require/do, and the "if caller" keeps this from being an illegal
+# top-level return when the script is run normally.
+return 1 if caller;
 
 GetOptions(
     'h|host=s'        => \$opt{host},
@@ -210,6 +225,9 @@ print STDERR "Connected to $opt{host} ($opt{transport}).\n",
 my $done = 0;
 $SIG{INT} = $SIG{TERM} = sub { $done = 1 };
 
+my $tn_carry = '';                       # partial telnet IAC sequence across reads
+my ($tn_cols, $tn_rows) = term_size();   # advertised to the device via NAWS
+
 raw_mode_on();
 eval {
     require IO::Select;
@@ -231,7 +249,17 @@ eval {
             else {
                 my $n = sysread($fh, my $out, 4096);
                 unless (defined $n && $n) { $done = 1; last; }   # device closed -> end
-                syswrite(\*STDOUT, mask_copy($out));
+                # Telnet: answer the device's option negotiation (DO/WILL) that a
+                # raw sysread relay would otherwise never reply to, and keep the
+                # IAC bytes out of the live view. record_raw still stores $out
+                # RAW, so the 0xff bytes stay in the .hex for generate_template.
+                my $shown = $out;
+                if ($opt{transport} eq 'telnet') {
+                    my $resp;
+                    ($resp, $shown) = telnet_negotiation($out, \$tn_carry, $tn_cols, $tn_rows);
+                    syswrite($devfh, $resp) if length $resp;
+                }
+                syswrite(\*STDOUT, mask_live($shown, \@secrets, $opt{auto_secrets}));
                 record_raw('<', $out);
             }
         }
@@ -239,7 +267,8 @@ eval {
     1;
 } or do { my $e = $@; raw_mode_off(); warn "session error: $e\n"; };
 
-render_txt();
+finalize();      # mask the whole captured session (line-accurate) + write .hex
+render_txt();    # human-readable .txt from the masked transcript
 raw_mode_off();
 
 $t->close if $t;
@@ -255,56 +284,156 @@ exit 0;
 
 # =========================================================================
 
-my @xcript;   # ordered [dir, bytes] chunks of the whole session, for the
-              # final .txt screen render. The .hex is written live and raw.
-
-# Best-effort password masking driven by the device's own prompt. When the
-# device output ends with a "Password:"-style prompt, the NEXT thing typed
-# is a secret the tool otherwise has no way to know (telnet login/enable
-# passwords are typed live). So: after such a prompt, mask every byte -
-# input and any echo of it - until the user presses Enter. Same-length
-# masking keeps the .hex byte-accurate. ($pw_mode is
-# declared at the top of the file so they exist before the relay runs.)
+my @xcript;   # ordered [dir, raw-bytes] chunks of the whole session. Masking
+              # and the .hex/.txt are produced from this at finalize() time, so
+              # a secret split across reads is still masked as one unit.
 
 sub record_raw {
     my ($dir, $bytes) = @_;
+    push @xcript, [ $dir, $bytes ];   # RAW; masked once, line-accurate, at finalize()
+}
 
-    # While in password mode, mask printable bytes in BOTH directions until
-    # a CR/LF ends the entry.
-    if ($pw_mode) {
-        my $out = '';
-        for my $ch (split //, $bytes) {
-            if ($ch eq "\r" || $ch eq "\n") { $pw_mode = 0; $out .= $ch; }
-            elsif (ord($ch) >= 0x20 && ord($ch) < 0x7f) { $out .= 'x'; }  # same length
-            else { $out .= $ch; }
+# finalize - mask the whole captured session and write the masked .hex.
+#
+# Masking happens here, after the session, so it sees COMPLETE lines regardless
+# of how the network split the bytes into reads: a secret (a -m token, a typed
+# password, or a pattern-matched value) spanning two reads is masked as a whole,
+# which per-read masking could not do. Every mask is same-length, so the masked
+# stream stays byte-aligned with the raw one and is re-sliced back to the
+# ORIGINAL read lengths - the .hex therefore keeps the original read boundaries.
+sub finalize {
+    pw_pass(\@xcript);                                    # prompt-driven password masking
+    secret_pass(\@xcript, \@secrets, $opt{auto_secrets}); # known secrets + output patterns
+    hexdump($HEX, $_->[0], $_->[1]) for @xcript;          # masked, original read framing
+}
+
+# pw_pass - prompt-driven password masking over the chronological transcript.
+#
+# When the DEVICE prints a "Password:"-style prompt, the NEXT thing typed (and
+# any echo of it) is a secret the tool cannot know in advance, so mask every
+# printable byte - in both directions - until Enter ends the entry. Walking the
+# transcript in order keeps the cross-direction state (prompt in '<', the typed
+# secret in '>') correct. The per-byte loop re-checks $pw so masking stops at
+# the Enter even when more text (the next command) arrives in the same read.
+# Detection tolerates the prompt and its trailing escapes being split across
+# reads via a rolling, escape-stripped tail.
+sub pw_pass {
+    my ($chunks) = @_;
+    my $pw  = 0;    # masking currently active
+    my $raw = '';   # rolling device tail for split-safe prompt detection
+    for my $c (@$chunks) {
+        my ($dir, $bytes) = @$c;
+
+        if ($pw) {
+            my $out = '';
+            for my $ch (split //, $bytes) {
+                if (!$pw) { $out .= $ch; next; }          # entry already ended in this read
+                if ($ch eq "\r" || $ch eq "\n") { $pw = 0; $out .= $ch; }
+                elsif (ord($ch) >= 0x20 && ord($ch) < 0x7f) { $out .= 'x'; }
+                else { $out .= $ch; }
+            }
+            $bytes = $out;
+            $c->[1] = $bytes;
         }
-        $bytes = $out;
-    }
 
-    # Normal same-length masking of known secrets (ssh creds, -m tokens,
-    # built-in output patterns).
-    my $m = mask_copy($bytes);
-    hexdump($HEX, $dir, $m);              # .hex: masked, same length as received
-    push @xcript, [ $dir, $m ];
-
-    # Arm password mode when the DEVICE prints a password prompt. This must
-    # survive two things the network does: (a) the prompt and its trailing
-    # cursor escapes arriving in separate reads, and (b) a single escape
-    # sequence being split across a read boundary. So we keep a rolling tail
-    # of RAW device bytes and strip the escapes from the WHOLE tail each time
-    # (a half-escape is completed once its other half arrives). We then test
-    # whether the visible tail ends with a password prompt.
-    if ($dir eq '<') {
-        $pw_raw .= $m;
-        $pw_raw = substr($pw_raw, -200) if length($pw_raw) > 200;   # bounded
-        my $vis = $pw_raw;
-        $vis =~ s/\x1b\[[0-9;?]*[A-Za-z]//g;   # CSI sequences
-        $vis =~ s/\x1b[()][A-Za-z0-9]//g;      # charset selects
-        $vis =~ s/\x1b[A-Za-z0-9=>]//g;        # other 2-byte escapes
-        $vis =~ s/[\x00-\x08\x0b-\x1f\x7f]//g; # remaining control bytes
+        next unless $dir eq '<';
+        # arm masking for the NEXT entry if the device output now ends in a prompt
+        $raw .= $bytes;
+        $raw = substr($raw, -200) if length($raw) > 200;
+        my $vis = $raw;
+        $vis =~ s/\xff(?:[\xfb-\xfe].|[\xf0-\xfa])//g;    # telnet IAC commands
+        $vis =~ s/\x1b\[[0-9;?]*[A-Za-z]//g;              # CSI sequences
+        $vis =~ s/\x1b[()][A-Za-z0-9]//g;                 # charset selects
+        $vis =~ s/\x1b[A-Za-z0-9=>]//g;                   # other 2-byte escapes
+        $vis =~ s/[\x00-\x08\x0b-\x1f\x7f]//g;            # remaining control bytes
         $vis =~ s/[\s\r\n]+$//;
-        $pw_mode = 1 if $vis =~ /password\s*[:#>]$/i;
+        $pw = 1 if $vis =~ /password\s*[:#>]$/i;
     }
+}
+
+# secret_pass - same-length masking of known secrets (ssh creds, -m tokens) and
+# well-known output patterns, applied to each direction's COMPLETE stream (so a
+# secret split across reads is caught), then re-sliced back to the original read
+# lengths. Patterns are applied per line so a greedy match cannot span lines.
+sub secret_pass {
+    my ($chunks, $secrets, $auto) = @_;
+    for my $dir ('<', '>') {
+        my @idx = grep { $chunks->[$_][0] eq $dir } 0 .. $#$chunks;
+        next unless @idx;
+        my $stream = join '', map { $chunks->[$_][1] } @idx;
+        $stream = mask_literal($stream, $secrets);
+        $stream = mask_patterns_perline($stream) if $auto;
+        my $pos = 0;
+        for my $i (@idx) {
+            my $len = length $chunks->[$i][1];
+            $chunks->[$i][1] = substr($stream, $pos, $len);   # same length -> aligned
+            $pos += $len;
+        }
+    }
+}
+
+# telnet_negotiation - reply to the device's telnet option negotiation that a
+# raw sysread relay would otherwise never answer, and return the data with all
+# IAC sequences removed (for the live view). The caller records the RAW bytes,
+# so the .hex keeps the 0xff negotiation for generate_template to detect telnet.
+# $carry (scalar ref) holds a partial IAC sequence split across reads. Policy:
+# accept the device's ECHO and SGA, offer TTYPE and NAWS, refuse the rest.
+# Returns ($response_to_send, $clean_data).
+sub telnet_negotiation {
+    my ($data, $carry, $cols, $rows) = @_;
+    $data = $$carry . $data; $$carry = '';
+    my ($resp, $clean) = ('', '');
+    my $len = length $data;
+    my $i = 0;
+    while ($i < $len) {
+        my $b = ord substr($data, $i, 1);
+        if ($b != 0xff) { $clean .= substr($data, $i, 1); $i++; next; }
+        if ($i + 1 >= $len) { $$carry = substr($data, $i); last; }      # partial IAC
+        my $cmd = ord substr($data, $i + 1, 1);
+        if ($cmd == 0xff) { $clean .= chr(0xff); $i += 2; next; }       # escaped 0xff
+        if ($cmd == 0xfa) {                                             # SB ... IAC SE
+            my $se = index($data, chr(0xff) . chr(0xf0), $i + 2);
+            if ($se < 0) { $$carry = substr($data, $i); last; }         # incomplete subneg
+            my $sub = substr($data, $i + 2, $se - ($i + 2));
+            if (length($sub) >= 2 && ord(substr($sub, 0, 1)) == 24
+                                  && ord(substr($sub, 1, 1)) == 1) {    # TTYPE SEND
+                $resp .= chr(0xff).chr(0xfa).chr(24).chr(0)."XTERM".chr(0xff).chr(0xf0);
+            }
+            $i = $se + 2; next;
+        }
+        if ($cmd >= 0xfb && $cmd <= 0xfe) {                             # WILL/WONT/DO/DONT opt
+            if ($i + 2 >= $len) { $$carry = substr($data, $i); last; }
+            my $opt = ord substr($data, $i + 2, 1);
+            $resp .= telnet_reply($cmd, $opt, $cols, $rows);
+            $i += 3; next;
+        }
+        $i += 2; next;                                                  # other 2-byte command
+    }
+    return ($resp, $clean);
+}
+
+sub telnet_reply {
+    my ($cmd, $opt, $cols, $rows) = @_;
+    my ($WILL, $WONT, $DO, $DONT)  = (0xfb, 0xfc, 0xfd, 0xfe);
+    my ($ECHO, $SGA, $TTYPE, $NAWS) = (1, 3, 24, 31);
+    my $IAC = chr(0xff);
+    if ($cmd == $WILL) {                           # device offers to do $opt
+        return $IAC.chr($DO).chr($opt) if $opt == $ECHO || $opt == $SGA;
+        return $IAC.chr($DONT).chr($opt);
+    }
+    if ($cmd == $DO) {                             # device asks us to do $opt
+        return $IAC.chr($WILL).chr($TTYPE) if $opt == $TTYPE;
+        if ($opt == $NAWS) {
+            my $size = pack('n', $cols) . pack('n', $rows);
+            $size =~ s/\xff/\xff\xff/g;            # IAC-escape inside subnegotiation
+            return $IAC.chr($WILL).chr($NAWS)
+                 . $IAC.chr(0xfa).chr($NAWS).$size.$IAC.chr(0xf0);
+        }
+        return $IAC.chr($WONT).chr($opt);
+    }
+    return $IAC.chr($DONT).chr($opt) if $cmd == $WONT;
+    return $IAC.chr($WONT).chr($opt) if $cmd == $DONT;
+    return '';
 }
 
 # ---------------------------------------------------------------------------
@@ -326,13 +455,28 @@ sub record_raw {
 # The .hex is the authoritative byte record; this .txt is a readability aid,
 # and its header says so.
 sub render_txt {
+    print $TXT "\n# The screens below are an ANSI/VT100 emulation of the device output,\n",
+               "# for readability (menu-driven devices are cursor-addressed). The .hex\n",
+               "# file holds the exact bytes. Typed input is shown as \"> ...\" lines.\n";
+    print $TXT render_txt_body(\@xcript);
+}
+
+# render_txt_body - build the human-readable transcript from the masked chunks
+# and return it. Pure (no globals), so it is unit-tested directly. Fixes over
+# the first version: a charset-select (ESC ( B) is consumed rather than printed
+# as "(B"; an escape or telnet IAC sequence split across two reads is
+# reassembled via $carry instead of leaking as literal text; and telnet
+# negotiation bytes (IAC, 0xff) are consumed, not shown.
+sub render_txt_body {
+    my ($chunks) = @_;
     my $COLS = 200;
     my @grid; my ($cr, $cc, $maxrow);
     my $reset = sub { @grid = (); ($cr,$cc,$maxrow)=(1,1,1); };
     $reset->();
+    my $out   = '';
     my $inbuf = '';   # accumulates typed input across reads
+    my $carry = '';   # incomplete device escape / IAC tail carried across reads
 
-    # ensure row $r exists (grid grows downward for scrolling output)
     my $need_row = sub {
         my ($r) = @_;
         while (@grid < $r) { push @grid, [ (' ') x $COLS ]; }
@@ -350,20 +494,18 @@ sub render_txt {
         pop @rows while @rows && $rows[-1] eq '';
         return unless @rows;
         # collapse an interior run of >1 blank line to a single blank line
-        # (a cleared screen with the prompt at the bottom otherwise shows
-        # dozens of empty rows); the layout is still faithful, just compact.
-        my @out; my $blank = 0;
+        my @o; my $blank = 0;
         for my $l (@rows) {
-            if ($l eq '') { $blank++; push @out, '' if $blank == 1; }
-            else          { $blank = 0; push @out, $l; }
+            if ($l eq '') { $blank++; push @o, '' if $blank == 1; }
+            else          { $blank = 0; push @o, $l; }
         }
-        shift @out while @out && $out[0] eq '';   # no leading blank
-        my $joined = join("\n", @out);
-        return if $joined eq $last_snap;           # skip if nothing changed
+        shift @o while @o && $o[0] eq '';   # no leading blank
+        my $joined = join("\n", @o);
+        return if $joined eq $last_snap;    # skip if nothing changed
         $last_snap = $joined;
         $snap_no++;
-        print $TXT "\n----- screen $snap_no -----\n";
-        print $TXT "$_\n" for @out;
+        $out .= "\n----- screen $snap_no -----\n";
+        $out .= "$_\n" for @o;
     };
 
     my $put = sub {
@@ -375,41 +517,36 @@ sub render_txt {
         $maxrow = $cr if $cr > $maxrow;
     };
 
-    print $TXT "\n# The screens below are an ANSI/VT100 emulation of the device output,\n",
-               "# for readability (menu-driven devices are cursor-addressed). The .hex\n",
-               "# file holds the exact bytes. Typed input is shown as \"> ...\" lines.\n";
-
-    for my $chunk (@xcript) {
+    for my $chunk (@$chunks) {
         my ($dir, $data) = @$chunk;
 
         if ($dir eq '>') {
-            # Accumulate typed input across reads (each keystroke on an
-            # echoing device arrives as its own read) and emit whole commands
-            # split on the Enter (CR/LF) actually pressed - not one char per
-            # line. Terminal auto-replies to the device's cursor-position
-            # query (ESC[<row>;<col>R) travel up this channel too; they are
-            # session noise, dropped from the .txt input view (the .hex keeps
-            # them). Other escapes are shown so nothing typed is hidden.
+            # Accumulate typed input across reads and emit whole commands split
+            # on the Enter actually pressed. The terminal's cursor-position
+            # auto-replies (ESC[<row>;<col>R) travel up this channel too; drop
+            # them from the input view (the .hex keeps them).
             $inbuf .= $data;
             while ($inbuf =~ /(.*?)(?:\r\n|\r|\n)/s) {
                 my $cmd = $1; my $whole = $&;
                 substr($inbuf, 0, length $whole, '');
                 $cmd =~ s/\x1b\[[0-9;]*R//g;            # drop cursor-position reports
                 next if $cmd eq '';                      # a bare Enter / report-only line
-                $dump_screen->();                        # capture the prompt state you replied to
+                $dump_screen->();                        # capture the prompt state replied to
                 (my $vis = $cmd) =~ s/([^\x20-\x7e])/sprintf('<%02x>', ord $1)/ge;
-                print $TXT "> $vis\n";
+                $out .= "> $vis\n";
             }
             next;
         }
 
-        # device output: feed through the emulator
+        # device output: prepend any carried partial escape/IAC, then emulate
+        $data = $carry . $data; $carry = '';
         my $i = 0; my $len = length $data;
         while ($i < $len) {
             my $o = ord substr($data, $i, 1);
             if ($o == 0x1b) {                              # ESC
                 my $rest = substr($data, $i + 1);
-                if ($rest =~ /^\[([0-9;?]*)([A-Za-z])/) {
+                if ($rest eq '') { $carry = substr($data, $i); last; }          # bare ESC -> carry
+                if ($rest =~ /^\[([0-9;?]*)([A-Za-z])/) {                       # complete CSI
                     my ($p, $cmd) = ($1, $2);
                     my @n = split /;/, $p;
                     if    ($cmd eq 'H' || $cmd eq 'f') { $cr = $n[0] || 1; $cc = $n[1] || 1; $need_row->($cr); }
@@ -423,9 +560,27 @@ sub render_txt {
                     $i += 1 + 1 + length($p) + 1;
                     next;
                 }
-                elsif ($rest =~ /^E/) { $cr++; $cc = 1; $need_row->($cr); $maxrow = $cr if $cr > $maxrow; $i += 2; next; }
-                elsif ($rest =~ /^[0-9=>]/) { $i += 2; next; }
-                else { $i += 1; next; }
+                if ($rest =~ /^\[[0-9;?]*$/) { $carry = substr($data, $i); last; } # incomplete CSI -> carry
+                if ($rest =~ /^[()][A-Za-z0-9]/) { $i += 3; next; }             # charset select -> skip (4a)
+                if ($rest =~ /^[()]$/) { $carry = substr($data, $i); last; }    # incomplete charset -> carry
+                if ($rest =~ /^E/) { $cr++; $cc = 1; $need_row->($cr); $maxrow = $cr if $cr > $maxrow; $i += 2; next; }
+                if ($rest =~ /^[0-9=>]/) { $i += 2; next; }                     # keypad / other 2-byte
+                $i += 2; next;                                                  # unknown ESC x -> skip both
+            }
+            elsif ($o == 0xff) {                           # telnet IAC -> consume (4c)
+                my $rest = substr($data, $i + 1);
+                if ($rest eq '') { $carry = substr($data, $i); last; }
+                my $cmd = ord substr($rest, 0, 1);
+                if ($cmd == 0xfa) {                        # SB ... IAC SE
+                    my $se = index($data, chr(0xff) . chr(0xf0), $i + 2);
+                    if ($se < 0) { $carry = substr($data, $i); last; }
+                    $i = $se + 2; next;
+                }
+                if ($cmd >= 0xfb && $cmd <= 0xfe) {        # WILL/WONT/DO/DONT opt
+                    if (length($rest) < 2) { $carry = substr($data, $i); last; }
+                    $i += 3; next;
+                }
+                $i += 2; next;                             # other 2-byte command
             }
             elsif ($o == 0x0d) { $cc = 1; $i++; next; }               # CR
             elsif ($o == 0x0a) { $cr++; $cc = 1; $need_row->($cr); $maxrow = $cr if $cr > $maxrow; $i++; next; }  # LF
@@ -436,9 +591,10 @@ sub render_txt {
     }
     if (length $inbuf) {   # trailing input with no final Enter
         (my $c = $inbuf) =~ s/\x1b\[[0-9;]*R//g;
-        if ($c ne '') { $c =~ s/([^\x20-\x7e])/sprintf('<%02x>', ord $1)/ge; print $TXT "> $c\n"; }
+        if ($c ne '') { $c =~ s/([^\x20-\x7e])/sprintf('<%02x>', ord $1)/ge; $out .= "> $c\n"; }
     }
     $dump_screen->();   # final screen
+    return $out;
 }
 
 sub hexdump {
@@ -455,18 +611,40 @@ sub hexdump {
     print $fh "\n";
 }
 
-# Same-length masking, applied to one complete line.
-sub mask_copy {
-    my ($bytes) = @_;
-    my $out = $bytes;
-    for my $s (@secrets) {
-        next unless length $s;
-        my $q = quotemeta $s;
-        my $m = 'x' x length($s);
-        $out =~ s/$q/$m/g;
+# mask_literal - same-length masking of known secrets (ssh creds, -m tokens).
+# Longest-first is handled by the caller's @secrets ordering.
+sub mask_literal {
+    my ($s, $secrets) = @_;
+    for my $sec (@$secrets) {
+        next unless defined $sec && length $sec;
+        my $q = quotemeta $sec;
+        my $m = 'x' x length $sec;
+        $s =~ s/$q/$m/g;
     }
-    $out = mask_patterns($out) if $opt{auto_secrets};
-    return $out;
+    return $s;
+}
+
+# mask_patterns_perline - apply the output-pattern masking one line at a time so
+# a greedy \S+ cannot run across a newline, while a secret split across network
+# reads (but within one line) is still caught because the caller passes the
+# whole reconstructed stream. Same length, line terminators preserved exactly.
+sub mask_patterns_perline {
+    my ($s) = @_;
+    my @parts = split /(\r\n|\n|\r)/, $s, -1;   # even: line content, odd: terminators
+    for (my $i = 0; $i < @parts; $i += 2) {
+        $parts[$i] = mask_patterns($parts[$i]);
+    }
+    return join '', @parts;
+}
+
+# mask_live - best-effort per-read masking for the LIVE on-screen view only
+# (the operator's own session). The saved files are masked line-accurately in
+# finalize(); a cross-read leak here affects only the live terminal echo.
+sub mask_live {
+    my ($s, $secrets, $auto) = @_;
+    $s = mask_literal($s, $secrets);
+    $s = mask_patterns($s) if $auto;
+    return $s;
 }
 
 # Best-effort masking of well-known secrets in device OUTPUT; only the
@@ -549,3 +727,5 @@ Masking of secrets the DEVICE prints is best effort; review the output.
 USAGE
     exit $rc;
 }
+
+1;   # modulino: require() returns true (see the "return 1 if caller" guard)

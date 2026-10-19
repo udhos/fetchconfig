@@ -19,12 +19,18 @@
 #
 # Usage:  python md2html.py input.md output.html [--title "Page title"]
 #         python md2html.py input.md            (writes input.html)
+#         python md2html.py -V | --version      (print version and exit)
 #
 from __future__ import print_function, unicode_literals
 
 import io
 import re
 import sys
+
+# Kept in step with fetchconfig's version by hand. NOT imported from
+# fetchconfig::Constants, so this tool is self-contained and can be copied
+# and run on its own.
+VERSION = '9.72'
 
 try:                       # Python 3
     from html import escape as _escape
@@ -81,6 +87,7 @@ def slugify(text):
 
 class Renderer(object):
     def __init__(self):
+        self.uses_mermaid = False
         self.out = []
         self.used_ids = {}
         self.headings = []      # (level, id, text) for the table of contents
@@ -154,8 +161,22 @@ class Renderer(object):
                     buf.append(lines[i])
                     i += 1
                 i += 1  # closing fence
-                cls = ' class="lang-%s"' % escape(lang) if lang else ''
-                self.out.append('<pre><code%s>%s</code></pre>' % (cls, escape('\n'.join(buf))))
+                if lang == 'mermaid':
+                    # Mermaid source rendered client-side (CDN). The diagram
+                    # text is escaped so it is valid HTML, but kept as the
+                    # textContent of <pre class="mermaid"> for mermaid.run().
+                    # Mermaid needs the RAW diagram source: arrows like -->>,
+                    # quoted labels and the & fan-out must not be HTML-escaped
+                    # (escaping turns -->> into --&gt;&gt;, which the stricter
+                    # mermaid.ink parser rejects as a syntax error). Guard only
+                    # the two characters that could break HTML parsing of the
+                    # <pre> itself - & and < - and leave >, " and the rest raw.
+                    self.uses_mermaid = True
+                    raw = '\n'.join(buf).replace('&', '&amp;').replace('<', '&lt;')
+                    self.out.append('<pre class="mermaid">%s</pre>' % raw)
+                else:
+                    cls = ' class="lang-%s"' % escape(lang) if lang else ''
+                    self.out.append('<pre><code%s>%s</code></pre>' % (cls, escape('\n'.join(buf))))
                 continue
 
             # heading
@@ -314,12 +335,19 @@ footer { color: var(--muted); font-size: .85em; border-top: 1px solid var(--line
 """
 
 
-def build_page(title, body_html, toc_html, source_name):
+MERMAID_HEAD = (
+    '<script type="module">\n'
+    'import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.6.0/dist/mermaid.esm.min.mjs";\n'
+    'mermaid.initialize({ startOnLoad: true, securityLevel: "strict" });\n'
+    '</script>\n')
+
+
+def build_page(title, body_html, toc_html, source_name, uses_mermaid=False):
     return ('<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-            '<title>%s</title>\n<style>%s</style>\n</head>\n<body>\n<main>\n%s\n%s\n'
+            '<title>%s</title>\n<style>%s</style>\n%s</head>\n<body>\n<main>\n%s\n%s\n'
             '<footer>Generated from <code>%s</code> by <code>md2html.py</code>.</footer>\n'
-            '</main>\n</body>\n</html>\n') % (escape(title), CSS, toc_html, body_html, escape(source_name))
+            '</main>\n</body>\n</html>\n') % ((title[5:] if title.startswith('\x00RAW\x00') else escape(title)), CSS, (MERMAID_HEAD if uses_mermaid else ''), toc_html, body_html, escape(source_name))
 
 
 def build_toc(headings):
@@ -343,14 +371,58 @@ def build_toc(headings):
     return ''.join(html)
 
 
-def convert(md_text, source_name, title=None):
+
+def _preprocess_mermaid(md_text):
+    """For HTML generation: replace each <!--MERMAID ... MERMAID--> comment with
+    a ```mermaid fenced block, and drop an immediately-preceding ```text ... ```
+    ASCII fence (its role is the .md / offline fallback only). The Markdown
+    source is unchanged; only the text handed to the HTML renderer is rewritten.
+    So the .md shows ASCII (+ an invisible comment) and the HTML shows Mermaid."""
+    import re as _re
+    # drop a ```text ... ``` fence that sits right before a <!--MERMAID ...-->
+    md_text = _re.sub(
+        r"```text\n.*?\n```\n(\s*)<!--MERMAID\n",
+        r"\1<!--MERMAID\n",
+        md_text, flags=_re.S)
+    # turn the comment into a mermaid fence
+    md_text = _re.sub(
+        r"<!--MERMAID\n(.*?)\nMERMAID-->",
+        lambda m: "```mermaid\n" + m.group(1) + "\n```",
+        md_text, flags=_re.S)
+    return md_text
+
+
+
+def _ascii_entities(html_text):
+    """Convert every non-ASCII character to a numeric HTML entity (&#NNNN;),
+    so the generated .html is pure 7-bit ASCII and safe to edit in a
+    non-Unicode editor (vi without Unicode support). ASCII bytes pass through
+    unchanged; a browser renders the entities identically to the characters."""
+    return "".join(
+        ch if ord(ch) < 128 else "&#%d;" % ord(ch) for ch in html_text)
+
+
+def convert(md_text, source_name, title=None, help_subtitle=None):
+    md_text = _preprocess_mermaid(md_text)
     lines = md_text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
     r = Renderer()
     r.render(lines)
     if title is None:
         h1 = [t for (lvl, _, t) in r.headings if lvl == 1]
-        title = re.sub(r'[`*]', '', h1[0]) if h1 else source_name
-    return build_page(title, '\n'.join(r.out), build_toc(r.headings), source_name)
+        h1text = re.sub(r'[`*]', '', h1[0]) if h1 else source_name
+        # Help-menu title convention: an H1 written "fetchconfig -- <Subtitle>"
+        # (ASCII double hyphen - the single source of the title, shared with the
+        # plain-text render) becomes <title>fetchconfig &mdash; <Subtitle></title>.
+        # An explicit --help-subtitle still overrides. The RAW marker keeps the
+        # literal &mdash; entity through escape() and _ascii_entities().
+        m = re.match(r'^\s*fetchconfig\s*--\s*(.+?)\s*$', h1text)
+        if help_subtitle is not None:
+            title = "\x00RAW\x00fetchconfig &mdash; " + help_subtitle
+        elif m:
+            title = "\x00RAW\x00fetchconfig &mdash; " + escape(m.group(1))
+        else:
+            title = h1text
+    return build_page(title, '\n'.join(r.out), build_toc(r.headings), source_name, r.uses_mermaid)
 
 
 def _u(value):
@@ -361,13 +433,58 @@ def _u(value):
     return value
 
 
+def _verbatim_passthrough(md):
+    """If the document is nothing but a single H1 title followed by one fenced
+    code block (a wrapped verbatim artifact, e.g. a license in LICENSE.md),
+    return the fence body EXACTLY as-is for the plain-text render: no heading,
+    no indentation, no transliteration. This keeps a verbatim legal text
+    byte-identical through the .md -> text conversion. Returns None if the
+    document is not of that shape (then to_text renders it normally)."""
+    s = re.sub(r'<!--MERMAID.*?MERMAID-->', '', md, flags=re.DOTALL)
+    s = re.sub(r'<!--.*?-->', '', s, flags=re.DOTALL)
+    lines = s.replace('\r\n', '\n').split('\n')
+    k = 0
+    while k < len(lines) and lines[k].strip() == '':      # leading blanks
+        k += 1
+    if k >= len(lines) or not re.match(r'^#\s+\S', lines[k]):   # need an H1
+        return None
+    k += 1
+    while k < len(lines) and lines[k].strip() == '':      # blanks after title
+        k += 1
+    if k >= len(lines) or not lines[k].lstrip().startswith('```'):  # opening fence
+        return None
+    k += 1
+    body = []
+    while k < len(lines) and not lines[k].lstrip().startswith('```'):
+        body.append(lines[k])
+        k += 1
+    if k >= len(lines):                                    # unterminated fence
+        return None
+    k += 1                                                 # closing fence
+    while k < len(lines):                                  # only blanks may follow
+        if lines[k].strip() != '':
+            return None
+        k += 1
+    return '\n'.join(body) + '\n'
+
+
 def to_text(md):
     """Render Markdown to a readable plain-text version: strip the inline and
     block markup, keep the structure (headings underlined, list bullets,
     fenced code indented, pipe tables as aligned columns). Good enough for a
     README.foo companion to the README.foo.html, from a single README.foo.md
     source."""
+    verbatim = _verbatim_passthrough(md)
+    if verbatim is not None:
+        return verbatim
     out = []
+    # drop HTML comment blocks so they never leak into the plain-text render.
+    # The <!--MERMAID ... MERMAID--> diagram sources are matched first and by
+    # their own end marker, because a Mermaid arrow ("-->") would otherwise end
+    # a generic <!-- ... --> match early. Each diagram's readable ASCII fallback
+    # is a separate fenced block and is kept.
+    md = re.sub(r'<!--MERMAID.*?MERMAID-->', '', md, flags=re.DOTALL)
+    md = re.sub(r'<!--.*?-->', '', md, flags=re.DOTALL)
     lines = md.replace('\r\n', '\n').split('\n')
     in_code = False
     i = 0
@@ -396,6 +513,15 @@ def to_text(md):
                 i += 1
             out.extend(_format_table(header, rows))
             continue
+        # ASCII "####..." info box (rule line of >=8 '#'): keep verbatim so the
+        # box is not mis-parsed as headings.
+        if re.match(r'^#{8,}\s*$', line):
+            out.append(line.rstrip()); i += 1
+            while i < n and not re.match(r'^#{8,}\s*$', lines[i]):
+                out.append(lines[i].rstrip()); i += 1
+            if i < n:
+                out.append(lines[i].rstrip()); i += 1
+            continue
         # headings: text then an underline of = or -
         h = re.match(r'^(#{1,6})\s+(.*)$', line)
         if h:
@@ -406,12 +532,12 @@ def to_text(md):
             out.append(('=' if level <= 2 else '-') * max(3, len(text)))
             i += 1
             continue
-        # list items: normalise bullets/numbers, keep indentation
+        # list items: keep the original marker (-, *, + or "N.") and indent, so
+        # a changelog written with "+" bullets round-trips as "+" in the text.
         li = re.match(r'^(\s*)([-*+]|\d+\.)\s+(.*)$', line)
         if li:
             indent, marker, text = li.group(1), li.group(2), li.group(3)
-            bullet = marker if re.match(r'\d+\.', marker) else '-'
-            out.append('%s%s %s' % (indent, bullet, _inline_text(text)))
+            out.append('%s%s %s' % (indent, marker, _inline_text(text)))
             i += 1
             continue
         # horizontal rule
@@ -486,7 +612,7 @@ def _inline_text(s):
     return s
 
 
-def convert_file(src, want_html=True, want_text=True, title=None):
+def convert_file(src, want_html=True, want_text=True, title=None, help_subtitle=None):
     """Convert one .md to .html and/or .txt (companion names)."""
     with io.open(src, 'r', encoding='utf-8') as f:
         md = f.read()
@@ -494,8 +620,8 @@ def convert_file(src, want_html=True, want_text=True, title=None):
     made = []
     if want_html:
         dst = base + '.html'
-        with io.open(dst, 'w', encoding='utf-8') as f:
-            f.write(convert(md, src.split('/')[-1], title))
+        with io.open(dst, 'w', encoding='ascii') as f:
+            f.write(_ascii_entities(convert(md, src.split('/')[-1], title, help_subtitle)))
         made.append(dst)
     if want_text:
         dst = base           # README.foo.md -> README.foo (plain text)
@@ -509,6 +635,15 @@ def convert_file(src, want_html=True, want_text=True, title=None):
 
 def main(argv):
     argv = [_u(a) for a in argv]
+    if '--version' in argv or '-V' in argv:
+        print('md2html.py (fetchconfig) %s' % VERSION)
+        print('Copyright (c) 2026 Rainer Tammer')
+        print('License GPL-2.0-or-later: GNU GPL version 2 or later.')
+        print('This is free software; see the source for copying conditions. '
+              'There is NO')
+        print('warranty; not even for MERCHANTABILITY or FITNESS FOR A '
+              'PARTICULAR PURPOSE.')
+        return 0
     opts = set(a for a in argv[1:] if a.startswith('--'))
     args = [a for a in argv[1:] if not a.startswith('--')]
     title = None
@@ -517,6 +652,12 @@ def main(argv):
         if k + 1 < len(argv):
             title = argv[k + 1]
             args = [a for a in args if a != title]
+    help_subtitle = None
+    if '--help-subtitle' in argv:
+        k = argv.index('--help-subtitle')
+        if k + 1 < len(argv):
+            help_subtitle = argv[k + 1]
+            args = [a for a in args if a != help_subtitle]
 
     # --all DIR : convert every *.md under DIR to .html and .txt companions
     if '--all' in opts:
@@ -540,6 +681,7 @@ def main(argv):
     if not args:
         print('usage: md2html.py input.md [output.html] [--title "Title"]', file=sys.stderr)
         print('       md2html.py --all DIR [--html-only|--text-only]', file=sys.stderr)
+        print('       md2html.py -V|--version', file=sys.stderr)
         return 2
 
     # single-file: keep the historical behaviour (input.md [output.html]);
@@ -552,11 +694,13 @@ def main(argv):
         dst = args[1]
         with io.open(src, 'r', encoding='utf-8') as f:
             md = f.read()
-        with io.open(dst, 'w', encoding='utf-8') as f:
-            f.write(convert(md, src.split('/')[-1], title))
+        with io.open(dst, 'w', encoding='ascii') as f:
+            f.write(_ascii_entities(convert(md, src.split('/')[-1], title,
+                                             help_subtitle)))
         print('%s -> %s' % (src, dst))
         return 0
-    made = convert_file(src, want_html=want_html, want_text=want_text, title=title)
+    made = convert_file(src, want_html=want_html, want_text=want_text,
+                        title=title, help_subtitle=help_subtitle)
     print('%s -> %s' % (src, ', '.join(made)))
     return 0
 

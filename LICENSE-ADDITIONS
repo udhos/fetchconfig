@@ -1,0 +1,91 @@
+fetchconfig -- Supplemental Disclaimer
+======================================
+
+fetchconfig is distributed under the GNU General Public License, Version 2
+(the "GPL"; see the accompanying LICENSE file). The GPL already disclaims
+all warranty (GPL section 11) and limits liability "to the extent permitted
+by applicable law" (GPL section 12).
+
+The statements below do not add to, remove from, or otherwise restrict the
+rights the GPL grants, and they impose no further restriction within the
+meaning of GPL section 6. Their sole purpose is to set out, for recipients
+in Germany and the European Union, how the warranty and liability
+disclaimers in GPL sections 11 and 12 apply under mandatory German and EU
+law. Where anything below would conflict with the GPL, the GPL prevails.
+
+1. Acknowledgement
+==================
+
+fetchconfig is provided free of charge. By copying, installing, or using
+fetchconfig you accept the disclaimer below, in addition to and consistent
+with the GPL (compare GPL section 5). If you do not accept it, do not use
+fetchconfig.
+
+2. Warranty and limitation of liability
+=======================================
+
+To the fullest extent permitted by applicable law, and supplementing GPL
+sections 11 and 12:
+
+  a) fetchconfig is provided "as is", without warranty of any kind. The
+     authors and copyright holders give no guarantee of fitness for a
+     particular purpose, merchantability, freedom from defects, correctness
+     of the configurations fetchconfig retrieves or stores, or
+     uninterrupted or error-free operation.
+
+  b) Any liability of the authors and copyright holders for damages arising
+     from the use of or inability to use fetchconfig is excluded, on
+     whatever legal ground.
+
+  c) The exclusion in (b) does NOT apply where liability is mandatory under
+     applicable law. Statutory liability remains unaffected in particular:
+
+       - for damage caused by intent (Vorsatz) or gross negligence (grobe
+         Fahrlaessigkeit);
+
+       - for injury to life, body, or health resulting from a negligent
+         breach of duty by the authors, or an intentional or negligent
+         breach of duty by their legal representatives or agents;
+
+       - for the fraudulent concealment of a defect (arglistiges
+         Verschweigen eines Mangels), or where a guarantee of condition was
+         given;
+
+       - under the German Product Liability Act (Produkthaftungsgesetz);
+         and
+
+       - for the culpable breach of a material contractual obligation
+         (Kardinalpflicht) - an obligation whose fulfilment is essential to
+         the proper use of fetchconfig and on whose observance the user may
+         regularly rely. In that case liability for simple negligence is
+         limited to the foreseeable damage typical of this kind of
+         agreement.
+
+  d) Because fetchconfig is supplied gratuitously, the liability of the
+     authors and copyright holders is in any event limited to intent and
+     gross negligence (compare section 521 of the German Civil Code, BGB),
+     except in the cases of mandatory liability listed in (c).
+
+  e) Where the liability of the authors and copyright holders is excluded or
+     limited, the same applies to the personal liability of their employees,
+     representatives, and agents.
+
+3. Severability
+===============
+
+If any provision of these terms is or becomes invalid or unenforceable, the
+remaining provisions remain unaffected. The invalid or unenforceable
+provision is deemed replaced by a valid and enforceable one that comes as
+close as possible to its economic purpose. The same applies to any gap in
+these terms.
+
+4. Governing law
+================
+
+These terms, and any non-contractual obligations arising out of or in
+connection with them, are governed by the law of the Federal Republic of
+Germany, excluding its conflict-of-law rules and the United Nations
+Convention on Contracts for the International Sale of Goods (CISG).
+Mandatory consumer-protection provisions of the country of the user's
+habitual residence remain unaffected.
+

@@ -70,77 +70,94 @@
 default:	cisco-ios	user=backup,pass=fran,enable=jose
 default:	cisco-ios	timeout=10,keep=5,changes_only=0
 default:	cisco-ios	repository=/var/fetchconfig/save
+default:	cisco-ios	debug=off
 
 default:	cisco-cat	user=backup,pass=fran,enable=jose
 default:	cisco-cat	timeout=10,keep=5
 default:	cisco-cat	changes_only=0,fetch_timeout=30
 default:	cisco-cat	repository=/var/fetchconfig/save
+default:	cisco-cat	debug=off
 
 default:        parks           user=admin,pass=parks
 default:        parks           timeout=2,keep=5
 default:        parks           fetch_timeout=30,banner_timeout=60
 default:        parks           repository=/var/fetchconfig/save
+default:        parks           debug=off
 
 default:        riverstone      user=rs3,pass=100,enable=adm
 default:        riverstone      timeout=3,keep=3
 default:        riverstone      fetch_timeout=30
 default:        riverstone      repository=/var/fetchconfig/save
+default:        riverstone      debug=off
 
 default:	terayon-os	user=testuser,pass=testpassword,enable=testenable
 default:	terayon-os	timeout=60,keep=50,changes_only=0
 default:	terayon-os	repository=/var/fetchconfig/save
+default:	terayon-os	debug=off
 
 default:        dmswitch        user=dm,pass=dmpass
 default:        dmswitch        timeout=10,keep=5,changes_only=0
 default:        dmswitch        repository=/var/fetchconfig/save
+default:        dmswitch        debug=off
 
 default:	cisco-asa	timeout=10,keep=5,changes_only=1
 default:	cisco-asa	repository=/srv/fetchconfig
+default:	cisco-asa	debug=off
 
 default:        3com-msr        user=admin,pass=lab,enable=lab
 default:        3com-msr        timeout=10,keep=5,changes_only=0
 default:        3com-msr        repository=/var/fetchconfig/save
+default:        3com-msr        debug=off
 
 default:        mikrotik        user=admin,pass=
 default:        mikrotik        timeout=10,keep=5,changes_only=0
 default:        mikrotik        repository=/var/fetchconfig/save
+default:        mikrotik        debug=off
 
 default:	cisco-pix	timeout=10,keep=5,changes_only=1
 default:	cisco-pix	repository=/var/fetchconfig/save
+default:	cisco-pix	debug=off
 
 default:        tellabs-msr     user=usr,pass=pwd,enable=jose
 default:        tellabs-msr     timeout=10,keep=5,changes_only=0
 default:        tellabs-msr     fetch_timeout=1200
 default:        tellabs-msr     repository=/var/fetchconfig/save
+default:        tellabs-msr     debug=off
 default:	tellabs-msr	filename_append_suffix=.txt
 
 default:	junos		user=juniper,pass=jun@321
 default:	junos		timeout=10,keep=5,changes_only=0
 default:	junos		filename_append_suffix=.txt
 default:	junos		repository=/var/fetchconfig/save
+default:	junos		debug=off
 
 default:	acme		user=admin,pass=acme
 default:	acme		timeout=10,keep=5,changes_only=0
 default:	acme		filename_append_suffix=.txt
 default:	acme		repository=/var/fetchconfig/save
+default:	acme		debug=off
 
 default:	mediant		user=Admin,pass=Admin
 default:	mediant		timeout=10,keep=5,changes_only=0
 default:	mediant		filename_append_suffix=.txt
 default:	mediant		repository=/var/fetchconfig/save
+default:	mediant		debug=off
 
 default:        cisco-iosxr     user=backup,pass=fran
 default:        cisco-iosxr     timeout=10,keep=5,changes_only=0
 default:        cisco-iosxr     repository=/var/fetchconfig/save
+default:        cisco-iosxr     debug=off
 
 default:	nec-univerge-ix	user=admin,pass=admin
 default:	nec-univerge-ix	timeout=10,keep=5,changes_only=0
 default:	nec-univerge-ix	filename_append_suffix=.txt
 default:	nec-univerge-ix	repository=/var/fetchconfig/save
+default:	nec-univerge-ix	debug=off
 
 default:        coriant-8600    user=backup,pass=fran,enable=jose
 default:        coriant-8600    timeout=10,keep=5,changes_only=0
 default:        coriant-8600    repository=/var/fetchconfig/save
+default:        coriant-8600    debug=off
 
 default:	procurve	user=admin,pass=procurve,enable=procurve
 default:	procurve	timeout=10,keep=5,changes_only=0
@@ -157,10 +174,12 @@ default:	procurve-ssh	debug=off
 default:	hirschmann	user=admin,pass=fran
 default:	hirschmann	timeout=10,keep=5,changes_only=0
 default:	hirschmann	repository=/var/fetchconfig/save
+default:	hirschmann	debug=off
 
 default:	zyxel		user=admin,pass=fran
 default:	zyxel		timeout=10,keep=5,changes_only=0
 default:	zyxel		repository=/var/fetchconfig/save
+default:	zyxel		debug=off
 
 # planet-ssh: PLANET managed switches over SSH. "enable" only matters
 # if the account lands on the ">" prompt; it defaults to pass.

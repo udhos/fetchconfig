@@ -43,7 +43,6 @@ my %TIMING_DEFAULT = (
     banner_timeout => 30,
     fetch_timeout  => undef,   # undef -> use base timeout
     fetch_delay    => 0,
-    prompt_settle  => undef,   # undef -> Abstract default settle
     max_visits     => 8,
 );
 
@@ -181,6 +180,9 @@ sub do_fetch {
         my $dev_pass = $self->dev_option($dev_opt_tab, "pass");
         if (!defined $dev_user) { $self->log_error("ssh: login username needed but not provided"); return; }
         if (!defined $dev_pass) { $self->log_error("ssh: login password needed but not provided"); return; }
+        # legacy ssh options from the template (-o Key=Val ...), fed to ssh_open
+        my $sx = $self->eff($dev_opt_tab, $tmpl, "ssh_extra_opts", '');
+        $self->{cur_ssh_extra} = [ length($sx) ? split(' ', $sx) : () ];
         my $debug_fh = $self->open_ssh_debug_file($dev_opt_tab, $dev_repository, $dev_id, $dev_host);
         ($t, $ssh, $pid, $warn_guard) = $self->ssh_open($dev_host, $dev_user, $dev_pass, $dev_timeout, $debug_fh);
         return unless defined $t;

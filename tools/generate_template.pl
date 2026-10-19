@@ -26,6 +26,7 @@
 #   -t, --transport T    ssh or telnet (default: guessed from the capture)
 #   -o, --output FILE    write the template here (default: stdout)
 #       --help
+#   -V, --version        print version and copyright, then exit
 #
 # No non-core modules.
 #
@@ -34,14 +35,26 @@ use strict;
 use warnings;
 use Getopt::Long qw(:config no_ignore_case bundling);
 
-my $VERSION = '9.66';
-my (%opt, $show_help);
+# Kept in step with fetchconfig's version by hand. NOT imported from
+# fetchconfig::Constants, so this tool is self-contained and can be copied
+# and run on its own.
+my $VERSION = '9.72';
+my (%opt, $show_help, $show_version);
 GetOptions(
     'f|hex=s'       => \$opt{hex},
     't|transport=s' => \$opt{transport},
     'o|output=s'    => \$opt{output},
     'help'          => \$show_help,
+    'V|version'     => \$show_version,
 ) or usage(2);
+if ($show_version) {
+    print "generate_template.pl (fetchconfig) $VERSION\n",
+          "Copyright (c) 2026 Rainer Tammer\n",
+          "License GPL-2.0-or-later: GNU GPL version 2 or later.\n",
+          "This is free software; see the source for copying conditions. There is NO\n",
+          "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n";
+    exit 0;
+}
 usage(0) if $show_help;
 usage(2) unless defined $opt{hex};
 
@@ -116,7 +129,6 @@ print $out <<"HEADER";
 transport      $transport
 banner_timeout 30
 fetch_timeout  120
-prompt_settle  250
 max_visits     8
 strip_ansi     @{[ $saw_ansi ? 'yes' : 'no' ]}
 
@@ -225,6 +237,7 @@ record-session.pl .hex capture. THE OUTPUT IS A DRAFT to review and test.
   -t, --transport T    ssh or telnet (default: guessed from the capture)
   -o, --output FILE    write here (default: stdout)
       --help           this help
+  -V, --version        print version and copyright, then exit
 
 See README.generic-model for the template grammar.
 USAGE

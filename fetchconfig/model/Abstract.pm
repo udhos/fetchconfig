@@ -716,6 +716,12 @@ sub parse_options {
     }
 }
 
+#
+# Debugging helper: log every name=value in an options table. Not used in
+# normal operation - uncomment the
+# "$self->dump_options('default', $self->{default_options});" call in
+# default_options() below to dump the parsed default options.
+#
 sub dump_options {
     my ($self, $label, $opt_tab_ref) = @_;
 
@@ -1066,7 +1072,9 @@ sub find_latest {
     $self->log_error("dev=$dev_id: backup filename in unexpected format (ordered by name only): $_") for @unparsed;
 
     if (@files < 1) {
-	$self->log_error("there is no latest config");
+	# A freshly added device has no previous backup yet: that is the
+	# normal first-run state, not a failure, so log it at info level.
+	$self->log_info("there is no latest config");
 	return undef;
     }
 
@@ -1467,7 +1475,7 @@ sub expect_enable_prompt_paging_auto {
         return undef;
     }
 
-    my $escaped_prompt = &escape_brackets($prompt);
+    my $escaped_prompt = $self->escape_brackets($prompt);
     #$self->log_debug("regexp='$prompt' escaped_brackets='$escaped_prompt'");
     my $prompt_regexp = '/(' . $escaped_prompt . '#$)|(\Q' . $paging_prompt . '\E$)/';
 

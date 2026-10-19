@@ -1,9 +1,64 @@
-#
-# fetchconfig.pl - CHANGES
-#
+fetchconfig -- Changes
+======================
+
+9.72
+====
+
++ Model-framework code-review fixes:
+
+  - MikroTik: expect_enable_prompt_paging() called escape_brackets() as a
+    package sub (&escape_brackets), which does not exist in the MikroTik
+    package and died on every fetch; it now calls the inherited
+    $self->escape_brackets().
+
+  - ProCurveSSH: the final-line ANSI strip is now guarded against an empty
+    config (matching ProCurve.pm) - a switch that answers the show command
+    with nothing but its prompt no longer crashes.
+
+  - JunOS: chat_login() now returns undef (not 1) when the pager-disable
+    command fails, so the caller treats it as a login failure instead of
+    continuing with a bogus prompt.
+
+  - Generic template model: the template ssh_extra_opts directive is now
+    actually passed to the ssh client (it was parsed but ignored); the
+    procurve.tmpl directive is written in "-o Key=Value" form to match the
+    ProCurveSSH model.
+
+  - mediant-sbc: the prompt_settle_ms option (default 150 ms) is now honoured
+    on SSH (drain to idle before matching the prompt), as it already is for
+    nexus-ssh and aruba-cx-ssh.
+
+  - Detector: device-table log masking now also masks community= values
+    (previously only pass= and enable=).
+
++ Removed the generic-template prompt_settle directive. It was accepted by
+  the template parser and emitted by generate_template, but never consumed by
+  the generic engine, whose timing is governed by per-state timeouts and
+  fetch_delay. Removed from the parser, both template generators
+  (generate_template.pl / .py) and the shipped templates (procurve.tmpl,
+  cisco-ios.tmpl). The SSH-model option prompt_settle_ms is a different
+  option and is unaffected.
+
++ Removed dead code: %holding and %started (fetchconfig.pl parallel-fetch
+  bookkeeping that was never read) and the unused entry_state() in
+  GenericTemplateParser. dump_options() (model::Abstract) is kept as a
+  documented debugging helper, with its call left commented out.
+
++ Fixed the --help text: the --check-template and --template-syntax option
+  descriptions were spliced together; each now describes its own option.
 
 9.71
 ====
+
++ New DEVELOPER-GUIDE.md / .html: a comprehensive architecture and
+  engineering guide (execution model, the per-device pipeline, parallel
+  fetch, all data structures, the device-table format, the model API, the
+  security mechanisms and deliberate non-mitigations, extension recipes,
+  testing and conventions), with an ASCII fetch-pipeline sequence diagram
+  and an Abstract-API call graph, for engineers extending fetchconfig. The
+  How-To-add-a-model skeleton now sends the password with print_secret()
+  (not a raw print, which would reach the .debug log) and cross-references
+  the developer guide.
 
 + debug=on now works for ALL device models. Previously only the SSH, HTTP
   and SNMP models (and a few telnet models) wrote a <dev_id>.debug session
@@ -17,6 +72,95 @@
   <repository>/<dev_id>.debug for every telnet model. Login and enable
   passwords stay out of the log because the models already send them with
   print_secret(), which suspends the log around the send.
+
++ The helper tools now report the release version and accept -V/--version:
+  generate_template.pl and md2html.py gained the option (record-session.pl
+  already had it), and every script under tools/ is pinned to the
+  fetchconfig version (9.71), so "<tool> --version" always matches the
+  package.
+
++ The "there is no latest config" notice (logged when a freshly added
+  device has no previous backup yet) is now logged at info level, not
+  error, and appears inside the device's own log block (after the
+  -----[dev]----- header) rather than before it. It is the normal
+  first-run state, not a failure.
+
++ record-session.pl: fixed several capture bugs found while porting the
+  tool. Secret masking now runs once at end of session on COMPLETE lines,
+  so a secret, a -m token, or a typed password split across two network
+  reads is masked as a whole instead of leaking (a community that spanned
+  a read boundary was being saved as "xxxlic"); the .hex still keeps the
+  original per-read framing. Password masking now stops at the Enter even
+  when the next command arrives in the same read (it used to mask the
+  command too). The .txt render no longer leaks a charset select ("ESC (
+  B" shown as "(B"), an escape split across two reads, or telnet
+  negotiation bytes. Over telnet the tool now answers option negotiation
+  (accepts ECHO/SGA, offers TTYPE/NAWS); the raw IAC bytes stay in the
+  .hex so generate_template still detects telnet captures.
+
++ Documentation build ("make doc"): each *.md now regenerates BOTH its
+  .html and its plain-text companion, so the shipped text files no longer
+  drift out of sync with the Markdown. The title now comes from a single
+  source: each .md's "# fetchconfig -- <Subtitle>" H1 becomes the .html
+  <title> "fetchconfig &mdash; <Subtitle>" and the text's first line
+  "fetchconfig -- <Subtitle>". The four docs whose H1 used a different
+  wording were normalised to this format. DEVELOPER-GUIDE now ships a
+  plain-text version too, and md2html.py's text renderer drops HTML comment
+  blocks (the  blocks) render from the CDN with an embedded-SVG
+  fallback - pre-rendered into tools/mermaid-cache/ by tools/gen-mermaid-svg.py -
+  so the pages also work offline / on AIX; the plain-text docs keep the ASCII
+  diagram. The HTML is 7-bit-ASCII entity-encoded (VI-safe).
+
++ The top-level README is now the single documentation source, converted to
+  Markdown (README.md): ALL-CAPS section headers became "##" sections (the
+  in-body "IMPORTANT CHANGE ..." / "INSTALLATION (Windows)" notes became "###"
+  sub-sections), and the DEVICE OPTIONS reference is now a consistent
+  "Option | Description" table per module group. Its H1 is
+  "# fetchconfig -- README / Documentation", so the generated page <title> is
+  "fetchconfig &mdash; README / Documentation" (fetchconfig-web reads the
+  <title> to build its Help-menu entries). The hero carries the
+  testers/compatibility notice as a
+  red info box plus a pointer to the fetchconfig-web companion project. The old
+  hand-maintained fetchconfig-documentation.html has been removed: README.html
+  (generated from README.md) supersedes it and adds the pager_cmd option the old
+  page was missing.
+
++ contrib/windows/: Python ports of the two developer tools -
+  record_session.py and generate_template.py - with the same command line
+  and the same .hex/.txt formats as the Perl versions. build.cmd packages
+  them into standalone record_session.exe and generate_template.exe with
+  PyInstaller, so Windows users need no Perl, PuTTY or OpenSSH; the .py
+  files also run on POSIX (paramiko for ssh). The notes are kept in
+  contrib/windows/README.windows.md, from which "make doc" derives the
+  README.windows text and .html like every other document.
+
++ Licensing is now sourced from a single file, LICENSE.md: an H1 title
+  wrapping the verbatim GNU GPL version 2 in a fenced block. "make doc"
+  derives LICENSE (plain text) and LICENSE.html from it, and copies LICENSE
+  to COPYING. The license text is preserved byte-for-byte: md2html.py now
+  renders a document that is just a title plus one fenced block as a
+  verbatim pass-through (no heading, no indentation, no transliteration), so
+  LICENSE and COPYING are identical to the canonical FSF GPLv2 text; the
+  .html keeps the text verbatim inside a <pre>. The license is pure 7-bit
+  ASCII (the five form-feed page breaks are the FSF original's).
+
++ New LICENSE-ADDITIONS.md (with derived LICENSE-ADDITIONS text and .html): a
+  supplemental warranty and liability disclaimer for recipients in Germany
+  and the EU. It does not alter or restrict the GPL (it adds no term within
+  the meaning of GPL section 6); it clarifies how the GPLv2 warranty and
+  liability disclaimers (sections 11 and 12) apply under mandatory German/EU
+  law - excluding liability to the maximum extent permitted, keeping the
+  mandatory carve-outs (intent, gross negligence, injury to life/body/health,
+  Produkthaftungsgesetz, fraudulent concealment, Kardinalpflichten) and the
+  section 521 BGB limitation for gratuitous provision - with severability and
+  German governing law (CISG excluded).
+
++ t/42-directory-allowlist.t now skips gracefully (plan skip_all) when
+  model::Detector cannot be loaded because the transport CPAN modules
+  (Net::Telnet, ...) are absent, matching the guard already used in
+  t/45/46/51. Previously it used require_ok and reported a hard failure on a
+  minimal host without the transports; the directory-allowlist logic it tests
+  needs no transport.
 
 9.70
 ====
@@ -127,7 +271,7 @@
   a pipeline, put it in a script and name the script.
 
 + repository=, template_dir= and the on_fetch_run program may not be a
-  system directory (/bin, /sbin, /lib*, /usr/bin, /usr/sbin, /usr/lib*,
+  system directory (/bin, /sbin, /lib, /usr/bin, /usr/sbin, /usr/lib,
   /usr/share, /usr/include, /etc, /boot, /dev, /proc, /sys, /run,
   /var/run, /var/lock, the root "/", or anything under them). A device
   value is rejected and the device skipped; a directory: allowlist line
@@ -174,7 +318,6 @@
   is a free-text token [A-Za-z0-9_-]+. The shipped cisco-ios.tmpl and
   procurve.tmpl now declare their style as examples.
 
-
 + -z and -Z gained -D and -T, mirroring -o/-e: with -D the zero-byte
   backups found are deleted (each by one plain unlink on its exact path -
   only the files, not directories; run -e -D afterwards to prune any
@@ -187,7 +330,6 @@
 9.66
 ====
 
-
 + cisco-asa-ssh and cisco-asa: a rejected enable password no longer hangs
   the fetch for the whole fetch_timeout. The ASA re-prompts "Password: "
   when the enable secret is wrong; the models now detect that second
@@ -196,7 +338,6 @@
   missing device-specific enable= falling back to a default: enable= that
   does not apply). The successful path (enable accepted, "#" prompt) is
   unchanged.
-
 
 + Change report: the Devices sidebar is hidden when the report is printed
   (an @media print rule), so the printed page uses the full width.
@@ -403,7 +544,6 @@
   to note that config secrets are not always hashed - SNMP communities and
   some routing/VPN keys are cleartext, and Cisco type-7 passwords are
   reversible - rather than implying everything is a one-way hash.
-
 
 9.63
 ====
@@ -750,3 +890,4 @@ DOCUMENTATION
 + notes about the device id.
 + copyright notice at beginning of source files.
 + added this CHANGES file.
+

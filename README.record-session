@@ -1,5 +1,5 @@
-record-session.pl - the session capture tool
-============================================
+fetchconfig -- Session Capture Tool (record-session.pl)
+=======================================================
 
 What it is
 ==========
@@ -86,6 +86,11 @@ Masked automatically:
   watches for a prompt ending in Password: / password# / Password> etc.
   and masks everything - input and echo - until you press Enter.
 
+Masking is finalized at the END of the session on COMPLETE lines, so a secret,
+a -m token or a typed password split across two network reads is still masked
+as a whole; because every mask is same-length, the .hex keeps the original
+per-read framing.
+
 Masking of what the DEVICE prints, and the password-prompt heuristic, are BEST
 EFFORT and can miss things (an unusual prompt, a hash format not in the pattern
 set). ALWAYS review both files before sharing them or committing them as
@@ -98,6 +103,12 @@ Notes
   80x40) so a full-screen device draws within your terminal during the live
   session instead of overflowing it. A 40-row device such as the ProCurve 8212zl
   then renders live the way PuTTY shows it.
+
+- Over telnet the tool answers the device's option negotiation (accepts the
+  device's ECHO and SGA, offers TTYPE and NAWS) so the session behaves like a
+  real client. The raw IAC (0xff) bytes are still recorded in the .hex so
+  generate_template.pl can detect a telnet capture, but they are kept out of
+  the live view and the .txt render.
 
 - Perl module requirements. Everything the tool uses is part of the Perl core
   (Getopt::Long, IO::Handle, POSIX, IO::Select) EXCEPT the transport

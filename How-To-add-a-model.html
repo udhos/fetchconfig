@@ -1,78 +1,608 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>fetchconfig — How to Add a Device Model</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fetchconfig &mdash; How to Add a Device Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-:root { --fg:#1f2328; --bg:#ffffff; --muted:#59636e; --line:#d1d9e0; --code:#f6f8fa; --link:#0969da; --accent:#1f6feb; }
-@media (prefers-color-scheme: dark) {
-  :root { --fg:#e6edf3; --bg:#0d1117; --muted:#9198a1; --line:#3d444d; --code:#161b22; --link:#4493f8; --accent:#4493f8; }
-}
-html { -webkit-text-size-adjust: 100%; }
-body { margin:0; background:var(--bg); color:var(--fg);
-  font: 16px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-main { max-width: 900px; margin: 0 auto; padding: 32px 24px 64px; }
-nav.toc { border:1px solid var(--line); border-radius:6px; padding:12px 18px; margin:24px 0 32px; background:var(--code); }
-nav.toc strong { display:block; margin-bottom:6px; }
-nav.toc ul { margin:0; padding-left:18px; }
-nav.toc li { margin:2px 0; }
-h1, h2, h3, h4 { line-height:1.25; margin:1.6em 0 .6em; font-weight:600; }
-h1 { font-size:2em; border-bottom:1px solid var(--line); padding-bottom:.3em; margin-top:0; }
-h2 { font-size:1.5em; border-bottom:1px solid var(--line); padding-bottom:.3em; }
-h3 { font-size:1.2em; }
-h4 { font-size:1em; }
-h2 a.anchor, h3 a.anchor { visibility:hidden; text-decoration:none; color:var(--muted); margin-left:.3em; }
-h2:hover a.anchor, h3:hover a.anchor { visibility:visible; }
-p { margin: 0 0 1em; }
-a { color: var(--link); }
-code { font: 0.9em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  background: var(--code); padding: .15em .35em; border-radius: 4px; }
-pre { background: var(--code); border:1px solid var(--line); border-radius: 6px; padding: 14px 16px; overflow-x: auto; margin: 0 0 1.2em; }
-pre code { background: none; padding: 0; font-size: 0.85em; }
-table { border-collapse: collapse; width: 100%; margin: 0 0 1.2em; display:block; overflow-x:auto; }
-th, td { border: 1px solid var(--line); padding: 6px 12px; vertical-align: top; }
-th { background: var(--code); }
-tr:nth-child(even) td { background: rgba(127,127,127,.06); }
-blockquote { border-left: 4px solid var(--line); margin: 0 0 1em; padding: 0 1em; color: var(--muted); }
-hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
-ul, ol { margin: 0 0 1em; padding-left: 2em; }
-li { margin: .2em 0; }
-input[type=checkbox] { margin-right: .4em; }
-footer { color: var(--muted); font-size: .85em; border-top: 1px solid var(--line); margin-top: 3em; padding-top: 1em; }
+  :root{
+    --bg:#fbfbf9;
+    --surface:#f1f4f4;
+    --surface-2:#e9edee;
+    --border:#dde3e3;
+    --text:#141a1f;
+    --text-muted:#5b6770;
+    --text-faint:#8a949b;
+    --accent:#0e7c8c;
+    --accent-bright:#22aabb;
+    --accent-soft:#e3f3f5;
+    --danger:#c4432b;
+    --danger-soft:#fbeae6;
+    --success:#1c8a5b;
+    --success-soft:#e8f5ee;
+    --changed:#2451c4;
+    --changed-soft:#e8edfb;
+    --code-bg:#10171c;
+    --code-text:#dce8ec;
+    --code-accent:#7fe0cc;
+    --code-muted:#7f929b;
+    --radius:6px;
+    --font-sans:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace;
+    --sidebar-w:280px;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    font-family:var(--font-sans);
+    color:var(--text);
+    background:var(--bg);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  a{color:var(--accent);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{
+    outline:2px solid var(--accent-bright);
+    outline-offset:2px;
+  }
+
+  code, kbd{
+    font-family:var(--font-mono);
+    font-size:0.88em;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:0.1em 0.4em;
+    color:var(--text);
+    white-space:nowrap;
+  }
+
+  pre{
+    font-family:var(--font-mono);
+    background:var(--code-bg);
+    color:var(--code-text);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    overflow-x:auto;
+    font-size:0.86rem;
+    line-height:1.65;
+    margin:16px 0;
+    border:1px solid #05090c;
+  }
+  pre code{
+    background:none;
+    border:none;
+    padding:0;
+    white-space:pre;
+    color:inherit;
+    font-size:1em;
+  }
+  pre .c{color:var(--code-muted);} /* comment */
+  pre .s{color:var(--code-accent);} /* string / value */
+  pre .k{color:#e8b95f;} /* keyword / flag */
+
+  h1,h2,h3,h4{
+    font-family:var(--font-sans);
+    font-weight:600;
+    line-height:1.25;
+    color:var(--text);
+    letter-spacing:-0.01em;
+  }
+
+  /* ---------- Layout ---------- */
+  .layout{
+    display:flex;
+    align-items:flex-start;
+    max-width:1600px;
+    margin:0 auto;
+  }
+
+  .sidebar{
+    position:sticky;
+    top:0;
+    height:100vh;
+    width:var(--sidebar-w);
+    flex:0 0 var(--sidebar-w);
+    overflow-y:auto;
+    padding:28px 22px 40px;
+    border-right:1px solid var(--border);
+    background:var(--surface);
+  }
+
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:4px;
+  }
+  .brand-mark{
+    width:30px;height:30px;border-radius:7px;
+    background:linear-gradient(155deg,var(--accent-bright),var(--accent));
+    display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;
+  }
+  .brand-mark svg{width:17px;height:17px;}
+  .brand-name{font-weight:700;font-size:1.05rem;letter-spacing:-0.01em;}
+
+  .brand-meta{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-muted);
+    margin:6px 0 22px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .pill{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:99px;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text-muted);
+  }
+
+  .nav-group{margin-bottom:4px;}
+  .nav-group-label{
+    font-size:0.68rem;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--text-faint);
+    margin:20px 0 6px;
+    font-weight:600;
+  }
+  .nav-group:first-of-type .nav-group-label{margin-top:0;}
+
+  .sidebar nav a{
+    display:block;
+    color:var(--text-muted);
+    font-size:0.885rem;
+    padding:6px 10px;
+    border-radius:5px;
+    text-decoration:none;
+    border-left:2px solid transparent;
+    transition:background 0.12s ease, color 0.12s ease;
+  }
+  .sidebar nav a:hover{background:var(--surface-2);color:var(--text);}
+  .sidebar nav a.active{
+    color:var(--accent);
+    background:var(--accent-soft);
+    border-left-color:var(--accent-bright);
+    font-weight:500;
+  }
+
+  .main-col{
+    flex:1 1 auto;
+    min-width:0;
+    padding:0 0 120px;
+  }
+
+  .content{
+    max-width:1200px;
+    margin:0 auto;
+    padding:0 48px;
+  }
+  /* Keep flowing prose at a comfortable reading measure, but let wide
+     elements (tables, code blocks, diagrams) use the full content width so
+     they don't need a horizontal scrollbar on a wide screen. */
+  .content > p,
+  .content > ul,
+  .content > ol,
+  .content > h2,
+  .content > h3,
+  .content > h4,
+  .content > blockquote{
+    max-width:820px;
+  }
+  .content > .table-wrap,
+  .content > pre,
+  .content > .callout{
+    max-width:100%;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding:64px 48px 48px;
+    max-width:1200px;
+    margin:0 auto;
+    border-bottom:1px solid var(--border);
+  }
+  .hero-eyebrow{
+    font-family:var(--font-mono);
+    font-size:0.78rem;
+    color:var(--accent);
+    margin-bottom:14px;
+  }
+  .hero h1{
+    font-size:2.6rem;
+    margin:0 0 14px;
+    letter-spacing:-0.02em;
+    color:var(--accent);
+  }
+  .mermaid{
+    /* A mermaid block is a <pre>, so it would otherwise inherit the dark code
+       background/border/padding. Render the diagram on the page background. */
+    margin:1.5rem 0;
+    text-align:center;
+    background:transparent;
+    color:inherit;
+    border:0;
+    padding:0;
+    overflow-x:auto;
+  }
+  /* Until mermaid.js has rendered a block (it stamps data-processed on success),
+     keep the raw diagram source hidden so it is never shown as a wall of text --
+     during the CDN load, or if the runtime is blocked/unavailable. mermaid still
+     measures and renders normally while it is hidden; the element reveals itself
+     the moment it is processed. */
+  figure.diagram{margin:1.5rem 0;text-align:center;}
+  .diagram-svg{display:block;}
+  .diagram-svg svg{max-width:100%;height:auto;}
+  /* keep raw mermaid source hidden until rendered */
+  .mermaid:not([data-processed]){display:none;}
+  .mermaid[data-processed]{display:block;}
+  /* once live mermaid has rendered, hide the embedded SVG fallback */
+  .mermaid[data-processed] + .diagram-svg{display:none;}
+  .hero p.lede{
+    font-size:1.13rem;
+    color:var(--text-muted);
+    max-width:640px;
+    margin:0 0 28px;
+    line-height:1.6;
+  }
+  .hero-stats{
+    display:flex;
+    gap:36px;
+    flex-wrap:wrap;
+    margin-top:8px;
+  }
+  .hero-stat .num{
+    font-family:var(--font-mono);
+    font-size:1.6rem;
+    font-weight:600;
+    color:var(--text);
+    display:block;
+  }
+  .hero-stat .label{
+    font-size:0.8rem;
+    color:var(--text-muted);
+  }
+
+  /* ---------- Sections ---------- */
+  section{
+    padding:56px 0 8px;
+    border-bottom:1px solid var(--border);
+  }
+  section:last-of-type{border-bottom:none;}
+
+  .section-kicker{
+    font-family:var(--font-mono);
+    font-size:0.75rem;
+    color:var(--text-faint);
+    margin-bottom:8px;
+  }
+  h2{
+    font-size:1.65rem;
+    margin:0 0 18px;
+    scroll-margin-top:24px;
+  }
+  h3{
+    font-size:1.18rem;
+    margin:34px 0 12px;
+    scroll-margin-top:24px;
+  }
+  h4{
+    font-size:0.98rem;
+    margin:22px 0 8px;
+    color:var(--text);
+    scroll-margin-top:24px;
+  }
+  p{margin:0 0 14px;color:var(--text);}
+  section p, section li{color:var(--text);}
+  ul,ol{padding-left:1.3em;margin:0 0 16px;}
+  li{margin-bottom:6px;}
+  .prose-muted{color:var(--text-muted);}
+
+  .file-label{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-faint);
+    margin:18px 0 -8px;
+    display:block;
+  }
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:18px 0;
+    border:1px solid var(--border);
+    background:var(--surface);
+    font-size:0.93rem;
+  }
+  .callout-title{
+    font-weight:600;
+    font-size:0.82rem;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    margin-bottom:6px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+  }
+  .callout.warn{background:var(--danger-soft);border-color:#f0c9bd;}
+  .callout.warn .callout-title{color:var(--danger);}
+  .callout.note{background:var(--accent-soft);border-color:#bfe4e9;}
+  .callout.note .callout-title{color:var(--accent);}
+  .callout p:last-child{margin-bottom:0;}
+
+  /* ---------- Tables ---------- */
+  .table-wrap{overflow-x:auto;margin:18px 0 26px;border:1px solid var(--border);border-radius:var(--radius);}
+  table{
+    border-collapse:collapse;
+    width:100%;
+    font-size:0.87rem;
+  }
+  caption{
+    text-align:left;
+    font-size:0.78rem;
+    color:var(--text-muted);
+    padding:8px 14px;
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+    caption-side:top;
+  }
+  th,td{
+    text-align:left;
+    padding:9px 14px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+  }
+  thead th{
+    background:var(--surface);
+    font-weight:600;
+    font-size:0.76rem;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--text-muted);
+    white-space:nowrap;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--surface);}
+  td code, th code{white-space:nowrap;}
+  .req-yes{color:var(--danger);font-weight:600;font-size:0.82rem;}
+  .req-opt{color:var(--text-faint);font-size:0.82rem;}
+  .req-dash{color:var(--border);}
+  .matrix th, .matrix td{text-align:center;}
+  .matrix td:first-child, .matrix th:first-child{text-align:left;}
+  .matrix{font-size:0.8rem;}
+  .matrix code{white-space:nowrap;}
+
+  /* ---------- Flag reference ---------- */
+  .flag-card{
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:14px 0;
+    background:var(--bg);
+  }
+  .flag-card + .flag-card{margin-top:10px;}
+  .flag-head{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:8px;
+  }
+  .flag-tag{
+    font-family:var(--font-mono);
+    font-weight:600;
+    background:var(--code-bg);
+    color:var(--code-accent);
+    border-radius:4px;
+    padding:3px 9px;
+    font-size:0.86rem;
+  }
+  .flag-req{
+    font-size:0.72rem;
+    font-family:var(--font-mono);
+    color:var(--text-faint);
+  }
+  .flag-card p{margin-bottom:8px;font-size:0.92rem;color:var(--text-muted);}
+  .flag-card p:last-child{margin-bottom:0;}
+  .exit-list{list-style:none;padding:0;margin:8px 0 0;font-family:var(--font-mono);font-size:0.82rem;}
+  .exit-list li{display:flex;gap:10px;margin-bottom:3px;}
+  .exit-list .code{color:var(--text);font-weight:600;min-width:1.6em;}
+
+  /* ---------- Footnotes ---------- */
+  sup.fnref{font-size:0.68em;line-height:0;vertical-align:super;}
+  sup.fnref a{color:var(--accent);text-decoration:none;font-weight:600;padding:0 1px;}
+  sup.fnref a:hover{text-decoration:underline;}
+  .footnotes{margin-top:1.4rem;padding-top:0.9rem;border-top:1px solid var(--border);
+             font-size:0.9rem;color:var(--text-muted);}
+  .footnote{margin:0 0 0.55rem 0;padding-left:1.9em;text-indent:-1.9em;line-height:1.5;}
+  .footnote:last-child{margin-bottom:0;}
+  .footnote .fnnum{display:inline-block;min-width:1.5em;text-indent:0;
+                   font-weight:600;color:var(--text);font-family:var(--font-mono);}
+
+  /* ---------- Color swatches (email notif) ---------- */
+  .swatches{display:flex;gap:14px;flex-wrap:wrap;margin:18px 0 22px;}
+  .swatch{
+    display:flex;align-items:center;gap:9px;
+    border:1px solid var(--border);border-radius:99px;
+    padding:5px 12px 5px 6px;font-size:0.82rem;background:var(--surface);
+  }
+  .swatch .dot{width:16px;height:16px;border-radius:50%;flex:0 0 auto;border:1px solid rgba(0,0,0,0.12);}
+
+  /* ---------- Toggle tabs (Installation) ---------- */
+  .tabs{margin:18px 0;}
+  input.tab-input{position:absolute;opacity:0;pointer-events:none;}
+  .tab-labels{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+  .tab-labels label{
+    font-size:0.88rem;font-weight:500;color:var(--text-muted);
+    padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;
+    margin-bottom:-1px;
+  }
+  .tab-panel{display:none;}
+  #tab-unix:checked ~ .tab-labels label[for="tab-unix"],
+  #tab-win:checked ~ .tab-labels label[for="tab-win"]{
+    color:var(--accent);border-bottom-color:var(--accent-bright);
+  }
+  #tab-unix:checked ~ .tab-panels #panel-unix,
+  #tab-win:checked ~ .tab-panels #panel-win{display:block;}
+
+  /* ---------- Device support grid ---------- */
+  .device-grid td:first-child code{font-weight:600;}
+
+  /* ---------- Footer ---------- */
+  .page-footer{
+    max-width:1200px;margin:0 auto;padding:40px 48px 60px;
+    color:var(--text-faint);font-size:0.82rem;
+  }
+  .page-footer a{color:var(--text-muted);}
+
+  /* ---------- Mobile nav ---------- */
+  .nav-toggle{display:none;}
+  .mobile-bar{display:none;}
+
+  @media (max-width: 900px){
+    .sidebar{
+      position:fixed;
+      inset:0 auto 0 0;
+      z-index:40;
+      transform:translateX(-100%);
+      transition:transform 0.2s ease;
+      box-shadow:2px 0 24px rgba(0,0,0,0.15);
+    }
+    .nav-toggle:checked ~ .layout .sidebar{transform:translateX(0);}
+    .mobile-bar{
+      display:flex;align-items:center;justify-content:space-between;
+      position:sticky;top:0;z-index:30;
+      background:var(--bg);border-bottom:1px solid var(--border);
+      padding:14px 20px;
+    }
+    .mobile-bar .brand{margin:0;}
+    .mobile-bar label{
+      font-family:var(--font-mono);font-size:0.8rem;
+      border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;
+    }
+    .content{padding:0 22px;}
+    .hero{padding:36px 22px 32px;}
+    .hero h1{font-size:2rem;}
+    .page-footer{padding:32px 22px 48px;}
+  }
+  @media (min-width:901px){
+    .mobile-bar{display:none !important;}
+  }
+
+  @media print{
+    .sidebar,.mobile-bar{display:none !important;}
+    .layout{display:block;}
+    a{color:inherit;text-decoration:none;}
+    pre{white-space:pre-wrap;}
+  }
 </style>
+
 </head>
 <body>
-<main>
-<nav class="toc"><strong>Contents</strong><ul><li><a href="#1-scope-and-audience">1. Scope and Audience</a></li><li><a href="#2-concepts">2. Concepts</a></li><li><a href="#3-the-model-contract">3. The Model Contract</a></li><li><a href="#4-procedure">4. Procedure</a></li><li><a href="#5-skeletons">5. Skeletons</a></li><ul><li><a href="#51-telnet-model">5.1 Telnet model</a></li><li><a href="#52-ssh-model">5.2 SSH model</a></li><li><a href="#53-where-to-look-for-worked-examples">5.3 Where to look for worked examples</a></li></ul><li><a href="#6-verification">6. Verification</a></li><ul><li><a href="#61-without-the-device-replay-mock">6.1 Without the device: replay mock</a></li><li><a href="#62-with-the-device">6.2 With the device</a></li></ul><li><a href="#7-integration-checklist">7. Integration Checklist</a></li><li><a href="#8-shared-api-reference">8. Shared API Reference</a></li><ul><li><a href="#81-options">8.1 Options</a></li><li><a href="#82-logging">8.2 Logging</a></li><li><a href="#83-transport">8.3 Transport</a></li><li><a href="#84-prompt-matching-and-chat">8.4 Prompt matching and chat</a></li><li><a href="#85-configuration-storage-and-comparison">8.5 Configuration storage and comparison</a></li><li><a href="#86-http-models-abstracthttp">8.6 HTTP models (<code>AbstractHTTP</code>)</a></li></ul><li><a href="#9-conventions-that-matter">9. Conventions That Matter</a></li><ul><li><a href="#91-return-values">9.1 Return values</a></li><li><a href="#92-never-modify-the-device">9.2 Never modify the device</a></li><li><a href="#93-credentials">9.3 Credentials</a></li><li><a href="#94-volatile-lines-and-changes-only">9.4 Volatile lines and <code>changes_only</code></a></li><li><a href="#95-bytes-not-characters">9.5 Bytes, not characters</a></li><li><a href="#96-timeouts">9.6 Timeouts</a></li><li><a href="#97-debug-file">9.7 Debug file</a></li></ul></ul></nav>
-<h1 id="fetchconfig-how-to-add-a-device-model">fetchconfig — How to Add a Device Model</h1>
-<p><em>Programming manual for writing a new configuration extractor. Applies to fetchconfig 9.62.</em></p>
+
+<input type="checkbox" id="nav-toggle" class="nav-toggle">
+
+<div class="mobile-bar">
+  <div class="brand">
+    <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+    <span class="brand-name">fetchconfig</span>
+  </div>
+  <label for="nav-toggle">Menu</label>
+</div>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="brand-name">fetchconfig</span>
+    </div>
+    <div class="brand-meta">
+      <span class="pill">v9.72</span>
+      <span class="pill">GPL&#8209;2.0+</span>
+    </div>
+
+    <nav>
+<div class="nav-group"><a href="#1-scope-and-audience">1. Scope and Audience</a></div>
+<div class="nav-group"><a href="#2-concepts">2. Concepts</a></div>
+<div class="nav-group"><a href="#3-the-model-contract">3. The Model Contract</a></div>
+<div class="nav-group"><a href="#4-procedure">4. Procedure</a></div>
+<div class="nav-group"><div class="nav-group-label">5. Skeletons</div><a href="#51-telnet-model">5.1 Telnet model</a><a href="#52-ssh-model">5.2 SSH model</a><a href="#53-where-to-look-for-worked-examples">5.3 Where to look for worked examples</a></div>
+<div class="nav-group"><div class="nav-group-label">6. Verification</div><a href="#61-without-the-device-replay-mock">6.1 Without the device: replay mock</a><a href="#62-with-the-device">6.2 With the device</a></div>
+<div class="nav-group"><a href="#7-integration-checklist">7. Integration Checklist</a></div>
+<div class="nav-group"><div class="nav-group-label">8. Shared API Reference</div><a href="#81-options">8.1 Options</a><a href="#82-logging">8.2 Logging</a><a href="#83-transport">8.3 Transport</a><a href="#84-prompt-matching-and-chat">8.4 Prompt matching and chat</a><a href="#85-configuration-storage-and-comparison">8.5 Configuration storage and comparison</a><a href="#86-http-models-abstracthttp">8.6 HTTP models (<code>AbstractHTTP</code>)</a></div>
+<div class="nav-group"><div class="nav-group-label">9. Conventions That Matter</div><a href="#91-return-values">9.1 Return values</a><a href="#92-never-modify-the-device">9.2 Never modify the device</a><a href="#93-credentials">9.3 Credentials</a><a href="#94-volatile-lines-and-changes_only">9.4 Volatile lines and <code>changes_only</code></a><a href="#95-bytes-not-characters">9.5 Bytes, not characters</a><a href="#96-timeouts">9.6 Timeouts</a><a href="#97-debug-file">9.7 Debug file</a></div>
+    </nav>
+  </aside>
+
+  <div class="main-col">
+
+    <div class="hero">
+      <div class="hero-eyebrow">How to Add a Device Model</div>
+      <h1 class="hero-title">fetchconfig</h1>
+      <p class="lede"><em>Programming manual for writing a new configuration extractor. Applies to fetchconfig 9.72.</em></p>
+      
+      
+    </div>
+
+    <div class="content">
+
 <hr>
-<h2 id="1-scope-and-audience">1. Scope and Audience</h2>
+<section id="1-scope-and-audience">
+<div class="section-kicker">01</div>
+<h2>1. Scope and Audience</h2>
 <p>This manual is for a software engineer who has to make fetchconfig back up a device family it does not yet support. It assumes working Perl, familiarity with <code>Net::Telnet</code>-style expect programming, and access to at least one device of the new family (or a byte-accurate capture of a session with it).</p>
-<p>It covers: what a model is and what the core expects from it (§2–§3), the step-by-step procedure (§4), two annotated skeletons you can copy (§5), how to verify a model without hardware and then with it (§6), the integration checklist (§7), and a complete reference of the shared functions available to a model (§8). Conventions that experience has shown to matter are collected in §9.</p>
-<h2 id="2-concepts">2. Concepts</h2>
-<p><strong>Model.</strong> One Perl class per device family, in <code>fetchconfig/model/&lt;Name&gt;.pm</code>, inheriting <code>fetchconfig::model::Abstract</code> (or <code>fetchconfig::model::AbstractHTTP</code> for web-UI devices). A model knows how to talk to one CLI dialect; it knows nothing about repositories, comparison, expiry, e-mail, or parallelism — the core does all of that, identically for every model.</p>
+<p>It covers: what a model is and what the core expects from it (section 2-section 3), the step-by-step procedure (section 4), two annotated skeletons you can copy (section 5), how to verify a model without hardware and then with it (section 6), the integration checklist (section 7), and a complete reference of the shared functions available to a model (section 8). Conventions that experience has shown to matter are collected in section 9.</p>
+<p>For the surrounding architecture -- the fetch pipeline, the data structures, the security model, parallel fetch, and how a model fits into the whole -- see <code>DEVELOPER-GUIDE.md</code>.</p>
+</section>
+<section id="2-concepts">
+<div class="section-kicker">02</div>
+<h2>2. Concepts</h2>
+<p><strong>Model.</strong> One Perl class per device family, in <code>fetchconfig/model/&lt;Name&gt;.pm</code>, inheriting <code>fetchconfig::model::Abstract</code> (or <code>fetchconfig::model::AbstractHTTP</code> for web-UI devices). A model knows how to talk to one CLI dialect; it knows nothing about repositories, comparison, expiry, e-mail, or parallelism -- the core does all of that, identically for every model.</p>
 <p><strong>Label.</strong> The short string that names the model in the device table (<code>cisco-ios</code>, <code>procurve-ssh</code>, <code>mediant-sbc</code>). Lower-case, hyphenated; use a <code>-ssh</code> suffix only if a telnet model of the same family exists, otherwise select the transport with an option (see <code>mediant-sbc</code>).</p>
 <p><strong>Device table.</strong> The operator&#x27;s configuration. Three line kinds:</p>
-<pre><code>default: &lt;label&gt;  key=value,key=value,...     model-wide defaults (repeatable; later wins)
-email:   from=...,to=...,smtp=...
+<pre><code><span class="k">default:</span> &lt;label&gt;  key=value,key=value,...     model-wide defaults (repeatable; later wins)
+<span class="k">email:</span>   from=...,to=...,smtp=...
 &lt;label&gt;  &lt;dev_id&gt;  &lt;host[:port]&gt;  [key=value,...]  a device; per-device options override defaults</code></pre>
 <p>Values containing commas or spaces are double-quoted. Your model reads options with <code>dev_option()</code>; you decide which are mandatory and reject a device that lacks them.</p>
-<p><strong>Fetch pipeline (owned by the core, <code>Detector::fetch_device</code>).</strong> For each device: call <code>$model-&gt;fetch(...)</code> → if it returned a saved file, compare with the previous backup (<code>config_equal</code>, which your model may override) → discard if unchanged and <code>changes_only</code> → expire beyond <code>keep=N</code> → record the result for the status file and the summary mail. A model that fails returns an empty list; the core logs the failure, records it, and moves to the next device. <strong>A model never terminates the run.</strong></p>
+<p><strong>Fetch pipeline (owned by the core, <code>Detector::fetch_device</code>).</strong> For each device: call <code>$model-&gt;fetch(...)</code> -&gt; if it returned a saved file, compare with the previous backup (<code>config_equal</code>, which your model may override) -&gt; discard if unchanged and <code>changes_only</code> -&gt; expire beyond <code>keep=N</code> -&gt; record the result for the status file and the summary mail. A model that fails returns an empty list; the core logs the failure, records it, and moves to the next device. <strong>A model never terminates the run.</strong></p>
 <p><strong>Repository.</strong> <code>&lt;repository&gt;/YYYYMM/YYYYMMDD/&lt;dev_id&gt;/&lt;dev_id&gt;.run.&lt;timestamp&gt;&lt;tz&gt;&lt;suffix&gt;</code>. Your model never builds this path; <code>dump_config()</code> does.</p>
-<h2 id="3-the-model-contract">3. The Model Contract</h2>
+</section>
+<section id="3-the-model-contract">
+<div class="section-kicker">03</div>
+<h2>3. The Model Contract</h2>
 <p>A model must provide:</p>
-<table><thead><tr><th style="text-align:left">Method</th><th style="text-align:left">Provided by</th><th style="text-align:left">Notes</th></tr></thead><tbody><tr><td style="text-align:left"><code>label()</code></td><td style="text-align:left">you</td><td style="text-align:left">Returns the label string.</td></tr><tr><td style="text-align:left"><code>new($log)</code></td><td style="text-align:left"><code>Abstract</code></td><td style="text-align:left">Inherit it. It sets up <code>default_options</code>, which the <code>default:</code> lines fill. Do <strong>not</strong> override unless you add state — and then call the parent.</td></tr><tr><td style="text-align:left"><code>fetch($file, $line_num, $line, $dev_id, $dev_host, $dev_opt_tab)</code></td><td style="text-align:left">you</td><td style="text-align:left">Connect, log in, retrieve, log out, save. Returns <code>($config_dir, $config_file)</code> from <code>dump_config()</code>, or an <strong>empty list</strong> on failure (already logged).</td></tr></tbody></table>
+<div class="table-wrap"><table><thead><tr><th>Method</th><th>Provided by</th><th>Notes</th></tr></thead><tbody><tr><td><code>label()</code></td><td>you</td><td>Returns the label string.</td></tr><tr><td><code>new($log)</code></td><td><code>Abstract</code></td><td>Inherit it. It sets up <code>default_options</code>, which the <code>default:</code> lines fill. Do <strong>not</strong> override unless you add state -- and then call the parent.</td></tr><tr><td><code>fetch($file, $line_num, $line, $dev_id, $dev_host, $dev_opt_tab)</code></td><td>you</td><td>Connect, log in, retrieve, log out, save. Returns <code>($config_dir, $config_file)</code> from <code>dump_config()</code>, or an <strong>empty list</strong> on failure (already logged).</td></tr></tbody></table></div>
 <p>A model may override:</p>
-<table><thead><tr><th style="text-align:left">Hook</th><th style="text-align:left">Default</th><th style="text-align:left">Purpose</th></tr></thead><tbody><tr><td style="text-align:left"><code>prompt_tail()</code></td><td style="text-align:left"><code>&#x27;#$&#x27;</code></td><td style="text-align:left">Regex after the quoted hostname in the enable prompt. <code>&#x27;# ?$&#x27;</code>, <code>&#x27; &gt; $&#x27;</code>, <code>&#x27;&gt; \(enable\) $&#x27;</code>, <code>&#x27;# &#x27;</code> (unanchored)…</td></tr><tr><td style="text-align:left"><code>prompt_head()</code></td><td style="text-align:left"><code>&#x27;&#x27;</code></td><td style="text-align:left">Regex before the hostname: <code>&#x27;\(&#x27;</code> for <code>(host) #</code>, <code>&#x27;\[&#x27;</code> for <code>[host-view]</code>, the VT100 escape prefix for switches that emit cursor codes before the prompt.</td></tr><tr><td style="text-align:left"><code>config_equal(...)</code></td><td style="text-align:left">byte compare</td><td style="text-align:left">Ignore volatile lines; see §9.4.</td></tr><tr><td style="text-align:left"><code>ssh_extra_opts()</code></td><td style="text-align:left"><code>()</code></td><td style="text-align:left">Legacy crypto an old switch needs (<code>-o =&gt; &quot;KexAlgorithms=+…&quot;</code>).</td></tr><tr><td style="text-align:left"><code>interrupt_screens()</code></td><td style="text-align:left"><code>()</code></td><td style="text-align:left">Screens that interpose before the prompt (banner, menu, save question) and the keystroke that dismisses each.</td></tr></tbody></table>
-<p>Everything else — options, repository I/O, comparison, expiry, logging, SSH transport, escape stripping, prompt matching, pager driving — is in <code>Abstract</code> and documented in §8. <strong>Use it. Do not copy code from another model into yours;</strong> every copy that ever existed diverged and each divergence became a bug report.</p>
-<h2 id="4-procedure">4. Procedure</h2>
-<ol><li><strong>Capture a real session</strong> before writing a line of Perl. Over telnet, a raw capture (PuTTY <em>Logging → All session output</em>, not &quot;Printable output&quot; — that drops the control bytes you need). Over SSH, run an existing SSH model with <code>debug=on</code> against the device; the <code>.debug</code> file is a raw dump. You need: the login prompts, the exact prompt strings (trailing space or not!), the enable dialogue, the pager marker and — critically — the bytes the device sends <em>after</em> you dismiss the pager, the show command&#x27;s first and last lines, the logout.</li><li><strong>Create <code>fetchconfig/model/&lt;Name&gt;.pm</code></strong> from the matching skeleton in §5. Fill in: label, prompt hooks, login/enable/fetch/logout steps.</li><li><strong>Register it</strong> in <code>fetchconfig/model/Detector.pm</code>: one <code>use fetchconfig::model::&lt;Name&gt;;</code> and one <code>$class-&gt;register(fetchconfig::model::&lt;Name&gt;-&gt;new($log));</code>. Order in the register list is the order models are listed at startup; append at the end.</li><li><strong>Build a replay mock</strong> from the capture and run the model against it until the saved file is byte-identical to the config in the capture (§6.1).</li><li><strong>Document</strong> (§7): README device list and options block, <code>device_table.example</code>, the HTML documentation&#x27;s model table, CHANGES.</li><li><strong>Bump the version</strong> in <code>fetchconfig/Constants.pm</code> (a new model is a minor release).</li><li><strong>Live-verify</strong> on the device with <code>debug=on</code>, twice: the second run must log &quot;discarding config unchanged since last run&quot; (§6.2).</li></ol>
-<h2 id="5-skeletons">5. Skeletons</h2>
-<p>Both skeletons are complete, compile against 9.60, and follow the conventions of §9. Replace the parts marked <code>&lt;&lt;…&gt;&gt;</code>.</p>
+<div class="table-wrap"><table><thead><tr><th>Hook</th><th>Default</th><th>Purpose</th></tr></thead><tbody><tr><td><code>prompt_tail()</code></td><td><code>&#x27;#$&#x27;</code></td><td>Regex after the quoted hostname in the enable prompt. <code>&#x27;# ?$&#x27;</code>, <code>&#x27; &gt; $&#x27;</code>, <code>&#x27;&gt; \(enable\) $&#x27;</code>, <code>&#x27;# &#x27;</code> (unanchored)...</td></tr><tr><td><code>prompt_head()</code></td><td><code>&#x27;&#x27;</code></td><td>Regex before the hostname: <code>&#x27;\(&#x27;</code> for <code>(host) #</code>, <code>&#x27;\[&#x27;</code> for <code>[host-view]</code>, the VT100 escape prefix for switches that emit cursor codes before the prompt.</td></tr><tr><td><code>config_equal(...)</code></td><td>byte compare</td><td>Ignore volatile lines; see section 9.4.</td></tr><tr><td><code>ssh_extra_opts()</code></td><td><code>()</code></td><td>Legacy crypto an old switch needs (<code>-o =&gt; &quot;KexAlgorithms=+...&quot;</code>).</td></tr><tr><td><code>interrupt_screens()</code></td><td><code>()</code></td><td>Screens that interpose before the prompt (banner, menu, save question) and the keystroke that dismisses each.</td></tr></tbody></table></div>
+<p>Everything else -- options, repository I/O, comparison, expiry, logging, SSH transport, escape stripping, prompt matching, pager driving -- is in <code>Abstract</code> and documented in section 8. <strong>Use it. Do not copy code from another model into yours;</strong> every copy that ever existed diverged and each divergence became a bug report.</p>
+</section>
+<section id="4-procedure">
+<div class="section-kicker">04</div>
+<h2>4. Procedure</h2>
+<ol><li value="1"><strong>Capture a real session</strong> before writing a line of Perl. Over telnet, a raw capture (PuTTY <em>Logging -&gt; All session output</em>, not &quot;Printable output&quot; -- that drops the control bytes you need). Over SSH, run an existing SSH model with <code>debug=on</code> against the device; the <code>.debug</code> file is a raw dump. You need: the login prompts, the exact prompt strings (trailing space or not!), the enable dialogue, the pager marker and -- critically -- the bytes the device sends <em>after</em> you dismiss the pager, the show command&#x27;s first and last lines, the logout.</li><li value="2"><strong>Create <code>fetchconfig/model/&lt;Name&gt;.pm</code></strong> from the matching skeleton in section 5. Fill in: label, prompt hooks, login/enable/fetch/logout steps.</li><li value="3"><strong>Register it</strong> in <code>fetchconfig/model/Detector.pm</code>: one <code>use fetchconfig::model::&lt;Name&gt;;</code> and one <code>$class-&gt;register(fetchconfig::model::&lt;Name&gt;-&gt;new($log));</code>. Order in the register list is the order models are listed at startup; append at the end.</li><li value="4"><strong>Build a replay mock</strong> from the capture and run the model against it until the saved file is byte-identical to the config in the capture (section 6.1).</li><li value="5"><strong>Document</strong> (section 7): README device list and options block, <code>device_table.example</code>, the HTML documentation&#x27;s model table, CHANGES.</li><li value="6"><strong>Bump the version</strong> in <code>fetchconfig/Constants.pm</code> (a new model is a minor release).</li><li value="7"><strong>Live-verify</strong> on the device with <code>debug=on</code>, twice: the second run must log &quot;discarding config unchanged since last run&quot; (section 6.2).</li></ol>
+</section>
+<section id="5-skeletons">
+<div class="section-kicker">05</div>
+<h2>5. Skeletons</h2>
+<p>Both skeletons are complete, compile against 9.60, and follow the conventions of section 9. Replace the parts marked <code>&lt;&lt;...&gt;&gt;</code>.</p>
 <h3 id="51-telnet-model">5.1 Telnet model</h3>
-<pre><code class="lang-perl">package fetchconfig::model::Acme;   # fetchconfig/model/Acme.pm
+<span class="file-label">perl</span>
+<pre><code>package fetchconfig::model::Acme;   # fetchconfig/model/Acme.pm
 
 use strict;
 use warnings;
@@ -81,18 +611,18 @@ use fetchconfig::model::Abstract;
 
 @fetchconfig::model::Acme::ISA = qw(fetchconfig::model::Abstract);
 
-sub label { &#x27;acme-os&#x27; }
+sub label { 'acme-os' }
 
-# Prompt &quot;hostname# &quot; with a trailing space; &quot;hostname&gt; &quot; is unprivileged.
-sub prompt_tail { &#x27;# $&#x27; }
+<span class="c"># Prompt "hostname# " with a trailing space; "hostname&gt; " is unprivileged.</span>
+sub prompt_tail { '# $' }
 
-# &quot;sub new&quot; inherited from Abstract.
+<span class="c"># "sub new" inherited from Abstract.</span>
 
 sub fetch {
     my ($self, $file, $line_num, $line, $dev_id, $dev_host, $dev_opt_tab) = @_;
 
     my $saved_prefix = $self-&gt;{log}-&gt;prefix;
-    $self-&gt;{log}-&gt;prefix(&quot;$saved_prefix: dev=$dev_id host=$dev_host&quot;);
+    $self-&gt;{log}-&gt;prefix(<span class="s">"$saved_prefix: dev=$dev_id host=$dev_host"</span>);
     my @conf = $self-&gt;do_fetch($file, $line_num, $line, $dev_id, $dev_host, $dev_opt_tab);
     $self-&gt;{log}-&gt;prefix($saved_prefix);
     return @conf;
@@ -101,108 +631,112 @@ sub fetch {
 sub chat_login {
     my ($self, $t, $dev_user, $dev_pass, $dev_opt_tab) = @_;
 
-    # chat_banner honours banner_timeout for the first prompt only.
-    my ($prematch, $match) = $self-&gt;chat_banner($t, $dev_opt_tab, &#x27;/&lt;&lt;Username: &gt;&gt;$/&#x27;);
+<span class="c">    # chat_banner honours banner_timeout for the first prompt only.</span>
+    my ($prematch, $match) = $self-&gt;chat_banner($t, $dev_opt_tab, '/&lt;&lt;Username: &gt;&gt;$/');
     if (!defined($prematch)) {
-        $self-&gt;log_error(&quot;could not find login prompt&quot;);
+        $self-&gt;log_error(<span class="s">"could not find login prompt"</span>);
         return undef;
     }
-    $self-&gt;log_debug(&quot;found login prompt: [$match]&quot;);
+    $self-&gt;log_debug(<span class="s">"found login prompt: [$match]"</span>);
     return undef unless $t-&gt;print($dev_user);
 
-    ($prematch, $match) = $t-&gt;waitfor(Match =&gt; &#x27;/&lt;&lt;Password: &gt;&gt;$/&#x27;);
+    ($prematch, $match) = $t-&gt;waitfor(Match =&gt; '/&lt;&lt;Password: &gt;&gt;$/');
     if (!defined($prematch)) {
-        $self-&gt;log_error(&quot;could not find password prompt&quot;);
+        $self-&gt;log_error(<span class="s">"could not find password prompt"</span>);
         return undef;
     }
-    return undef unless $t-&gt;print($dev_pass);
+<span class="c">    # Send the password with print_secret, NOT $t-&gt;print: print_secret</span>
+<span class="c">    # suspends the debug log around the send so the password never reaches</span>
+<span class="c">    # the .debug file. Use it for every credential (password, enable secret).</span>
+    return undef unless $self-&gt;print_secret($t, $dev_pass);
 
-    # Learn the hostname from the first prompt. Quote it later with
-    # regexp_quote_keep_bytes (the shared expect_enable_prompt does).
-    ($prematch, $match) = $t-&gt;waitfor(Match =&gt; &#x27;/([\w.-]+)# $/&#x27;);
+<span class="c">    # Learn the hostname from the first prompt. Quote it later with</span>
+<span class="c">    # regexp_quote_keep_bytes (the shared expect_enable_prompt does).</span>
+    ($prematch, $match) = $t-&gt;waitfor(Match =&gt; '/([\w.-]+)# $/');
     if (!defined($prematch)) {
-        $self-&gt;log_error(&quot;could not find command prompt&quot;);
+        $self-&gt;log_error(<span class="s">"could not find command prompt"</span>);
         return undef;
     }
     my $prompt = fetchconfig::model::Abstract::stripansi($match);
     $prompt =~ s/# $//;
-    $self-&gt;log_debug(&quot;logged in prompt=[$prompt]&quot;);
+    $self-&gt;log_debug(<span class="s">"logged in prompt=[$prompt]"</span>);
     $prompt;                                   # prompt string, or undef on failure
 }
 
 sub chat_fetch {
     my ($self, $t, $dev_id, $dev_host, $prompt, $fetch_timeout, $show_cmd, $conf_ref) = @_;
 
-    # Pager off if the device has a SESSION-ONLY command for it. Never a
-    # command that changes the device&#x27;s configuration (see §9.2).
-    # Otherwise drive the pager as MediantSBC.pm does.
-    $t-&gt;print(&#x27;&lt;&lt;terminal length 0&gt;&gt;&#x27;) or return 1;
-    my ($prematch, $match) = $self-&gt;expect_enable_prompt($t, $prompt, undef, &#x27;pager-off&#x27;);
+<span class="c">    # Pager off if the device has a SESSION-ONLY command for it. Never a</span>
+<span class="c">    # command that changes the device's configuration (see section 9.2).</span>
+<span class="c">    # Otherwise drive the pager as MediantSBC.pm does.</span>
+    $t-&gt;print('&lt;&lt;terminal length 0&gt;&gt;') or return 1;
+    my ($prematch, $match) = $self-&gt;expect_enable_prompt($t, $prompt, undef, 'pager-off');
     return 1 unless defined($prematch);
 
-    return 1 if $self-&gt;chat_show_conf($t, &#x27;&lt;&lt;show running-config&gt;&gt;&#x27;, $show_cmd);
+    return 1 if $self-&gt;chat_show_conf($t, '&lt;&lt;show running-config&gt;&gt;', $show_cmd);
 
     my $save_timeout;
     if (defined($fetch_timeout)) { $save_timeout = $t-&gt;timeout; $t-&gt;timeout($fetch_timeout); }
-    ($prematch, $match) = $self-&gt;expect_enable_prompt($t, $prompt, undef, &#x27;fetching-config&#x27;);
+    ($prematch, $match) = $self-&gt;expect_enable_prompt($t, $prompt, undef, 'fetching-config');
     $t-&gt;timeout($save_timeout) if defined($fetch_timeout);
     return 1 unless defined($prematch);
-    $self-&gt;log_debug(&quot;found end of configuration: [&quot; . fetchconfig::model::Abstract::stripansi($match) . &quot;]&quot;);
+    $self-&gt;log_debug(<span class="s">"found end of configuration: ["</span> . fetchconfig::model::Abstract::stripansi($match) . <span class="s">"]"</span>);
 
-    # Lines: strip CR (and escapes), split, drop the echo of the show
-    # command and anything before the first real configuration line.
+<span class="c">    # Lines: strip CR (and escapes), split, drop the echo of the show</span>
+<span class="c">    # command and anything before the first real configuration line.</span>
     $prematch = fetchconfig::model::Abstract::stripansi($prematch);
     @$conf_ref = split /\n/, $prematch;
     while (@$conf_ref &amp;&amp; $conf_ref-&gt;[0] !~ /^&lt;&lt;version |^!&gt;&gt;/) { shift @$conf_ref; }
     if (!@$conf_ref) {
-        $self-&gt;log_error(&quot;could not find start of configuration&quot;);
+        $self-&gt;log_error(<span class="s">"could not find start of configuration"</span>);
         return 1;
     }
     while (@$conf_ref &amp;&amp; $conf_ref-&gt;[-1] =~ /^\s*$/) { pop @$conf_ref; }
 
-    $self-&gt;log_debug(&quot;fetched: &quot; . scalar @$conf_ref . &quot; lines&quot;);
+    $self-&gt;log_debug(<span class="s">"fetched: "</span> . scalar @$conf_ref . <span class="s">" lines"</span>);
     undef;                                     # undef = success, 1 = failure
 }
 
 sub chat_logout {
     my ($self, $t) = @_;
-    $t-&gt;print(&#x27;&lt;&lt;exit&gt;&gt;&#x27;);
-    $self-&gt;log_debug(&quot;logged out&quot;);
+    $t-&gt;print('&lt;&lt;exit&gt;&gt;');
+    $self-&gt;log_debug(<span class="s">"logged out"</span>);
 }
 
 sub do_fetch {
     my ($self, $file, $line_num, $line, $dev_id, $dev_host, $dev_opt_tab) = @_;
 
-    $self-&gt;log_debug(&quot;trying&quot;);
+    $self-&gt;log_debug(<span class="s">"trying"</span>);
 
-    my $dev_repository = $self-&gt;dev_option($dev_opt_tab, &quot;repository&quot;);
-    my $dev_user       = $self-&gt;dev_option($dev_opt_tab, &quot;user&quot;);
-    my $dev_pass       = $self-&gt;dev_option($dev_opt_tab, &quot;pass&quot;);
+    my $dev_repository = $self-&gt;dev_option($dev_opt_tab, <span class="s">"repository"</span>);
+    my $dev_user       = $self-&gt;dev_option($dev_opt_tab, <span class="s">"user"</span>);
+    my $dev_pass       = $self-&gt;dev_option($dev_opt_tab, <span class="s">"pass"</span>);
     foreach my $need ([repository =&gt; $dev_repository], [user =&gt; $dev_user], [pass =&gt; $dev_pass]) {
         if (!defined($need-&gt;[1])) {
-            $self-&gt;log_error(&quot;$need-&gt;[0] needed but not provided&quot;);
+            $self-&gt;log_error(<span class="s">"$need-&gt;[0] needed but not provided"</span>);
             return;
         }
     }
-    my $dev_timeout   = $self-&gt;dev_option($dev_opt_tab, &quot;timeout&quot;);   # 30 s default, logged
-    my $fetch_timeout = $self-&gt;dev_option($dev_opt_tab, &quot;fetch_timeout&quot;);
-    my $show_cmd      = $self-&gt;dev_option($dev_opt_tab, &quot;show_cmd&quot;);
+    my $dev_timeout   = $self-&gt;dev_option($dev_opt_tab, <span class="s">"timeout"</span>);   # 30 s default, logged
+    my $fetch_timeout = $self-&gt;dev_option($dev_opt_tab, <span class="s">"fetch_timeout"</span>);
+    my $show_cmd      = $self-&gt;dev_option($dev_opt_tab, <span class="s">"show_cmd"</span>);
 
-    my @telnet_args = (Errmode =&gt; &#x27;return&#x27;, Timeout =&gt; $dev_timeout);
-    if ($self-&gt;dev_option_flag($dev_opt_tab, &quot;debug&quot;, 0)) {
-        push @telnet_args, (dump_log =&gt; &quot;$dev_repository/$dev_id.debug&quot;);
-    }
-    my $t = Net::Telnet-&gt;new(@telnet_args);
-    $self-&gt;secure_debug_file(&quot;$dev_repository/$dev_id.debug&quot;)
-        if $self-&gt;dev_option_flag($dev_opt_tab, &quot;debug&quot;, 0);   # 0600: it holds passwords
+    my $t = Net::Telnet-&gt;new(Errmode =&gt; 'return', Timeout =&gt; $dev_timeout);
 
     my ($host, $port) = ($dev_host, 23);
     ($host, $port) = ($1, $2) if $dev_host =~ /^(.+):(\d+)$/;
     if (!$t-&gt;open(Host =&gt; $host, Port =&gt; $port)) {
-        $self-&gt;log_error(&quot;could not connect: &quot; . $t-&gt;errmsg);
+        $self-&gt;log_error(<span class="s">"could not connect: "</span> . $t-&gt;errmsg);
         return;
     }
-    $self-&gt;log_debug(&quot;connected&quot;);
+    $self-&gt;log_debug(<span class="s">"connected"</span>);
+
+<span class="c">    # debug=on: capture the whole telnet session to &lt;repository&gt;/&lt;dev_id&gt;.debug.</span>
+<span class="c">    # The shared helper attaches dump_log to the live connection and chmods the</span>
+<span class="c">    # file 0600; print_secret() keeps the passwords out of it. debug= is a</span>
+<span class="c">    # GLOBAL option -- wire it this way in every telnet model (like</span>
+<span class="c">    # repository=), never as a model-specific switch.</span>
+    my $debug_fh = $self-&gt;open_telnet_debug_file($t, $dev_opt_tab, $dev_repository, $dev_id, $dev_host);
 
     my $prompt = $self-&gt;chat_login($t, $dev_user, $dev_pass, $dev_opt_tab);
     return unless defined($prompt);
@@ -211,32 +745,34 @@ sub do_fetch {
     my $failed = $self-&gt;chat_fetch($t, $dev_id, $dev_host, $prompt, $fetch_timeout, $show_cmd, \@config);
     $self-&gt;chat_logout($t);
     $t-&gt;close;
+    close($debug_fh) if defined $debug_fh;
     return if $failed;
-    $self-&gt;log_debug(&quot;disconnected&quot;);
+    $self-&gt;log_debug(<span class="s">"disconnected"</span>);
 
     $self-&gt;dump_config($dev_id, $dev_opt_tab, \@config);   # ($dir, $file) or undef
 }
 
 1;</code></pre>
 <h3 id="52-ssh-model">5.2 SSH model</h3>
-<p>Identical to 5.1 except for the connection. Replace <code>do_fetch</code>&#x27;s connection block with the shared transport; there is no login chat — SSH authenticated the user, and the session lands on the prompt:</p>
-<pre><code class="lang-perl">sub do_fetch {
+<p>Identical to 5.1 except for the connection. Replace <code>do_fetch</code>&#x27;s connection block with the shared transport; there is no login chat -- SSH authenticated the user, and the session lands on the prompt:</p>
+<span class="file-label">perl</span>
+<pre><code>sub do_fetch {
     my ($self, $file, $line_num, $line, $dev_id, $dev_host, $dev_opt_tab) = @_;
-    $self-&gt;log_debug(&quot;trying&quot;);
-    # ... option reads and mandatory checks as in 5.1 ...
+    $self-&gt;log_debug(<span class="s">"trying"</span>);
+<span class="c">    # ... option reads and mandatory checks as in 5.1 ...</span>
 
     my $debug_fh = $self-&gt;open_ssh_debug_file($dev_opt_tab, $dev_repository, $dev_id, $dev_host);
     my ($t, $ssh, $pid, $warn_guard) = $self-&gt;ssh_open($dev_host, $dev_user, $dev_pass, $dev_timeout, $debug_fh);
     return unless defined($t);            # error already logged
-    # $ssh and $warn_guard MUST stay in scope for the whole session.
+<span class="c">    # $ssh and $warn_guard MUST stay in scope for the whole session.</span>
 
-    # First prompt: settle, then match. prompt_settle_ms (default 150) lets
-    # a slow banner finish before the broad token below is applied.
-    $self-&gt;drain_until_idle($t, $self-&gt;dev_option($dev_opt_tab, &quot;prompt_settle_ms&quot;) // 150);
-    my ($prematch, $match) = $self-&gt;chat_banner($t, $dev_opt_tab, &#x27;/([^\r\n]*[^\r\n\s&gt;#])# ?$/&#x27;);
+<span class="c">    # First prompt: settle, then match. prompt_settle_ms (default 150) lets</span>
+<span class="c">    # a slow banner finish before the broad token below is applied.</span>
+    $self-&gt;drain_until_idle($t, $self-&gt;dev_option($dev_opt_tab, <span class="s">"prompt_settle_ms"</span>) // 150);
+    my ($prematch, $match) = $self-&gt;chat_banner($t, $dev_opt_tab, '/([^\r\n]*[^\r\n\s&gt;#])# ?$/');
     return unless defined($prematch);
     my $prompt = fetchconfig::model::Abstract::stripansi($match); $prompt =~ s/# ?$//;
-    $self-&gt;log_debug(&quot;logged in prompt=[$prompt]&quot;);
+    $self-&gt;log_debug(<span class="s">"logged in prompt=[$prompt]"</span>);
 
     my @config;
     my $failed = $self-&gt;chat_fetch($t, $dev_id, $dev_host, $prompt, $fetch_timeout, $show_cmd, \@config);
@@ -244,89 +780,142 @@ sub do_fetch {
     $t-&gt;close;
     waitpid($pid, 0) if defined($pid);      # reap the ssh shell
     return if $failed;
-    $self-&gt;log_debug(&quot;disconnected&quot;);
+    $self-&gt;log_debug(<span class="s">"disconnected"</span>);
     $self-&gt;dump_config($dev_id, $dev_opt_tab, \@config);
 }
 
-# An old switch that needs SHA1 kex / ssh-rsa / CBC re-enabled:
+<span class="c"># An old switch that needs SHA1 kex / ssh-rsa / CBC re-enabled:</span>
 sub ssh_extra_opts {
-    (-o =&gt; &quot;KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1&quot;,
-     -o =&gt; &quot;HostKeyAlgorithms=+ssh-rsa&quot;,
-     -o =&gt; &quot;Ciphers=+aes128-cbc,3des-cbc&quot;);
+    (-o =&gt; <span class="s">"KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1"</span>,
+     -o =&gt; <span class="s">"HostKeyAlgorithms=+ssh-rsa"</span>,
+     -o =&gt; <span class="s">"Ciphers=+aes128-cbc,3des-cbc"</span>);
 }</code></pre>
 <p><code>ssh_open</code> loads <code>Net::OpenSSH</code> on first use, so a telnet-only installation is not forced to install it.</p>
 <h3 id="53-where-to-look-for-worked-examples">5.3 Where to look for worked examples</h3>
-<table><thead><tr><th style="text-align:left">Need</th><th style="text-align:left">Read</th></tr></thead><tbody><tr><td style="text-align:left">Plainest telnet model</td><td style="text-align:left"><code>CiscoIOS.pm</code></td></tr><tr><td style="text-align:left">Plainest SSH model</td><td style="text-align:left"><code>CiscoIOSSSH.pm</code></td></tr><tr><td style="text-align:left">Unprivileged → <code>enable</code> → privileged, with rejection text</td><td style="text-align:left"><code>MediantSBC.pm::chat_enable</code></td></tr><tr><td style="text-align:left">Driving a <code>--MORE--</code> pager and stripping its erase bytes</td><td style="text-align:left"><code>MediantSBC.pm::chat_fetch</code></td></tr><tr><td style="text-align:left">Transport selectable by option, with a safe SSH→telnet fallback</td><td style="text-align:left"><code>MediantSBC.pm::do_fetch</code></td></tr><tr><td style="text-align:left">Full-screen TUI with menus/banners before the prompt</td><td style="text-align:left"><code>ProCurve.pm</code> (<code>interrupt_screens</code>)</td></tr><tr><td style="text-align:left">Non-ASCII hostnames, prompt settle</td><td style="text-align:left"><code>ArubaCXSSH.pm</code></td></tr><tr><td style="text-align:left">Volatile line ignored in comparison</td><td style="text-align:left"><code>CiscoASA.pm</code>, <code>NexusSSH.pm</code>, <code>PLANET.pm</code></td></tr><tr><td style="text-align:left">Web UI (HTTP) model, binary config stored uuencoded</td><td style="text-align:left"><code>TPLinkWebSG105E.pm</code>, <code>AbstractHTTP.pm</code></td></tr><tr><td style="text-align:left">SNMP + TFTP, no CLI at all</td><td style="text-align:left"><code>ProCurveSNMP.pm</code></td></tr></tbody></table>
-<h2 id="6-verification">6. Verification</h2>
+<div class="table-wrap"><table><thead><tr><th>Need</th><th>Read</th></tr></thead><tbody><tr><td>Plainest telnet model</td><td><code>CiscoIOS.pm</code></td></tr><tr><td>Plainest SSH model</td><td><code>CiscoIOSSSH.pm</code></td></tr><tr><td>Unprivileged -&gt; <code>enable</code> -&gt; privileged, with rejection text</td><td><code>MediantSBC.pm::chat_enable</code></td></tr><tr><td>Driving a <code>--MORE--</code> pager and stripping its erase bytes</td><td><code>MediantSBC.pm::chat_fetch</code></td></tr><tr><td>Transport selectable by option, with a safe SSH-&gt;telnet fallback</td><td><code>MediantSBC.pm::do_fetch</code></td></tr><tr><td>Full-screen TUI with menus/banners before the prompt</td><td><code>ProCurve.pm</code> (<code>interrupt_screens</code>)</td></tr><tr><td>Non-ASCII hostnames, prompt settle</td><td><code>ArubaCXSSH.pm</code></td></tr><tr><td>Volatile line ignored in comparison</td><td><code>CiscoASA.pm</code>, <code>NexusSSH.pm</code>, <code>PLANET.pm</code></td></tr><tr><td>Web UI (HTTP) model, binary config stored uuencoded</td><td><code>TPLinkWebSG105E.pm</code>, <code>AbstractHTTP.pm</code></td></tr><tr><td>SNMP + TFTP, no CLI at all</td><td><code>ProCurveSNMP.pm</code></td></tr></tbody></table></div>
+</section>
+<section id="6-verification">
+<div class="section-kicker">06</div>
+<h2>6. Verification</h2>
 <h3 id="61-without-the-device-replay-mock">6.1 Without the device: replay mock</h3>
 <p>Write a small server that replays the captured bytes and reacts to the model&#x27;s commands. The pattern that has worked (see the SBC10, 2610 and Comware mocks in the CHANGES history):</p>
-<ul><li>Split the capture into the server&#x27;s chunks, keyed by the client command that preceded each.</li><li>Serve login prompts and the config body <strong>byte-exact</strong>, including line endings (<code>\r\n</code> vs <code>\r\r\n</code>), NULs, escape sequences, pager markers and their erase bytes.</li><li>Have the mock <strong>react</strong>: advance only on the correct keystroke, so a wrong key shows up as a hang, not a pass.</li><li>Run fetchconfig against it with a device table (<code>-devices=</code>), not <code>-line=</code> — a shell may mangle <code>!</code> and quotes in <code>-line=</code> values.</li><li>Compare the saved file with the configuration in the capture <strong>byte for byte</strong>. &quot;Looks right&quot; is not a result; identical or a diff is.</li></ul>
+<ul><li>Split the capture into the server&#x27;s chunks, keyed by the client command that preceded each.</li><li>Serve login prompts and the config body <strong>byte-exact</strong>, including line endings (<code>\r\n</code> vs <code>\r\r\n</code>), NULs, escape sequences, pager markers and their erase bytes.</li><li>Have the mock <strong>react</strong>: advance only on the correct keystroke, so a wrong key shows up as a hang, not a pass.</li><li>Run fetchconfig against it with a device table (<code>-devices=</code>), not <code>-line=</code> -- a shell may mangle <code>!</code> and quotes in <code>-line=</code> values.</li><li>Compare the saved file with the configuration in the capture <strong>byte for byte</strong>. &quot;Looks right&quot; is not a result; identical or a diff is.</li></ul>
 <p>Test the failure paths too: wrong login password, wrong enable password, a rejected pager command, a connection refused. Each must produce one clear <code>error:</code> line and an empty return, never a hang or a die.</p>
 <p>Sandbox note: the <code>Net::Telnet</code> module is pure Perl; if it is missing, <code>perl -I&lt;dir-with-Net/Telnet.pm&gt;</code> against a copy of the module is enough to run the mock tests.</p>
 <h3 id="62-with-the-device">6.2 With the device</h3>
 <p>Run twice with <code>debug=on</code>:</p>
-<ol><li>First run: expect <code>connected</code>, the learned prompt in brackets, <code>found end of configuration</code>, <code>fetched: N lines</code>, a saved file. Inspect the file: first line is real configuration, last line is real configuration, no prompt text, no pager fragments, no <code>\r</code> or escape bytes (<code>grep -c -P &#x27;[\x08\x1b\r]&#x27; file</code> → 0), indentation intact.</li><li>Second run with <code>changes_only=1</code>: expect <strong>&quot;discarding config unchanged since last run&quot;</strong>. If it reports a change instead, <code>fetchconfig.pl -g &lt;dev&gt; -n 1 -m 2</code> shows the diff: either the device embeds a volatile line (§9.4) or your extraction is not deterministic.</li></ol>
+<ol><li value="1">First run: expect <code>connected</code>, the learned prompt in brackets, <code>found end of configuration</code>, <code>fetched: N lines</code>, a saved file. Inspect the file: first line is real configuration, last line is real configuration, no prompt text, no pager fragments, no <code>\r</code> or escape bytes (<code>grep -c -P &#x27;[\x08\x1b\r]&#x27; file</code> -&gt; 0), indentation intact.</li><li value="2">Second run with <code>changes_only=1</code>: expect <strong>&quot;discarding config unchanged since last run&quot;</strong>. If it reports a change instead, <code>fetchconfig.pl -g &lt;dev&gt; -n 1 -m 2</code> shows the diff: either the device embeds a volatile line (section 9.4) or your extraction is not deterministic.</li></ol>
 <p>Keep the <code>.debug</code> file of a successful run with the model&#x27;s source: it is the only precise record of what the device sends, and the seed of the next mock.</p>
-<h2 id="7-integration-checklist">7. Integration Checklist</h2>
-<ul><li><input type="checkbox" disabled> <code>fetchconfig/model/&lt;Name&gt;.pm</code> — header comment states the device family, firmware observed, transport, the session dialogue, and every option (mandatory/optional).</li><li><input type="checkbox" disabled> <code>fetchconfig/model/Detector.pm</code> — <code>use</code> line and <code>register</code> line.</li><li><input type="checkbox" disabled> <code>README</code> — device list entry (transport, what was observed), options block (&quot;The <code>&lt;label&gt;</code> module recognizes the following options:&quot;), intro sentence if it lists device families.</li><li><input type="checkbox" disabled> <code>device_table.example</code> — a <code>default:</code> block with every option and a sample device line.</li><li><input type="checkbox" disabled> <code>fetchconfig-documentation.html</code> — a row in the model table; the <code>debug</code> heading if the model writes a debug file.</li><li><input type="checkbox" disabled> <code>CHANGES</code> — what, why, how verified (mock, live), and any one-time effect on existing backups.</li><li><input type="checkbox" disabled> <code>fetchconfig/Constants.pm</code> — version bump.</li><li><input type="checkbox" disabled> <code>perl -I. -c</code> on every changed file; the whole tree compiles.</li><li><input type="checkbox" disabled> The mock replay and both live runs of §6 pass.</li></ul>
-<h2 id="8-shared-api-reference">8. Shared API Reference</h2>
-<p>All of these live in <code>fetchconfig::model::Abstract</code> unless noted. &quot;Method&quot; means <code>$self-&gt;name(...)</code>; &quot;function&quot; means a plain call <code>fetchconfig::model::Abstract::name(...)</code>. Return conventions vary — they are stated per entry; new code should follow §9.1.</p>
+</section>
+<section id="7-integration-checklist">
+<div class="section-kicker">07</div>
+<h2>7. Integration Checklist</h2>
+<ul><li>[ ] <code>fetchconfig/model/&lt;Name&gt;.pm</code> -- header comment states the device family, firmware observed, transport, the session dialogue, and every option (mandatory/optional).</li><li>[ ] <code>fetchconfig/model/Detector.pm</code> -- <code>use</code> line and <code>register</code> line.</li><li>[ ] <code>README</code> -- device list entry (transport, what was observed), options block (&quot;The <code>&lt;label&gt;</code> module recognizes the following options:&quot;), intro sentence if it lists device families.</li><li>[ ] <code>device_table.example</code> -- a <code>default:</code> block with every option and a sample device line.</li><li>[ ] <code>README</code> -- device-support and DEVICE OPTIONS coverage is complete. (<code>debug=</code> support is global and documented once, so do not add a per-model &quot;supports debug&quot; entry; add a note only to describe transport-specific <code>.debug</code> content, as the SSH/SNMP/web models do.)</li><li>[ ] <code>CHANGES</code> -- what, why, how verified (mock, live), and any one-time effect on existing backups.</li><li>[ ] <code>fetchconfig/Constants.pm</code> -- version bump.</li><li>[ ] <code>perl -I. -c</code> on every changed file; the whole tree compiles.</li><li>[ ] The mock replay and both live runs of section 6 pass.</li></ul>
+</section>
+<section id="8-shared-api-reference">
+<div class="section-kicker">08</div>
+<h2>8. Shared API Reference</h2>
+<p>All of these live in <code>fetchconfig::model::Abstract</code> unless noted. &quot;Method&quot; means <code>$self-&gt;name(...)</code>; &quot;function&quot; means a plain call <code>fetchconfig::model::Abstract::name(...)</code>. Return conventions vary -- they are stated per entry; new code should follow section 9.1.</p>
 <h3 id="81-options">8.1 Options</h3>
-<p><strong><code>dev_option($dev_opt_tab, $opt_name)</code></strong> — method. The option&#x27;s value: device line, else the model&#x27;s <code>default:</code> value, else <code>undef</code>. Exception: <code>timeout</code> returns <strong>30</strong> when unset and logs <code>Using 30s fetch timeout because the timeout was not set for this model</code>. Values are returned as written (quotes already removed).</p>
-<p><strong><code>dev_option_flag($dev_opt_tab, $opt_name, $default)</code></strong> — method. Boolean option: <code>1</code> if the value is <code>on</code> (case-insensitive), <code>0</code> otherwise; <code>$default</code> (truthy → 1) when unset. Use for <code>debug</code>, <code>changes_only</code>-style switches.</p>
-<p><strong><code>opt_trim($opt)</code></strong> — function. Trims surrounding whitespace.</p>
-<p><strong><code>dequote_value($val)</code></strong> — function. Removes one pair of surrounding double quotes.</p>
-<p><strong><code>mask_secrets($line)</code></strong> — function. Returns the device-table line with <code>pass=</code>, <code>enable=</code>, <code>community=</code>, <code>password=</code> values replaced by <code>***</code>. Use it before logging any table line.</p>
+<p><strong><code>dev_option($dev_opt_tab, $opt_name)</code></strong> -- method. The option&#x27;s value: device line, else the model&#x27;s <code>default:</code> value, else <code>undef</code>. Exception: <code>timeout</code> returns <strong>30</strong> when unset and logs <code>Using 30s fetch timeout because the timeout was not set for this model</code>. Values are returned as written (quotes already removed).</p>
+<p><strong><code>dev_option_flag($dev_opt_tab, $opt_name, $default)</code></strong> -- method. Boolean option: <code>1</code> if the value is <code>on</code> (case-insensitive), <code>0</code> otherwise; <code>$default</code> (truthy -&gt; 1) when unset. Use for <code>debug</code>, <code>changes_only</code>-style switches.</p>
+<p><strong><code>opt_trim($opt)</code></strong> -- function. Trims surrounding whitespace.</p>
+<p><strong><code>dequote_value($val)</code></strong> -- function. Removes one pair of surrounding double quotes.</p>
+<p><strong><code>mask_secrets($line)</code></strong> -- function. Returns the device-table line with <code>pass=</code>, <code>enable=</code>, <code>community=</code>, <code>password=</code> values replaced by <code>***</code>. Use it before logging any table line.</p>
 <h3 id="82-logging">8.2 Logging</h3>
-<p><strong><code>log_debug($msg)</code>, <code>log_info($msg)</code>, <code>log_error($msg)</code></strong> — methods. Emit <code>&lt;label&gt;: &lt;msg&gt;</code> at the given level through the run&#x27;s logger, with the per-device prefix that <code>fetch()</code> installed. Conventions: <code>debug</code> for every chat step (<code>trying</code>, <code>connected</code>, <code>found command prompt: [...]</code>, <code>cmd: [...]</code>, <code>found end of configuration: [...]</code>, <code>fetched: N lines</code>, <code>logged out</code>, <code>disconnected</code>); <code>info</code> for operator-relevant decisions (a transport fallback); <code>error</code> once per failure, with the device&#x27;s own text where available (<code>enable rejected by the device: [Access denied]</code>). There is no warning level; use <code>info</code> with a <code>warning:</code> prefix.</p>
+<p><strong><code>log_debug($msg)</code>, <code>log_info($msg)</code>, <code>log_error($msg)</code></strong> -- methods. Emit <code>&lt;label&gt;: &lt;msg&gt;</code> at the given level through the run&#x27;s logger, with the per-device prefix that <code>fetch()</code> installed. Conventions: <code>debug</code> for every chat step (<code>trying</code>, <code>connected</code>, <code>found command prompt: [...]</code>, <code>cmd: [...]</code>, <code>found end of configuration: [...]</code>, <code>fetched: N lines</code>, <code>logged out</code>, <code>disconnected</code>); <code>info</code> for operator-relevant decisions (a transport fallback); <code>error</code> once per failure, with the device&#x27;s own text where available (<code>enable rejected by the device: [Access denied]</code>). There is no warning level; use <code>info</code> with a <code>warning:</code> prefix.</p>
 <p>The logger itself (<code>$self-&gt;{log}</code>) has <code>prefix([$new])</code>, <code>info</code>, <code>debug</code>, <code>error</code>.</p>
 <h3 id="83-transport">8.3 Transport</h3>
-<p><strong><code>ssh_open($dev_host, $dev_user, $dev_pass, $dev_timeout, $debug_fh)</code></strong> — method. Opens the SSH connection (<code>Net::OpenSSH</code>, password authentication, <code>StrictHostKeyChecking=no</code>, <code>UserKnownHostsFile=/dev/null</code>, <code>LogLevel=DEBUG</code> into <code>$debug_fh</code> when given, else <code>ERROR</code>), allocates a pty (<code>open2pty</code>) and wraps it in <code>Net::Telnet</code> (<code>Errmode &#x27;return&#x27;</code>, <code>Timeout $dev_timeout</code>, <code>Telnetmode 0</code>, <code>Cmd_remove_mode 1</code>, <code>Output_record_separator &quot;\r&quot;</code>, <code>dump_log =&gt; $debug_fh</code> when given). Installs the <code>setsid</code> warning filter. Returns <code>($t, $ssh, $pid, $guard)</code> or an <strong>empty list</strong> (error logged; the error text is in <code>$self-&gt;{last_ssh_error}</code>). Keep <code>$ssh</code> and <code>$guard</code> in scope for the session; <code>waitpid($pid, 0)</code> when done. Adds <code>$self-&gt;ssh_extra_opts</code> to the master options. Loads <code>Net::OpenSSH</code> lazily.</p>
-<p><strong><code>ssh_extra_opts()</code></strong> — hook, default <code>()</code>. Return a list of <code>-o =&gt; &quot;Option=value&quot;</code> pairs.</p>
-<p><strong><code>open_ssh_debug_file($dev_opt_tab, $dev_repository, $dev_id, $dev_host)</code></strong> — method. If <code>debug=on</code>: opens <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code>, <code>chmod 0600</code>, autoflush, writes the header line, returns the handle. Else (or on open failure, logged) <code>undef</code>.</p>
-<p><strong><code>secure_debug_file($target)</code></strong> — method. <code>chmod 0600</code> on a path or an open handle. Call it on every file that records a session — they contain passwords as typed.</p>
+<p><strong><code>ssh_open($dev_host, $dev_user, $dev_pass, $dev_timeout, $debug_fh)</code></strong> -- method. Opens the SSH connection (<code>Net::OpenSSH</code>, password authentication, <code>StrictHostKeyChecking=no</code>, <code>UserKnownHostsFile=/dev/null</code>, <code>LogLevel=DEBUG</code> into <code>$debug_fh</code> when given, else <code>ERROR</code>), allocates a pty (<code>open2pty</code>) and wraps it in <code>Net::Telnet</code> (<code>Errmode &#x27;return&#x27;</code>, <code>Timeout $dev_timeout</code>, <code>Telnetmode 0</code>, <code>Cmd_remove_mode 1</code>, <code>Output_record_separator &quot;\r&quot;</code>, <code>dump_log =&gt; $debug_fh</code> when given). Installs the <code>setsid</code> warning filter. Returns <code>($t, $ssh, $pid, $guard)</code> or an <strong>empty list</strong> (error logged; the error text is in <code>$self-&gt;{last_ssh_error}</code>). Keep <code>$ssh</code> and <code>$guard</code> in scope for the session; <code>waitpid($pid, 0)</code> when done. Adds <code>$self-&gt;ssh_extra_opts</code> to the master options. Loads <code>Net::OpenSSH</code> lazily.</p>
+<p><strong><code>ssh_extra_opts()</code></strong> -- hook, default <code>()</code>. Return a list of <code>-o =&gt; &quot;Option=value&quot;</code> pairs.</p>
+<p><strong><code>open_ssh_debug_file($dev_opt_tab, $dev_repository, $dev_id, $dev_host)</code></strong> -- method. If <code>debug=on</code>: opens <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code>, <code>chmod 0600</code>, autoflush, writes the header line, returns the handle. Else (or on open failure, logged) <code>undef</code>.</p>
+<p><strong><code>open_telnet_debug_file($t, $dev_opt_tab, $dev_repository, $dev_id, $dev_host)</code></strong> -- method. The telnet counterpart of <code>open_ssh_debug_file</code>. If <code>debug=on</code>: opens <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code> (<code>chmod 0600</code>, autoflush, header line) and attaches it to the already-connected <code>Net::Telnet</code> object <code>$t</code> with <code>$t-&gt;dump_log</code>, returning the handle; else (or on open failure, logged) <code>undef</code>. Call it right after <code>connected</code>, and <code>close()</code> the returned handle after <code>$t-&gt;close</code>. <code>debug=</code> is a global option, so every telnet model wires it this way (like <code>repository=</code>).</p>
+<p><strong><code>secure_debug_file($target)</code></strong> -- method. <code>chmod 0600</code> on a path or an open handle. Call it on every file that records a session -- they contain passwords as typed.</p>
 <h3 id="84-prompt-matching-and-chat">8.4 Prompt matching and chat</h3>
-<p><strong><code>chat_banner($t, $dev_opt_tab, $login_pattern)</code></strong> — method. <code>waitfor(Match =&gt; $login_pattern)</code> with the timeout temporarily set to <code>banner_timeout</code> if that option is set. Returns <code>($prematch, $match)</code>; <code>$prematch</code> undefined on timeout. Use it for the <strong>first</strong> prompt of a session (login banners can be slow); plain <code>$t-&gt;waitfor</code> afterwards.</p>
-<p><strong><code>drain_until_idle($t, $settle_ms)</code></strong> — method. Reads until no byte has arrived for <code>$settle_ms</code> milliseconds, then pushes everything back into <code>Net::Telnet</code>&#x27;s buffer so a following <code>waitfor</code> sees it all. Non-consuming. Use before matching a prompt whose token is broad (spaces, non-ASCII) so a banner line ending in the prompt sign is not mistaken for the prompt. <code>$settle_ms &lt;= 0</code> does nothing.</p>
-<p><strong><code>prompt_head()</code>, <code>prompt_tail()</code></strong> — hooks, defaults <code>&#x27;&#x27;</code> and <code>&#x27;#$&#x27;</code>. Regex fragments placed before/after the byte-safely quoted hostname by <code>expect_enable_prompt</code>.</p>
-<p><strong><code>expect_enable_prompt($t, $prompt, $tail_override, $label)</code></strong> — method. Waits for <code>prompt_head . quote($prompt) . (tail_override // prompt_tail)</code>. Returns <code>($prematch, $match)</code>; <code>$prematch</code> undefined on timeout, with <code>[&lt;label&gt;: ]could not match enable command prompt: /regex/</code> logged. Use for every wait for the enable prompt after the first. Callers must not pre-escape <code>$prompt</code>.</p>
-<p><strong><code>wait_for_command_prompt($t, $prompt_regex, $label)</code></strong> — method. Waits for <code>$prompt_regex</code> (preceded by any VT100 escapes) <strong>or</strong> one of the model&#x27;s <code>interrupt_screens</code>; on a screen, sends its keystroke and waits again; then a 1-second settle check for a screen trailing in behind an apparent prompt; bounded retries. Returns <code>($prematch, $match)</code> or <code>undef</code>. Run <code>$match</code> through <code>stripansi</code> before reading the hostname.</p>
-<p><strong><code>interrupt_screens()</code></strong> — hook, default <code>()</code>. List of <code>[regex_text, keystroke, debug_note_or_undef]</code>, e.g. <code>[&#x27;Press any key to continue&#x27;, &#x27; &#x27;, undef]</code>, <code>[&#x27;Main Menu&#x27;, &#x27;5&#x27;, undef]</code>, <code>[&#x27;Do you want to save current configuration&#x27;, &#x27;y&#x27;, &#x27;saved running config&#x27;]</code>. Keystrokes are sent raw with <code>put()</code> — no newline.</p>
-<p><strong><code>expect_enable_prompt_paging_auto($t, $prompt, $paging_prompt)</code></strong> — method. Waits for the enable prompt or <code>$paging_prompt</code> (a <code>--More--</code>-style marker); on the marker sends a space and continues; strips the marker with <code>escape_brackets</code>-quoted matching. Returns the accumulated <code>($prematch, $match)</code> or <code>undef</code>. Suitable when the device&#x27;s erase sequence is simple; for a device that erases with backspaces adjacent to the next line&#x27;s indentation, follow <code>MediantSBC.pm::chat_fetch</code> (sentinel at each page boundary, targeted strip) instead.</p>
-<p><strong><code>chat_show_conf($t, $show_cmd_default, $show_cmd_custom)</code></strong> — method. Sends <code>$show_cmd_custom // $show_cmd_default</code>, logs <code>cmd: [...]</code>. Returns <code>undef</code> on success, <strong><code>1</code></strong> on failure (logged).</p>
-<p><strong><code>regexp_quote_keep_bytes($str)</code></strong> — function. Escapes regex metacharacters (ASCII only) and leaves every other byte, including UTF-8 sequences, untouched. <strong>Always</strong> quote a learned prompt with this, never <code>quotemeta</code> (which mangles non-ASCII) and never raw interpolation (a <code>.</code> in a hostname then matches anything).</p>
-<p><strong><code>stripansi($str)</code></strong> — function. Removes CSI escape sequences (any parameter count, <code>?</code> private forms), two-byte escapes (<code>ESC E/M/D/7/8/=/&gt;</code>), NUL and CR. Apply to prompts before reading the hostname and to captured configuration text before splitting into lines.</p>
-<p><strong><code>escape_brackets($str)</code></strong> — function. Legacy: escapes <code>@</code>, <code>[</code>, <code>]</code> only. Prefer <code>regexp_quote_keep_bytes</code>.</p>
+<p><strong><code>chat_banner($t, $dev_opt_tab, $login_pattern)</code></strong> -- method. <code>waitfor(Match =&gt; $login_pattern)</code> with the timeout temporarily set to <code>banner_timeout</code> if that option is set. Returns <code>($prematch, $match)</code>; <code>$prematch</code> undefined on timeout. Use it for the <strong>first</strong> prompt of a session (login banners can be slow); plain <code>$t-&gt;waitfor</code> afterwards.</p>
+<p><strong><code>drain_until_idle($t, $settle_ms)</code></strong> -- method. Reads until no byte has arrived for <code>$settle_ms</code> milliseconds, then pushes everything back into <code>Net::Telnet</code>&#x27;s buffer so a following <code>waitfor</code> sees it all. Non-consuming. Use before matching a prompt whose token is broad (spaces, non-ASCII) so a banner line ending in the prompt sign is not mistaken for the prompt. <code>$settle_ms &lt;= 0</code> does nothing.</p>
+<p><strong><code>prompt_head()</code>, <code>prompt_tail()</code></strong> -- hooks, defaults <code>&#x27;&#x27;</code> and <code>&#x27;#$&#x27;</code>. Regex fragments placed before/after the byte-safely quoted hostname by <code>expect_enable_prompt</code>.</p>
+<p><strong><code>expect_enable_prompt($t, $prompt, $tail_override, $label)</code></strong> -- method. Waits for <code>prompt_head . quote($prompt) . (tail_override // prompt_tail)</code>. Returns <code>($prematch, $match)</code>; <code>$prematch</code> undefined on timeout, with <code>[&lt;label&gt;: ]could not match enable command prompt: /regex/</code> logged. Use for every wait for the enable prompt after the first. Callers must not pre-escape <code>$prompt</code>.</p>
+<p><strong><code>wait_for_command_prompt($t, $prompt_regex, $label)</code></strong> -- method. Waits for <code>$prompt_regex</code> (preceded by any VT100 escapes) <strong>or</strong> one of the model&#x27;s <code>interrupt_screens</code>; on a screen, sends its keystroke and waits again; then a 1-second settle check for a screen trailing in behind an apparent prompt; bounded retries. Returns <code>($prematch, $match)</code> or <code>undef</code>. Run <code>$match</code> through <code>stripansi</code> before reading the hostname.</p>
+<p><strong><code>interrupt_screens()</code></strong> -- hook, default <code>()</code>. List of <code>[regex_text, keystroke, debug_note_or_undef]</code>, e.g. <code>[&#x27;Press any key to continue&#x27;, &#x27; &#x27;, undef]</code>, <code>[&#x27;Main Menu&#x27;, &#x27;5&#x27;, undef]</code>, <code>[&#x27;Do you want to save current configuration&#x27;, &#x27;y&#x27;, &#x27;saved running config&#x27;]</code>. Keystrokes are sent raw with <code>put()</code> -- no newline.</p>
+<p><strong><code>expect_enable_prompt_paging_auto($t, $prompt, $paging_prompt)</code></strong> -- method. Waits for the enable prompt or <code>$paging_prompt</code> (a <code>--More--</code>-style marker); on the marker sends a space and continues; strips the marker with <code>escape_brackets</code>-quoted matching. Returns the accumulated <code>($prematch, $match)</code> or <code>undef</code>. Suitable when the device&#x27;s erase sequence is simple; for a device that erases with backspaces adjacent to the next line&#x27;s indentation, follow <code>MediantSBC.pm::chat_fetch</code> (sentinel at each page boundary, targeted strip) instead.</p>
+<p><strong><code>chat_show_conf($t, $show_cmd_default, $show_cmd_custom)</code></strong> -- method. Sends <code>$show_cmd_custom // $show_cmd_default</code>, logs <code>cmd: [...]</code>. Returns <code>undef</code> on success, <strong><code>1</code></strong> on failure (logged).</p>
+<p><strong><code>regexp_quote_keep_bytes($str)</code></strong> -- function. Escapes regex metacharacters (ASCII only) and leaves every other byte, including UTF-8 sequences, untouched. <strong>Always</strong> quote a learned prompt with this, never <code>quotemeta</code> (which mangles non-ASCII) and never raw interpolation (a <code>.</code> in a hostname then matches anything).</p>
+<p><strong><code>stripansi($str)</code></strong> -- function. Removes CSI escape sequences (any parameter count, <code>?</code> private forms), two-byte escapes (<code>ESC E/M/D/7/8/=/&gt;</code>), NUL and CR. Apply to prompts before reading the hostname and to captured configuration text before splitting into lines.</p>
+<p><strong><code>escape_brackets($str)</code></strong> -- function. Legacy: escapes <code>@</code>, <code>[</code>, <code>]</code> only. Prefer <code>regexp_quote_keep_bytes</code>.</p>
 <h3 id="85-configuration-storage-and-comparison">8.5 Configuration storage and comparison</h3>
-<p><strong><code>dump_config($dev_id, $dev_opt_tab, $conf_ref)</code></strong> — method. Writes <code>@$conf_ref</code> (one line per element, newline-terminated) to the repository path for today, creating directories. Validates <code>filename_append_suffix</code> (must start with <code>.</code>, no <code>/</code> or whitespace). Honours <code>timezone=hide</code>. Returns <code>($config_dir, $config_file)</code>, or <code>undef</code> on failure (logged). This return value is what <code>fetch()</code> returns.</p>
-<p><strong><code>find_latest($dev_id, $dev_opt_tab)</code></strong> — method. <code>($dir, $file)</code> of the most recent backup by <strong>parsed timestamp</strong> (never string order — the timezone token varies by platform), or <code>undef</code> if none.</p>
-<p><strong><code>config_equal($prev_dir, $prev_file, $curr_dir, $curr_file)</code></strong> — method, overridable. Default: <code>File::Compare</code> byte equality. Returns true if equal.</p>
-<p><strong><code>config_equal_ignoring_lines($prev_dir, $prev_file, $curr_dir, $curr_file, $ignore_re)</code></strong> — method. Compares after removing every line matching <code>$ignore_re</code> from both files. Returns false if either file cannot be read (keeps the newer version). Wrap it in your <code>config_equal</code> override:</p>
-<pre><code class="lang-perl">my $VOLATILE = qr/^!Time: /;             # NX-OS example
+<p><strong><code>dump_config($dev_id, $dev_opt_tab, $conf_ref)</code></strong> -- method. Writes <code>@$conf_ref</code> (one line per element, newline-terminated) to the repository path for today, creating directories. Validates <code>filename_append_suffix</code> (must start with <code>.</code>, no <code>/</code> or whitespace). Honours <code>timezone=hide</code>. Returns <code>($config_dir, $config_file)</code>, or <code>undef</code> on failure (logged). This return value is what <code>fetch()</code> returns.</p>
+<p><strong><code>find_latest($dev_id, $dev_opt_tab)</code></strong> -- method. <code>($dir, $file)</code> of the most recent backup by <strong>parsed timestamp</strong> (never string order -- the timezone token varies by platform), or <code>undef</code> if none.</p>
+<p><strong><code>config_equal($prev_dir, $prev_file, $curr_dir, $curr_file)</code></strong> -- method, overridable. Default: <code>File::Compare</code> byte equality. Returns true if equal.</p>
+<p><strong><code>config_equal_ignoring_lines($prev_dir, $prev_file, $curr_dir, $curr_file, $ignore_re)</code></strong> -- method. Compares after removing every line matching <code>$ignore_re</code> from both files. Returns false if either file cannot be read (keeps the newer version). Wrap it in your <code>config_equal</code> override:</p>
+<span class="file-label">perl</span>
+<pre><code>my $VOLATILE = qr/^!Time: /;             # NX-OS example
 sub config_equal { my ($self, @a) = @_; $self-&gt;config_equal_ignoring_lines(@a, $VOLATILE) }</code></pre>
-<p><strong><code>parse_backup_filename($dev_id, $file)</code></strong> — function. <code>($timestamp, $tz, $suffix)</code> from a backup file name; recognises <code>+0200</code>, <code>CEST</code>/<code>CET</code>, <code>-CEST</code>, multi-word Windows zones, and none.</p>
-<p><strong><code>sort_backups_desc($dev_id, $files_ref, $unparsed_ref)</code></strong> — function. Sorts file names newest first by parsed timestamp; unparsable names go to <code>@$unparsed_ref</code>.</p>
+<p><strong><code>parse_backup_filename($dev_id, $file)</code></strong> -- function. <code>($timestamp, $tz, $suffix)</code> from a backup file name; recognises <code>+0200</code>, <code>CEST</code>/<code>CET</code>, <code>-CEST</code>, multi-word Windows zones, and none.</p>
+<p><strong><code>sort_backups_desc($dev_id, $files_ref, $unparsed_ref)</code></strong> -- function. Sorts file names newest first by parsed timestamp; unparsable names go to <code>@$unparsed_ref</code>.</p>
 <p>The core calls <code>purge_ancient</code>, <code>config_discard</code>, <code>prune_dir_tree</code>, <code>scan_dir</code> itself; a model does not.</p>
 <h3 id="86-http-models-abstracthttp">8.6 HTTP models (<code>AbstractHTTP</code>)</h3>
-<p>Inherit <code>fetchconfig::model::AbstractHTTP</code> and implement <code>http_login($ua, $base, $user, $pass, $dev_opt_tab)</code>, <code>http_backup(...)</code> and <code>http_logout(...)</code>; <code>AbstractHTTP::do_fetch</code> runs them with an <code>LWP::UserAgent</code> and cookie jar. Helpers: <code>http_request($ua, $req, $what, $timeout)</code> (one request with logging), <code>response_body($res)</code>, <code>accept_binary_response($res, $default_name)</code>, <code>uuencode_lines($filename, $binary)</code> (store a binary config as text; restore with <code>-g … | uudecode</code>), <code>open_debug</code>/<code>close_debug</code> (0600 trace of every request and response).</p>
-<h2 id="9-conventions-that-matter">9. Conventions That Matter</h2>
+<p>Inherit <code>fetchconfig::model::AbstractHTTP</code> and implement <code>http_login($ua, $base, $user, $pass, $dev_opt_tab)</code>, <code>http_backup(...)</code> and <code>http_logout(...)</code>; <code>AbstractHTTP::do_fetch</code> runs them with an <code>LWP::UserAgent</code> and cookie jar. Helpers: <code>http_request($ua, $req, $what, $timeout)</code> (one request with logging), <code>response_body($res)</code>, <code>accept_binary_response($res, $default_name)</code>, <code>uuencode_lines($filename, $binary)</code> (store a binary config as text; restore with <code>-g ... | uudecode</code>), <code>open_debug</code>/<code>close_debug</code> (0600 trace of every request and response).</p>
+</section>
+<section id="9-conventions-that-matter">
+<div class="section-kicker">09</div>
+<h2>9. Conventions That Matter</h2>
 <h3 id="91-return-values">9.1 Return values</h3>
-<p>The shared helpers carry two historical conventions: chat helpers return <code>($prematch, $match)</code> with <code>$prematch</code> undefined on failure; <code>chat_fetch</code>/<code>chat_show_conf</code> return <code>undef</code> on success and <code>1</code> on failure; <code>fetch</code>/<code>dump_config</code> return a value or nothing. <strong>New code: return the useful value, <code>undef</code>/empty on failure, and log the error exactly once at the point of failure.</strong> Never <code>die</code> inside a model — a failure of one device must not end the run.</p>
+<p>The shared helpers carry two historical conventions: chat helpers return <code>($prematch, $match)</code> with <code>$prematch</code> undefined on failure; <code>chat_fetch</code>/<code>chat_show_conf</code> return <code>undef</code> on success and <code>1</code> on failure; <code>fetch</code>/<code>dump_config</code> return a value or nothing. <strong>New code: return the useful value, <code>undef</code>/empty on failure, and log the error exactly once at the point of failure.</strong> Never <code>die</code> inside a model -- a failure of one device must not end the run.</p>
 <h3 id="92-never-modify-the-device">9.2 Never modify the device</h3>
-<p>A backup tool reads. It must not enter configuration mode, change a setting, or save anything on the device — not even to make its own job easier (the AudioCodes pager could have been disabled with a configuration change; the model drives the pager instead). If a device offers a <strong>session-only</strong> command for a terminal setting at the exec level (<code>terminal length 0</code>), that is acceptable; anything under a <code>configure</code> mode is not.</p>
+<p>A backup tool reads. It must not enter configuration mode, change a setting, or save anything on the device -- not even to make its own job easier (the AudioCodes pager could have been disabled with a configuration change; the model drives the pager instead). If a device offers a <strong>session-only</strong> command for a terminal setting at the exec level (<code>terminal length 0</code>), that is acceptable; anything under a <code>configure</code> mode is not.</p>
 <h3 id="93-credentials">9.3 Credentials</h3>
 <p>Never log a password or community string; log the device-table line only through <code>mask_secrets</code>. Any file that records a session (<code>dump_log</code>, HTTP trace, SSH debug) gets <code>secure_debug_file</code> (0600) at creation. Never retry a password over a second, weaker channel after an authentication failure (see <code>MediantSBC.pm</code>&#x27;s <code>transport=auto</code> rule: fall back to telnet only when no SSH service answered).</p>
-<h3 id="94-volatile-lines-and-changes-only">9.4 Volatile lines and <code>changes_only</code></h3>
-<p>If the device rewrites a line on every read — a save timestamp (<code>!!: Written by …</code>), an uptime, <code>!Time:</code>, a re-salted password hash — <code>changes_only</code> will never discard a backup for that model. Override <code>config_equal</code> with <code>config_equal_ignoring_lines</code> and a tight regex for exactly that line. The line is still <strong>stored</strong>; it is only ignored for the comparison. Weigh what you ignore: the maintainer chose <em>not</em> to ignore Hirschmann&#x27;s re-rendered password hashes because that would also hide a real password change.</p>
+<h3 id="94-volatile-lines-and-changes_only">9.4 Volatile lines and <code>changes_only</code></h3>
+<p>If the device rewrites a line on every read -- a save timestamp (<code>!!: Written by ...</code>), an uptime, <code>!Time:</code>, a re-salted password hash -- <code>changes_only</code> will never discard a backup for that model. Override <code>config_equal</code> with <code>config_equal_ignoring_lines</code> and a tight regex for exactly that line. The line is still <strong>stored</strong>; it is only ignored for the comparison. Weigh what you ignore: the maintainer chose <em>not</em> to ignore Hirschmann&#x27;s re-rendered password hashes because that would also hide a real password change.</p>
 <h3 id="95-bytes-not-characters">9.5 Bytes, not characters</h3>
-<p>Devices send bytes: UTF-8 hostnames, <code>\r\r\n</code>, NULs, cursor escapes, backspaces. Match and quote at the byte level (<code>regexp_quote_keep_bytes</code>, <code>stripansi</code>), and verify with a raw capture, never with a terminal window or a printable log — both hide the very bytes that break extraction.</p>
+<p>Devices send bytes: UTF-8 hostnames, <code>\r\r\n</code>, NULs, cursor escapes, backspaces. Match and quote at the byte level (<code>regexp_quote_keep_bytes</code>, <code>stripansi</code>), and verify with a raw capture, never with a terminal window or a printable log -- both hide the very bytes that break extraction.</p>
 <h3 id="96-timeouts">9.6 Timeouts</h3>
 <p><code>timeout</code> (default 30 s) governs every <code>waitfor</code>; a long configuration needs <code>fetch_timeout</code> applied only around the show command (see the skeletons). A pager that is driven page by page is bounded by <code>timeout</code> per page, not by the total.</p>
 <h3 id="97-debug-file">9.7 Debug file</h3>
-<p><code>debug=on</code> must produce <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code>, mode 0600, and it should be the complete raw session: for SSH models the shared <code>open_ssh_debug_file</code> + <code>ssh_open</code> give the ssh client&#x27;s <code>-v</code> trace followed by the session dump; for telnet, <code>dump_log</code>. The README documents this per model — keep it true.</p>
+<p><code>debug=on</code> must produce <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code>, mode 0600, and it should be the complete raw session: for SSH models the shared <code>open_ssh_debug_file</code> + <code>ssh_open</code> give the ssh client&#x27;s <code>-v</code> trace followed by the session dump; for telnet, the shared <code>open_telnet_debug_file</code> attaches <code>dump_log</code> to the live connection. <code>debug=</code> is a global option that works in every model: its on/off/0600/password semantics are documented once (the README&#x27;s &quot;available for all models&quot; block and the HTML&#x27;s <code>debug</code> heading), and <code>device_table.example</code> carries <code>debug=off</code> on every <code>default:</code> block -- so do not re-document whether your model supports debug. Add a short per-model note only on what the <code>.debug</code> file <em>contains</em> when the transport makes it non-obvious (the ssh auth trace, SNMP sets plus a TFTP transfer, or raw HTTP request/response), the way the SSH, SNMP and web models do.</p>
 <hr>
 <p><em>Generated documentation: <code>How-To-add-a-model.html</code> is produced from this file by <code>tools/md2html.py</code> (Python 2.7 / 3.x, no dependencies): <code>python tools/md2html.py How-To-add-a-model.md How-To-add-a-model.html</code>.</em></p>
-<footer>Generated from <code>How-To-add-a-model.md</code> by <code>md2html.py</code>.</footer>
-</main>
+</section>
+
+    </div>
+
+    <div class="page-footer">
+      Generated from the fetchconfig README &middot; Rainer Tammer &middot; GPL&#8209;2.0-or-later
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Scroll-spy: highlight the sidebar link matching the section in view.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a'));
+    // Resolve by id, not by CSS selector: section ids can start with a digit
+    // (version numbers in CHANGES, numbered sections in DEVELOPER), which is a
+    // valid HTML id but an invalid CSS id selector, so passing the href to
+    // querySelector would throw. getElementById has no such restriction.
+    var sections = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); }).filter(Boolean);
+    if (!('IntersectionObserver' in window) || !sections.length) return;
+    var current = null;
+    function setActive(id){
+      if (id === current) return;
+      current = id;
+      links.forEach(function(a){ a.classList.toggle('active', a.getAttribute('href') === '#' + id); });
+    }
+    var observer = new IntersectionObserver(function(entries){
+      var visible = entries.filter(function(e){ return e.isIntersecting; });
+      if (visible.length){
+        visible.sort(function(a,b){ return a.boundingClientRect.top - b.boundingClientRect.top; });
+        setActive(visible[0].target.id);
+      }
+    }, { rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+    sections.forEach(function(s){ observer.observe(s); });
+    setActive(sections[0].id);
+    var toggle = document.getElementById('nav-toggle');
+    links.forEach(function(a){ a.addEventListener('click', function(){ if (toggle) toggle.checked = false; }); });
+  })();
+</script>
+
 </body>
 </html>

@@ -121,7 +121,7 @@ sub chat_login {
     $ok = $t->print($pager_disable_cmd);
     if (!$ok) {
 	$self->log_error("could not send pager disabling command: [$pager_disable_cmd]");
-	return 1;
+	return undef;
     }
 
     $self->log_debug("sent pager disable command: [$pager_disable_cmd]");

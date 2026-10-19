@@ -1,98 +1,649 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>record-session.pl - the session capture tool</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fetchconfig &mdash; Session Capture Tool (record-session.pl)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-:root { --fg:#1f2328; --bg:#ffffff; --muted:#59636e; --line:#d1d9e0; --code:#f6f8fa; --link:#0969da; --accent:#1f6feb; }
-@media (prefers-color-scheme: dark) {
-  :root { --fg:#e6edf3; --bg:#0d1117; --muted:#9198a1; --line:#3d444d; --code:#161b22; --link:#4493f8; --accent:#4493f8; }
-}
-html { -webkit-text-size-adjust: 100%; }
-body { margin:0; background:var(--bg); color:var(--fg);
-  font: 16px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-main { max-width: 900px; margin: 0 auto; padding: 32px 24px 64px; }
-nav.toc { border:1px solid var(--line); border-radius:6px; padding:12px 18px; margin:24px 0 32px; background:var(--code); }
-nav.toc strong { display:block; margin-bottom:6px; }
-nav.toc ul { margin:0; padding-left:18px; }
-nav.toc li { margin:2px 0; }
-h1, h2, h3, h4 { line-height:1.25; margin:1.6em 0 .6em; font-weight:600; }
-h1 { font-size:2em; border-bottom:1px solid var(--line); padding-bottom:.3em; margin-top:0; }
-h2 { font-size:1.5em; border-bottom:1px solid var(--line); padding-bottom:.3em; }
-h3 { font-size:1.2em; }
-h4 { font-size:1em; }
-h2 a.anchor, h3 a.anchor { visibility:hidden; text-decoration:none; color:var(--muted); margin-left:.3em; }
-h2:hover a.anchor, h3:hover a.anchor { visibility:visible; }
-p { margin: 0 0 1em; }
-a { color: var(--link); }
-code { font: 0.9em/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  background: var(--code); padding: .15em .35em; border-radius: 4px; }
-pre { background: var(--code); border:1px solid var(--line); border-radius: 6px; padding: 14px 16px; overflow-x: auto; margin: 0 0 1.2em; }
-pre code { background: none; padding: 0; font-size: 0.85em; }
-table { border-collapse: collapse; width: 100%; margin: 0 0 1.2em; display:block; overflow-x:auto; }
-th, td { border: 1px solid var(--line); padding: 6px 12px; vertical-align: top; }
-th { background: var(--code); }
-tr:nth-child(even) td { background: rgba(127,127,127,.06); }
-blockquote { border-left: 4px solid var(--line); margin: 0 0 1em; padding: 0 1em; color: var(--muted); }
-hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
-ul, ol { margin: 0 0 1em; padding-left: 2em; }
-li { margin: .2em 0; }
-input[type=checkbox] { margin-right: .4em; }
-footer { color: var(--muted); font-size: .85em; border-top: 1px solid var(--line); margin-top: 3em; padding-top: 1em; }
+  :root{
+    --bg:#fbfbf9;
+    --surface:#f1f4f4;
+    --surface-2:#e9edee;
+    --border:#dde3e3;
+    --text:#141a1f;
+    --text-muted:#5b6770;
+    --text-faint:#8a949b;
+    --accent:#0e7c8c;
+    --accent-bright:#22aabb;
+    --accent-soft:#e3f3f5;
+    --danger:#c4432b;
+    --danger-soft:#fbeae6;
+    --success:#1c8a5b;
+    --success-soft:#e8f5ee;
+    --changed:#2451c4;
+    --changed-soft:#e8edfb;
+    --code-bg:#10171c;
+    --code-text:#dce8ec;
+    --code-accent:#7fe0cc;
+    --code-muted:#7f929b;
+    --radius:6px;
+    --font-sans:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace;
+    --sidebar-w:280px;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    font-family:var(--font-sans);
+    color:var(--text);
+    background:var(--bg);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  a{color:var(--accent);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{
+    outline:2px solid var(--accent-bright);
+    outline-offset:2px;
+  }
+
+  code, kbd{
+    font-family:var(--font-mono);
+    font-size:0.88em;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:0.1em 0.4em;
+    color:var(--text);
+    white-space:nowrap;
+  }
+
+  pre{
+    font-family:var(--font-mono);
+    background:var(--code-bg);
+    color:var(--code-text);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    overflow-x:auto;
+    font-size:0.86rem;
+    line-height:1.65;
+    margin:16px 0;
+    border:1px solid #05090c;
+  }
+  pre code{
+    background:none;
+    border:none;
+    padding:0;
+    white-space:pre;
+    color:inherit;
+    font-size:1em;
+  }
+  pre .c{color:var(--code-muted);} /* comment */
+  pre .s{color:var(--code-accent);} /* string / value */
+  pre .k{color:#e8b95f;} /* keyword / flag */
+
+  h1,h2,h3,h4{
+    font-family:var(--font-sans);
+    font-weight:600;
+    line-height:1.25;
+    color:var(--text);
+    letter-spacing:-0.01em;
+  }
+
+  /* ---------- Layout ---------- */
+  .layout{
+    display:flex;
+    align-items:flex-start;
+    max-width:1600px;
+    margin:0 auto;
+  }
+
+  .sidebar{
+    position:sticky;
+    top:0;
+    height:100vh;
+    width:var(--sidebar-w);
+    flex:0 0 var(--sidebar-w);
+    overflow-y:auto;
+    padding:28px 22px 40px;
+    border-right:1px solid var(--border);
+    background:var(--surface);
+  }
+
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:4px;
+  }
+  .brand-mark{
+    width:30px;height:30px;border-radius:7px;
+    background:linear-gradient(155deg,var(--accent-bright),var(--accent));
+    display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;
+  }
+  .brand-mark svg{width:17px;height:17px;}
+  .brand-name{font-weight:700;font-size:1.05rem;letter-spacing:-0.01em;}
+
+  .brand-meta{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-muted);
+    margin:6px 0 22px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .pill{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:99px;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text-muted);
+  }
+
+  .nav-group{margin-bottom:4px;}
+  .nav-group-label{
+    font-size:0.68rem;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--text-faint);
+    margin:20px 0 6px;
+    font-weight:600;
+  }
+  .nav-group:first-of-type .nav-group-label{margin-top:0;}
+
+  .sidebar nav a{
+    display:block;
+    color:var(--text-muted);
+    font-size:0.885rem;
+    padding:6px 10px;
+    border-radius:5px;
+    text-decoration:none;
+    border-left:2px solid transparent;
+    transition:background 0.12s ease, color 0.12s ease;
+  }
+  .sidebar nav a:hover{background:var(--surface-2);color:var(--text);}
+  .sidebar nav a.active{
+    color:var(--accent);
+    background:var(--accent-soft);
+    border-left-color:var(--accent-bright);
+    font-weight:500;
+  }
+
+  .main-col{
+    flex:1 1 auto;
+    min-width:0;
+    padding:0 0 120px;
+  }
+
+  .content{
+    max-width:1200px;
+    margin:0 auto;
+    padding:0 48px;
+  }
+  /* Keep flowing prose at a comfortable reading measure, but let wide
+     elements (tables, code blocks, diagrams) use the full content width so
+     they don't need a horizontal scrollbar on a wide screen. */
+  .content > p,
+  .content > ul,
+  .content > ol,
+  .content > h2,
+  .content > h3,
+  .content > h4,
+  .content > blockquote{
+    max-width:820px;
+  }
+  .content > .table-wrap,
+  .content > pre,
+  .content > .callout{
+    max-width:100%;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding:64px 48px 48px;
+    max-width:1200px;
+    margin:0 auto;
+    border-bottom:1px solid var(--border);
+  }
+  .hero-eyebrow{
+    font-family:var(--font-mono);
+    font-size:0.78rem;
+    color:var(--accent);
+    margin-bottom:14px;
+  }
+  .hero h1{
+    font-size:2.6rem;
+    margin:0 0 14px;
+    letter-spacing:-0.02em;
+    color:var(--accent);
+  }
+  .mermaid{
+    /* A mermaid block is a <pre>, so it would otherwise inherit the dark code
+       background/border/padding. Render the diagram on the page background. */
+    margin:1.5rem 0;
+    text-align:center;
+    background:transparent;
+    color:inherit;
+    border:0;
+    padding:0;
+    overflow-x:auto;
+  }
+  /* Until mermaid.js has rendered a block (it stamps data-processed on success),
+     keep the raw diagram source hidden so it is never shown as a wall of text --
+     during the CDN load, or if the runtime is blocked/unavailable. mermaid still
+     measures and renders normally while it is hidden; the element reveals itself
+     the moment it is processed. */
+  figure.diagram{margin:1.5rem 0;text-align:center;}
+  .diagram-svg{display:block;}
+  .diagram-svg svg{max-width:100%;height:auto;}
+  /* keep raw mermaid source hidden until rendered */
+  .mermaid:not([data-processed]){display:none;}
+  .mermaid[data-processed]{display:block;}
+  /* once live mermaid has rendered, hide the embedded SVG fallback */
+  .mermaid[data-processed] + .diagram-svg{display:none;}
+  .hero p.lede{
+    font-size:1.13rem;
+    color:var(--text-muted);
+    max-width:640px;
+    margin:0 0 28px;
+    line-height:1.6;
+  }
+  .hero-stats{
+    display:flex;
+    gap:36px;
+    flex-wrap:wrap;
+    margin-top:8px;
+  }
+  .hero-stat .num{
+    font-family:var(--font-mono);
+    font-size:1.6rem;
+    font-weight:600;
+    color:var(--text);
+    display:block;
+  }
+  .hero-stat .label{
+    font-size:0.8rem;
+    color:var(--text-muted);
+  }
+
+  /* ---------- Sections ---------- */
+  section{
+    padding:56px 0 8px;
+    border-bottom:1px solid var(--border);
+  }
+  section:last-of-type{border-bottom:none;}
+
+  .section-kicker{
+    font-family:var(--font-mono);
+    font-size:0.75rem;
+    color:var(--text-faint);
+    margin-bottom:8px;
+  }
+  h2{
+    font-size:1.65rem;
+    margin:0 0 18px;
+    scroll-margin-top:24px;
+  }
+  h3{
+    font-size:1.18rem;
+    margin:34px 0 12px;
+    scroll-margin-top:24px;
+  }
+  h4{
+    font-size:0.98rem;
+    margin:22px 0 8px;
+    color:var(--text);
+    scroll-margin-top:24px;
+  }
+  p{margin:0 0 14px;color:var(--text);}
+  section p, section li{color:var(--text);}
+  ul,ol{padding-left:1.3em;margin:0 0 16px;}
+  li{margin-bottom:6px;}
+  .prose-muted{color:var(--text-muted);}
+
+  .file-label{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-faint);
+    margin:18px 0 -8px;
+    display:block;
+  }
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:18px 0;
+    border:1px solid var(--border);
+    background:var(--surface);
+    font-size:0.93rem;
+  }
+  .callout-title{
+    font-weight:600;
+    font-size:0.82rem;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    margin-bottom:6px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+  }
+  .callout.warn{background:var(--danger-soft);border-color:#f0c9bd;}
+  .callout.warn .callout-title{color:var(--danger);}
+  .callout.note{background:var(--accent-soft);border-color:#bfe4e9;}
+  .callout.note .callout-title{color:var(--accent);}
+  .callout p:last-child{margin-bottom:0;}
+
+  /* ---------- Tables ---------- */
+  .table-wrap{overflow-x:auto;margin:18px 0 26px;border:1px solid var(--border);border-radius:var(--radius);}
+  table{
+    border-collapse:collapse;
+    width:100%;
+    font-size:0.87rem;
+  }
+  caption{
+    text-align:left;
+    font-size:0.78rem;
+    color:var(--text-muted);
+    padding:8px 14px;
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+    caption-side:top;
+  }
+  th,td{
+    text-align:left;
+    padding:9px 14px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+  }
+  thead th{
+    background:var(--surface);
+    font-weight:600;
+    font-size:0.76rem;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--text-muted);
+    white-space:nowrap;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--surface);}
+  td code, th code{white-space:nowrap;}
+  .req-yes{color:var(--danger);font-weight:600;font-size:0.82rem;}
+  .req-opt{color:var(--text-faint);font-size:0.82rem;}
+  .req-dash{color:var(--border);}
+  .matrix th, .matrix td{text-align:center;}
+  .matrix td:first-child, .matrix th:first-child{text-align:left;}
+  .matrix{font-size:0.8rem;}
+  .matrix code{white-space:nowrap;}
+
+  /* ---------- Flag reference ---------- */
+  .flag-card{
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:14px 0;
+    background:var(--bg);
+  }
+  .flag-card + .flag-card{margin-top:10px;}
+  .flag-head{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:8px;
+  }
+  .flag-tag{
+    font-family:var(--font-mono);
+    font-weight:600;
+    background:var(--code-bg);
+    color:var(--code-accent);
+    border-radius:4px;
+    padding:3px 9px;
+    font-size:0.86rem;
+  }
+  .flag-req{
+    font-size:0.72rem;
+    font-family:var(--font-mono);
+    color:var(--text-faint);
+  }
+  .flag-card p{margin-bottom:8px;font-size:0.92rem;color:var(--text-muted);}
+  .flag-card p:last-child{margin-bottom:0;}
+  .exit-list{list-style:none;padding:0;margin:8px 0 0;font-family:var(--font-mono);font-size:0.82rem;}
+  .exit-list li{display:flex;gap:10px;margin-bottom:3px;}
+  .exit-list .code{color:var(--text);font-weight:600;min-width:1.6em;}
+
+  /* ---------- Footnotes ---------- */
+  sup.fnref{font-size:0.68em;line-height:0;vertical-align:super;}
+  sup.fnref a{color:var(--accent);text-decoration:none;font-weight:600;padding:0 1px;}
+  sup.fnref a:hover{text-decoration:underline;}
+  .footnotes{margin-top:1.4rem;padding-top:0.9rem;border-top:1px solid var(--border);
+             font-size:0.9rem;color:var(--text-muted);}
+  .footnote{margin:0 0 0.55rem 0;padding-left:1.9em;text-indent:-1.9em;line-height:1.5;}
+  .footnote:last-child{margin-bottom:0;}
+  .footnote .fnnum{display:inline-block;min-width:1.5em;text-indent:0;
+                   font-weight:600;color:var(--text);font-family:var(--font-mono);}
+
+  /* ---------- Color swatches (email notif) ---------- */
+  .swatches{display:flex;gap:14px;flex-wrap:wrap;margin:18px 0 22px;}
+  .swatch{
+    display:flex;align-items:center;gap:9px;
+    border:1px solid var(--border);border-radius:99px;
+    padding:5px 12px 5px 6px;font-size:0.82rem;background:var(--surface);
+  }
+  .swatch .dot{width:16px;height:16px;border-radius:50%;flex:0 0 auto;border:1px solid rgba(0,0,0,0.12);}
+
+  /* ---------- Toggle tabs (Installation) ---------- */
+  .tabs{margin:18px 0;}
+  input.tab-input{position:absolute;opacity:0;pointer-events:none;}
+  .tab-labels{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+  .tab-labels label{
+    font-size:0.88rem;font-weight:500;color:var(--text-muted);
+    padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;
+    margin-bottom:-1px;
+  }
+  .tab-panel{display:none;}
+  #tab-unix:checked ~ .tab-labels label[for="tab-unix"],
+  #tab-win:checked ~ .tab-labels label[for="tab-win"]{
+    color:var(--accent);border-bottom-color:var(--accent-bright);
+  }
+  #tab-unix:checked ~ .tab-panels #panel-unix,
+  #tab-win:checked ~ .tab-panels #panel-win{display:block;}
+
+  /* ---------- Device support grid ---------- */
+  .device-grid td:first-child code{font-weight:600;}
+
+  /* ---------- Footer ---------- */
+  .page-footer{
+    max-width:1200px;margin:0 auto;padding:40px 48px 60px;
+    color:var(--text-faint);font-size:0.82rem;
+  }
+  .page-footer a{color:var(--text-muted);}
+
+  /* ---------- Mobile nav ---------- */
+  .nav-toggle{display:none;}
+  .mobile-bar{display:none;}
+
+  @media (max-width: 900px){
+    .sidebar{
+      position:fixed;
+      inset:0 auto 0 0;
+      z-index:40;
+      transform:translateX(-100%);
+      transition:transform 0.2s ease;
+      box-shadow:2px 0 24px rgba(0,0,0,0.15);
+    }
+    .nav-toggle:checked ~ .layout .sidebar{transform:translateX(0);}
+    .mobile-bar{
+      display:flex;align-items:center;justify-content:space-between;
+      position:sticky;top:0;z-index:30;
+      background:var(--bg);border-bottom:1px solid var(--border);
+      padding:14px 20px;
+    }
+    .mobile-bar .brand{margin:0;}
+    .mobile-bar label{
+      font-family:var(--font-mono);font-size:0.8rem;
+      border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;
+    }
+    .content{padding:0 22px;}
+    .hero{padding:36px 22px 32px;}
+    .hero h1{font-size:2rem;}
+    .page-footer{padding:32px 22px 48px;}
+  }
+  @media (min-width:901px){
+    .mobile-bar{display:none !important;}
+  }
+
+  @media print{
+    .sidebar,.mobile-bar{display:none !important;}
+    .layout{display:block;}
+    a{color:inherit;text-decoration:none;}
+    pre{white-space:pre-wrap;}
+  }
 </style>
+
 </head>
 <body>
-<main>
-<nav class="toc"><strong>Contents</strong><ul><li><a href="#what-it-is">What it is</a></li><li><a href="#output-files">Output files</a></li><li><a href="#usage">Usage</a></li><li><a href="#masking">Masking</a></li><li><a href="#notes">Notes</a></li></ul></nav>
-<h1 id="record-sessionpl---the-session-capture-tool">record-session.pl - the session capture tool</h1>
-<h2 id="what-it-is">What it is</h2>
-<p><code>tools/record-session.pl</code> is a standalone helper for capturing a telnet or SSH
-session with a network device as a byte-accurate log. Use it when writing a new
-fetchconfig model, and to gather fixtures for the test suite: it records exactly
-what a device sends and what you type, so you can see the prompts, escape
-sequences and command output a model has to handle.</p>
-<p>It connects the way a model does - <code>Net::Telnet</code> for telnet, <code>Net::OpenSSH</code>
-wrapped in <code>Net::Telnet</code> for SSH - then hands you a live interactive session and
-writes two files.</p>
-<h2 id="output-files">Output files</h2>
+
+<input type="checkbox" id="nav-toggle" class="nav-toggle">
+
+<div class="mobile-bar">
+  <div class="brand">
+    <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+    <span class="brand-name">fetchconfig</span>
+  </div>
+  <label for="nav-toggle">Menu</label>
+</div>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="brand-name">fetchconfig</span>
+    </div>
+    <div class="brand-meta">
+      <span class="pill">v9.72</span>
+      <span class="pill">GPL&#8209;2.0+</span>
+    </div>
+
+    <nav>
+<div class="nav-group"><a href="#what-it-is">What it is</a></div>
+<div class="nav-group"><a href="#output-files">Output files</a></div>
+<div class="nav-group"><a href="#usage">Usage</a></div>
+<div class="nav-group"><a href="#masking">Masking</a></div>
+<div class="nav-group"><a href="#notes">Notes</a></div>
+    </nav>
+  </aside>
+
+  <div class="main-col">
+
+    <div class="hero">
+      <div class="hero-eyebrow">Session Capture Tool (record-session.pl)</div>
+      <h1 class="hero-title">fetchconfig</h1>
+      <p class="lede">A single-file Perl CGI front-end for fetchconfig: a browser UI for browsing device backups, viewing and comparing configurations, checking run status, and editing the device table &mdash; backed by a PostgreSQL user database.</p>
+      
+      
+    </div>
+
+    <div class="content">
+
+
+<section id="what-it-is">
+<div class="section-kicker">01</div>
+<h2>What it is</h2>
+<p><code>tools/record-session.pl</code> is a standalone helper for capturing a telnet or SSH session with a network device as a byte-accurate log. Use it when writing a new fetchconfig model, and to gather fixtures for the test suite: it records exactly what a device sends and what you type, so you can see the prompts, escape sequences and command output a model has to handle.</p>
+<p>It connects the way a model does - <code>Net::Telnet</code> for telnet, <code>Net::OpenSSH</code> wrapped in <code>Net::Telnet</code> for SSH - then hands you a live interactive session and writes two files.</p>
+</section>
+<section id="output-files">
+<div class="section-kicker">02</div>
+<h2>Output files</h2>
 <ul><li><strong><code>&lt;base&gt;.hex</code></strong> - an offset + hex + ASCII dump of the EXACT bytes, both directions, in the PuTTY &quot;all session output&quot; style. This is the authoritative record you build a model from. Direction is marked <code>&lt;</code> (device -&gt; you) and <code>&gt;</code> (you -&gt; device).</li><li><strong><code>&lt;base&gt;.txt</code></strong> - a human-readable render. Device output is replayed through a small ANSI/VT100 screen emulator, so a menu-driven, cursor-addressed device (e.g. HP ProCurve) is shown as the SCREENS you saw - not as an unreadable stream of escape codes. A screen snapshot is written when the device clears the screen AND before each command you type, so every prompt state is captured (e.g. ProCurve privileged <code>#</code> -&gt; operator <code>&gt;</code> -&gt; logout <code>[y/n]?</code>). A line-oriented device (Cisco IOS) renders as a normal scrolling transcript. Typed input appears as <code>&gt; ...</code> lines.</li></ul>
 <p>The <code>.hex</code> is the truth; the <code>.txt</code> is a readability aid, and its header says so.</p>
-<h2 id="usage">Usage</h2>
+</section>
+<section id="usage">
+<div class="section-kicker">03</div>
+<h2>Usage</h2>
 <pre><code>record-session.pl -h HOST [-t ssh|telnet] [-u USER] [-p PASS]
                   [-o BASE] [-m SECRET]... [--no-auto-secrets]
                   [--timeout N]</code></pre>
 <ul><li><code>-h, --host HOST</code> - device hostname or IP (HOST:PORT allowed)</li><li><code>-t, --transport T</code> - ssh (default) or telnet</li><li><code>-u, --user USER</code> - SSH login username (SSH only; telnet logs in live at the device prompts)</li><li><code>-p, --password PASS</code> - SSH login password (SSH only; prompted, no echo, if <code>-p</code> is given with no value)</li><li><code>-o, --output BASE</code> - output basename -&gt; <code>BASE.txt</code> and <code>BASE.hex</code> (default: <code>session-&lt;host&gt;-&lt;timestamp&gt;</code>)</li><li><code>-m, --mask SECRET</code> - an exact string to mask, repeatable; matched literally so a value may contain commas or semicolons. Use for SNMP communities, the enable password, and any other known secret.</li><li><code>--no-auto-secrets</code> - do not apply the built-in output patterns</li><li><code>--timeout N</code> - per-read timeout in seconds (default 30)</li><li><code>--help</code> - show help</li><li><code>-V, --version</code> - print version and copyright, then exit</li></ul>
-<p>End the session with the device&#x27;s own <code>exit</code>/<code>logout</code> or with <code>Ctrl-]</code> (as in
-<code>telnet(1)</code>). Enter the enable password at the device&#x27;s own prompt during the
-session.</p>
+<p>End the session with the device&#x27;s own <code>exit</code>/<code>logout</code> or with <code>Ctrl-]</code> (as in <code>telnet(1)</code>). Enter the enable password at the device&#x27;s own prompt during the session.</p>
 <p>Examples:</p>
-<pre><code># SSH, credentials on the command line, mask two known secrets:
+<pre><code><span class="c"># SSH, credentials on the command line, mask two known secrets:</span>
 record-session.pl -h sw1.example.com -t ssh -u manager \
                   -m public -m myEnablePass -o sw1-ssh
 
-# Telnet, log in interactively:
+<span class="c"># Telnet, log in interactively:</span>
 record-session.pl -h sw1.example.com -t telnet -o sw1-telnet</code></pre>
-<h2 id="masking">Masking</h2>
-<p>All masking is SAME-LENGTH: a secret of N bytes becomes N mask characters, so
-byte offsets and line lengths are preserved and the <code>.hex</code> stays a faithful
-fixture.</p>
+</section>
+<section id="masking">
+<div class="section-kicker">04</div>
+<h2>Masking</h2>
+<p>All masking is SAME-LENGTH: a secret of N bytes becomes N mask characters, so byte offsets and line lengths are preserved and the <code>.hex</code> stays a faithful fixture.</p>
 <p>Masked automatically:</p>
 <ul><li>the SSH <code>-u</code>/<code>-p</code> values (the tool knows them);</li><li>every <code>-m</code> string, on an exact byte match in either direction;</li><li>a best-effort set of patterns for secrets the DEVICE prints (Cisco &quot;password 7 ...&quot;, &quot;secret 5 ...&quot;, &quot;snmp-server community X&quot;, keys);</li><li>the input typed after a &quot;Password:&quot;-style prompt. Because a telnet login/enable password is typed live and often echoed by the device, the tool watches for a prompt ending in <code>Password:</code> / <code>password#</code> / <code>Password&gt;</code> etc. and masks everything - input and echo - until you press Enter.</li></ul>
-<p>Masking of what the DEVICE prints, and the password-prompt heuristic, are BEST
-EFFORT and can miss things (an unusual prompt, a hash format not in the pattern
-set). ALWAYS review both files before sharing them or committing them as
-fixtures. The tool prints this reminder when it finishes.</p>
-<h2 id="notes">Notes</h2>
+<p>Masking is finalized at the END of the session on COMPLETE lines, so a secret, a <code>-m</code> token or a typed password split across two network reads is still masked as a whole; because every mask is same-length, the <code>.hex</code> keeps the original per-read framing.</p>
+<p>Masking of what the DEVICE prints, and the password-prompt heuristic, are BEST EFFORT and can miss things (an unusual prompt, a hash format not in the pattern set). ALWAYS review both files before sharing them or committing them as fixtures. The tool prints this reminder when it finishes.</p>
+</section>
+<section id="notes">
+<div class="section-kicker">05</div>
+<h2>Notes</h2>
 <ul><li>Over SSH the pty is sized to your local terminal (from <code>stty size</code>, else 80x40) so a full-screen device draws within your terminal during the live session instead of overflowing it. A 40-row device such as the ProCurve 8212zl then renders live the way PuTTY shows it.</li></ul>
+<ul><li>Over telnet the tool answers the device&#x27;s option negotiation (accepts the device&#x27;s ECHO and SGA, offers TTYPE and NAWS) so the session behaves like a real client. The raw IAC (<code>0xff</code>) bytes are still recorded in the <code>.hex</code> so <code>generate_template.pl</code> can detect a telnet capture, but they are kept out of the live view and the <code>.txt</code> render.</li></ul>
 <ul><li>Perl module requirements. Everything the tool uses is part of the Perl core (<code>Getopt::Long</code>, <code>IO::Handle</code>, <code>POSIX</code>, <code>IO::Select</code>) EXCEPT the transport modules, which come from CPAN:</li></ul>
 <ul><li><code>Net::Telnet</code> - required for BOTH transports (telnet directly, and SSH is wrapped in <code>Net::Telnet</code>). Always needed.</li><li><code>Net::OpenSSH</code> - required for <code>-t ssh</code> only; also needs the <code>ssh</code> client binary in PATH.</li><li><code>IO::Pty</code> - pulled in by <code>Net::OpenSSH</code> (pseudo-terminal); needed for <code>-t ssh</code>.</li></ul>
-<p>  Install, e.g.: <code>cpan install Net::Telnet Net::OpenSSH</code> (<code>IO::Pty</code> comes in as
-  a <code>Net::OpenSSH</code> prerequisite). A telnet-only user needs only <code>Net::Telnet</code>.
-  None of these is core in any Perl release, including 5.40; see the top-level
-  DEPENDENCIES file.</p>
+<p>  Install, e.g.: <code>cpan install Net::Telnet Net::OpenSSH</code> (<code>IO::Pty</code> comes in as   a <code>Net::OpenSSH</code> prerequisite). A telnet-only user needs only <code>Net::Telnet</code>.   None of these is core in any Perl release, including 5.40; see the top-level   DEPENDENCIES file.</p>
 <ul><li>The live terminal shows the device&#x27;s raw output (so you can navigate menus); the readable, emulated view is in the <code>.txt</code>.</li></ul>
-<footer>Generated from <code>README.record-session.md</code> by <code>md2html.py</code>.</footer>
-</main>
+</section>
+
+    </div>
+
+    <div class="page-footer">
+      Generated from the fetchconfig README &middot; Rainer Tammer &middot; GPL&#8209;2.0-or-later
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Scroll-spy: highlight the sidebar link matching the section in view.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a'));
+    // Resolve by id, not by CSS selector: section ids can start with a digit
+    // (version numbers in CHANGES, numbered sections in DEVELOPER), which is a
+    // valid HTML id but an invalid CSS id selector, so passing the href to
+    // querySelector would throw. getElementById has no such restriction.
+    var sections = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); }).filter(Boolean);
+    if (!('IntersectionObserver' in window) || !sections.length) return;
+    var current = null;
+    function setActive(id){
+      if (id === current) return;
+      current = id;
+      links.forEach(function(a){ a.classList.toggle('active', a.getAttribute('href') === '#' + id); });
+    }
+    var observer = new IntersectionObserver(function(entries){
+      var visible = entries.filter(function(e){ return e.isIntersecting; });
+      if (visible.length){
+        visible.sort(function(a,b){ return a.boundingClientRect.top - b.boundingClientRect.top; });
+        setActive(visible[0].target.id);
+      }
+    }, { rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+    sections.forEach(function(s){ observer.observe(s); });
+    setActive(sections[0].id);
+    var toggle = document.getElementById('nav-toggle');
+    links.forEach(function(a){ a.addEventListener('click', function(){ if (toggle) toggle.checked = false; }); });
+  })();
+</script>
+
 </body>
 </html>

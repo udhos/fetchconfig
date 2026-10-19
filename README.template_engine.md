@@ -1,4 +1,4 @@
-# fetchconfig Generic Template Engine
+# fetchconfig -- Template Engine
 
 This document describes the template-driven **generic model** for fetchconfig:
 its architecture, the template grammar, the execution semantics, and how to
@@ -76,7 +76,7 @@ A template may also carry a syntax-style hint for config viewers:
 
     # syntax_style: cisco-ios
 
-This is a plain `#` comment — the parser and the backup path ignore it
+This is a plain `#` comment - the parser and the backup path ignore it
 completely (optional, cannot affect a backup). It names the syntax of the
 config the template produces, so a viewer such as fetchconfig-web can pick
 a highlighter for a `generic`-model backup. The value is a free-text token
@@ -98,12 +98,15 @@ All optional; defaults in parentheses.
 | `banner_timeout N` | seconds to wait for the first prompt (30) |
 | `fetch_timeout N` | seconds to wait for the show output (base `timeout`) |
 | `fetch_delay N` | seconds to pause after connect (0) |
-| `prompt_settle N` | prompt settle time, ms (Abstract default) |
 | `max_visits N` | global cap on self-loops (8) |
 | `strip_ansi yes\|no` | strip VT100/ANSI escapes from device output (no) |
 | `prompt_head 'REGEX'` | matched before the learned hostname (empty) |
 | `prompt_tail 'REGEX'` | matched after it (`#`) |
 | `ssh_extra_opts 'STRING'` | extra ssh client options (legacy crypto) |
+
+*Removed in 9.72:* the `prompt_settle` directive -- parsed but never used by
+the generic engine (timing is governed by the per-state timeouts and
+`fetch_delay`). The SSH-model device option `prompt_settle_ms` is unaffected.
 
 ### 4.2 Trimming the saved config
 

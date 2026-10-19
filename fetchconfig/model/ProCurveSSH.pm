@@ -368,8 +368,10 @@ sub chat_fetch
     chomp $ascii_line;
     push(@$conf_ref,$ascii_line ? $ascii_line : "");
   }
-  # Remove ANSI fragment from final line (if present)
-  $conf_ref->[$#$conf_ref]=~s/\x1b\[24\;//;
+  # Remove ANSI fragment from final line (if present); guard against an
+  # empty config (a switch that answers the show command with nothing but
+  # its prompt), which would otherwise crash on the -1 subscript.
+  $conf_ref->[$#$conf_ref]=~s/\x1b\[24\;// if @$conf_ref;
   # Change: 20260902b (Rainer) real ProCurve config content always
   # starts with a line beginning with "; " (e.g. "; J9049A
   # Configuration Editor; Created on release #T.13.84"); everything

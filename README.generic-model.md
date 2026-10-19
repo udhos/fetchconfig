@@ -1,4 +1,4 @@
-# The template-driven "generic" model
+# fetchconfig -- Generic Model
 
 ## What it is
 
@@ -47,7 +47,6 @@ Top-of-file directives (all optional; defaults in parentheses):
 | `banner_timeout N` | wait for the first prompt, seconds (30) |
 | `fetch_timeout N` | wait for the show output, seconds (base) |
 | `fetch_delay N` | pause after connect, seconds (0) |
-| `prompt_settle N` | prompt settle time, ms (Abstract default) |
 | `max_visits N` | global self-loop cap (8) |
 | `strip_ansi yes\|no` | strip VT100 escapes from output (no) |
 | `prompt_head 'REGEX'` | matched before the learned hostname (empty) |
@@ -55,6 +54,10 @@ Top-of-file directives (all optional; defaults in parentheses):
 | `ssh_extra_opts 'STRING'` | extra ssh options (legacy crypto) |
 | `capture_from /REGEX/` | start the saved config at the first matching line |
 | `skip_first N` | drop the first N captured lines |
+
+*Removed in 9.72:* the `prompt_settle` directive -- parsed but never used by
+the generic engine (timing is governed by the per-state timeouts and
+`fetch_delay`). The SSH-model device option `prompt_settle_ms` is unaffected.
 
 Global (checked in every state):
 

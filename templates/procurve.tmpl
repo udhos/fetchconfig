@@ -19,12 +19,11 @@
 transport      ssh telnet
 banner_timeout 45
 fetch_timeout  180
-prompt_settle  500                 # ProCurve needs a longer settle
 max_visits     8
 strip_ansi     yes
 
 # old switches need legacy kex/cipher (matches the ProCurveSSH model)
-ssh_extra_opts 'KexAlgorithms +diffie-hellman-group14-sha1 -HostKeyAlgorithms +ssh-rsa -Ciphers +aes128-cbc'
+ssh_extra_opts '-o KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1 -o HostKeyAlgorithms=+ssh-rsa -o Ciphers=+aes128-cbc,3des-cbc'
 
 # the hostname is cursor-drawn; head consumes leading VT100 escapes,
 # tail is the "# " (or "> ") the CLI ends with.

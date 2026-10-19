@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fetchconfig &mdash; Changes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbfbf9;
+    --surface:#f1f4f4;
+    --surface-2:#e9edee;
+    --border:#dde3e3;
+    --text:#141a1f;
+    --text-muted:#5b6770;
+    --text-faint:#8a949b;
+    --accent:#0e7c8c;
+    --accent-bright:#22aabb;
+    --accent-soft:#e3f3f5;
+    --danger:#c4432b;
+    --danger-soft:#fbeae6;
+    --success:#1c8a5b;
+    --success-soft:#e8f5ee;
+    --changed:#2451c4;
+    --changed-soft:#e8edfb;
+    --code-bg:#10171c;
+    --code-text:#dce8ec;
+    --code-accent:#7fe0cc;
+    --code-muted:#7f929b;
+    --radius:6px;
+    --font-sans:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace;
+    --sidebar-w:280px;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    font-family:var(--font-sans);
+    color:var(--text);
+    background:var(--bg);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  a{color:var(--accent);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{
+    outline:2px solid var(--accent-bright);
+    outline-offset:2px;
+  }
+
+  code, kbd{
+    font-family:var(--font-mono);
+    font-size:0.88em;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:0.1em 0.4em;
+    color:var(--text);
+    white-space:nowrap;
+  }
+
+  pre{
+    font-family:var(--font-mono);
+    background:var(--code-bg);
+    color:var(--code-text);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    overflow-x:auto;
+    font-size:0.86rem;
+    line-height:1.65;
+    margin:16px 0;
+    border:1px solid #05090c;
+  }
+  pre code{
+    background:none;
+    border:none;
+    padding:0;
+    white-space:pre;
+    color:inherit;
+    font-size:1em;
+  }
+  pre .c{color:var(--code-muted);} /* comment */
+  pre .s{color:var(--code-accent);} /* string / value */
+  pre .k{color:#e8b95f;} /* keyword / flag */
+
+  h1,h2,h3,h4{
+    font-family:var(--font-sans);
+    font-weight:600;
+    line-height:1.25;
+    color:var(--text);
+    letter-spacing:-0.01em;
+  }
+
+  /* ---------- Layout ---------- */
+  .layout{
+    display:flex;
+    align-items:flex-start;
+    max-width:1600px;
+    margin:0 auto;
+  }
+
+  .sidebar{
+    position:sticky;
+    top:0;
+    height:100vh;
+    width:var(--sidebar-w);
+    flex:0 0 var(--sidebar-w);
+    overflow-y:auto;
+    padding:28px 22px 40px;
+    border-right:1px solid var(--border);
+    background:var(--surface);
+  }
+
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:4px;
+  }
+  .brand-mark{
+    width:30px;height:30px;border-radius:7px;
+    background:linear-gradient(155deg,var(--accent-bright),var(--accent));
+    display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;
+  }
+  .brand-mark svg{width:17px;height:17px;}
+  .brand-name{font-weight:700;font-size:1.05rem;letter-spacing:-0.01em;}
+
+  .brand-meta{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-muted);
+    margin:6px 0 22px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .pill{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:99px;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text-muted);
+  }
+
+  .nav-group{margin-bottom:4px;}
+  .nav-group-label{
+    font-size:0.68rem;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--text-faint);
+    margin:20px 0 6px;
+    font-weight:600;
+  }
+  .nav-group:first-of-type .nav-group-label{margin-top:0;}
+
+  .sidebar nav a{
+    display:block;
+    color:var(--text-muted);
+    font-size:0.885rem;
+    padding:6px 10px;
+    border-radius:5px;
+    text-decoration:none;
+    border-left:2px solid transparent;
+    transition:background 0.12s ease, color 0.12s ease;
+  }
+  .sidebar nav a:hover{background:var(--surface-2);color:var(--text);}
+  .sidebar nav a.active{
+    color:var(--accent);
+    background:var(--accent-soft);
+    border-left-color:var(--accent-bright);
+    font-weight:500;
+  }
+
+  .main-col{
+    flex:1 1 auto;
+    min-width:0;
+    padding:0 0 120px;
+  }
+
+  .content{
+    max-width:1200px;
+    margin:0 auto;
+    padding:0 48px;
+  }
+  /* Keep flowing prose at a comfortable reading measure, but let wide
+     elements (tables, code blocks, diagrams) use the full content width so
+     they don't need a horizontal scrollbar on a wide screen. */
+  .content > p,
+  .content > ul,
+  .content > ol,
+  .content > h2,
+  .content > h3,
+  .content > h4,
+  .content > blockquote{
+    max-width:820px;
+  }
+  .content > .table-wrap,
+  .content > pre,
+  .content > .callout{
+    max-width:100%;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding:64px 48px 48px;
+    max-width:1200px;
+    margin:0 auto;
+    border-bottom:1px solid var(--border);
+  }
+  .hero-eyebrow{
+    font-family:var(--font-mono);
+    font-size:0.78rem;
+    color:var(--accent);
+    margin-bottom:14px;
+  }
+  .hero h1{
+    font-size:2.6rem;
+    margin:0 0 14px;
+    letter-spacing:-0.02em;
+    color:var(--accent);
+  }
+  .mermaid{
+    /* A mermaid block is a <pre>, so it would otherwise inherit the dark code
+       background/border/padding. Render the diagram on the page background. */
+    margin:1.5rem 0;
+    text-align:center;
+    background:transparent;
+    color:inherit;
+    border:0;
+    padding:0;
+    overflow-x:auto;
+  }
+  /* Until mermaid.js has rendered a block (it stamps data-processed on success),
+     keep the raw diagram source hidden so it is never shown as a wall of text --
+     during the CDN load, or if the runtime is blocked/unavailable. mermaid still
+     measures and renders normally while it is hidden; the element reveals itself
+     the moment it is processed. */
+  figure.diagram{margin:1.5rem 0;text-align:center;}
+  .diagram-svg{display:block;}
+  .diagram-svg svg{max-width:100%;height:auto;}
+  /* keep raw mermaid source hidden until rendered */
+  .mermaid:not([data-processed]){display:none;}
+  .mermaid[data-processed]{display:block;}
+  /* once live mermaid has rendered, hide the embedded SVG fallback */
+  .mermaid[data-processed] + .diagram-svg{display:none;}
+  .hero p.lede{
+    font-size:1.13rem;
+    color:var(--text-muted);
+    max-width:640px;
+    margin:0 0 28px;
+    line-height:1.6;
+  }
+  .hero-stats{
+    display:flex;
+    gap:36px;
+    flex-wrap:wrap;
+    margin-top:8px;
+  }
+  .hero-stat .num{
+    font-family:var(--font-mono);
+    font-size:1.6rem;
+    font-weight:600;
+    color:var(--text);
+    display:block;
+  }
+  .hero-stat .label{
+    font-size:0.8rem;
+    color:var(--text-muted);
+  }
+
+  /* ---------- Sections ---------- */
+  section{
+    padding:56px 0 8px;
+    border-bottom:1px solid var(--border);
+  }
+  section:last-of-type{border-bottom:none;}
+
+  .section-kicker{
+    font-family:var(--font-mono);
+    font-size:0.75rem;
+    color:var(--text-faint);
+    margin-bottom:8px;
+  }
+  h2{
+    font-size:1.65rem;
+    margin:0 0 18px;
+    scroll-margin-top:24px;
+  }
+  h3{
+    font-size:1.18rem;
+    margin:34px 0 12px;
+    scroll-margin-top:24px;
+  }
+  h4{
+    font-size:0.98rem;
+    margin:22px 0 8px;
+    color:var(--text);
+    scroll-margin-top:24px;
+  }
+  p{margin:0 0 14px;color:var(--text);}
+  section p, section li{color:var(--text);}
+  ul,ol{padding-left:1.3em;margin:0 0 16px;}
+  li{margin-bottom:6px;}
+  .prose-muted{color:var(--text-muted);}
+
+  .file-label{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-faint);
+    margin:18px 0 -8px;
+    display:block;
+  }
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:18px 0;
+    border:1px solid var(--border);
+    background:var(--surface);
+    font-size:0.93rem;
+  }
+  .callout-title{
+    font-weight:600;
+    font-size:0.82rem;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    margin-bottom:6px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+  }
+  .callout.warn{background:var(--danger-soft);border-color:#f0c9bd;}
+  .callout.warn .callout-title{color:var(--danger);}
+  .callout.note{background:var(--accent-soft);border-color:#bfe4e9;}
+  .callout.note .callout-title{color:var(--accent);}
+  .callout p:last-child{margin-bottom:0;}
+
+  /* ---------- Tables ---------- */
+  .table-wrap{overflow-x:auto;margin:18px 0 26px;border:1px solid var(--border);border-radius:var(--radius);}
+  table{
+    border-collapse:collapse;
+    width:100%;
+    font-size:0.87rem;
+  }
+  caption{
+    text-align:left;
+    font-size:0.78rem;
+    color:var(--text-muted);
+    padding:8px 14px;
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+    caption-side:top;
+  }
+  th,td{
+    text-align:left;
+    padding:9px 14px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+  }
+  thead th{
+    background:var(--surface);
+    font-weight:600;
+    font-size:0.76rem;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--text-muted);
+    white-space:nowrap;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--surface);}
+  td code, th code{white-space:nowrap;}
+  .req-yes{color:var(--danger);font-weight:600;font-size:0.82rem;}
+  .req-opt{color:var(--text-faint);font-size:0.82rem;}
+  .req-dash{color:var(--border);}
+  .matrix th, .matrix td{text-align:center;}
+  .matrix td:first-child, .matrix th:first-child{text-align:left;}
+  .matrix{font-size:0.8rem;}
+  .matrix code{white-space:nowrap;}
+
+  /* ---------- Flag reference ---------- */
+  .flag-card{
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:14px 0;
+    background:var(--bg);
+  }
+  .flag-card + .flag-card{margin-top:10px;}
+  .flag-head{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:8px;
+  }
+  .flag-tag{
+    font-family:var(--font-mono);
+    font-weight:600;
+    background:var(--code-bg);
+    color:var(--code-accent);
+    border-radius:4px;
+    padding:3px 9px;
+    font-size:0.86rem;
+  }
+  .flag-req{
+    font-size:0.72rem;
+    font-family:var(--font-mono);
+    color:var(--text-faint);
+  }
+  .flag-card p{margin-bottom:8px;font-size:0.92rem;color:var(--text-muted);}
+  .flag-card p:last-child{margin-bottom:0;}
+  .exit-list{list-style:none;padding:0;margin:8px 0 0;font-family:var(--font-mono);font-size:0.82rem;}
+  .exit-list li{display:flex;gap:10px;margin-bottom:3px;}
+  .exit-list .code{color:var(--text);font-weight:600;min-width:1.6em;}
+
+  /* ---------- Footnotes ---------- */
+  sup.fnref{font-size:0.68em;line-height:0;vertical-align:super;}
+  sup.fnref a{color:var(--accent);text-decoration:none;font-weight:600;padding:0 1px;}
+  sup.fnref a:hover{text-decoration:underline;}
+  .footnotes{margin-top:1.4rem;padding-top:0.9rem;border-top:1px solid var(--border);
+             font-size:0.9rem;color:var(--text-muted);}
+  .footnote{margin:0 0 0.55rem 0;padding-left:1.9em;text-indent:-1.9em;line-height:1.5;}
+  .footnote:last-child{margin-bottom:0;}
+  .footnote .fnnum{display:inline-block;min-width:1.5em;text-indent:0;
+                   font-weight:600;color:var(--text);font-family:var(--font-mono);}
+
+  /* ---------- Color swatches (email notif) ---------- */
+  .swatches{display:flex;gap:14px;flex-wrap:wrap;margin:18px 0 22px;}
+  .swatch{
+    display:flex;align-items:center;gap:9px;
+    border:1px solid var(--border);border-radius:99px;
+    padding:5px 12px 5px 6px;font-size:0.82rem;background:var(--surface);
+  }
+  .swatch .dot{width:16px;height:16px;border-radius:50%;flex:0 0 auto;border:1px solid rgba(0,0,0,0.12);}
+
+  /* ---------- Toggle tabs (Installation) ---------- */
+  .tabs{margin:18px 0;}
+  input.tab-input{position:absolute;opacity:0;pointer-events:none;}
+  .tab-labels{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+  .tab-labels label{
+    font-size:0.88rem;font-weight:500;color:var(--text-muted);
+    padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;
+    margin-bottom:-1px;
+  }
+  .tab-panel{display:none;}
+  #tab-unix:checked ~ .tab-labels label[for="tab-unix"],
+  #tab-win:checked ~ .tab-labels label[for="tab-win"]{
+    color:var(--accent);border-bottom-color:var(--accent-bright);
+  }
+  #tab-unix:checked ~ .tab-panels #panel-unix,
+  #tab-win:checked ~ .tab-panels #panel-win{display:block;}
+
+  /* ---------- Device support grid ---------- */
+  .device-grid td:first-child code{font-weight:600;}
+
+  /* ---------- Footer ---------- */
+  .page-footer{
+    max-width:1200px;margin:0 auto;padding:40px 48px 60px;
+    color:var(--text-faint);font-size:0.82rem;
+  }
+  .page-footer a{color:var(--text-muted);}
+
+  /* ---------- Mobile nav ---------- */
+  .nav-toggle{display:none;}
+  .mobile-bar{display:none;}
+
+  @media (max-width: 900px){
+    .sidebar{
+      position:fixed;
+      inset:0 auto 0 0;
+      z-index:40;
+      transform:translateX(-100%);
+      transition:transform 0.2s ease;
+      box-shadow:2px 0 24px rgba(0,0,0,0.15);
+    }
+    .nav-toggle:checked ~ .layout .sidebar{transform:translateX(0);}
+    .mobile-bar{
+      display:flex;align-items:center;justify-content:space-between;
+      position:sticky;top:0;z-index:30;
+      background:var(--bg);border-bottom:1px solid var(--border);
+      padding:14px 20px;
+    }
+    .mobile-bar .brand{margin:0;}
+    .mobile-bar label{
+      font-family:var(--font-mono);font-size:0.8rem;
+      border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;
+    }
+    .content{padding:0 22px;}
+    .hero{padding:36px 22px 32px;}
+    .hero h1{font-size:2rem;}
+    .page-footer{padding:32px 22px 48px;}
+  }
+  @media (min-width:901px){
+    .mobile-bar{display:none !important;}
+  }
+
+  @media print{
+    .sidebar,.mobile-bar{display:none !important;}
+    .layout{display:block;}
+    a{color:inherit;text-decoration:none;}
+    pre{white-space:pre-wrap;}
+  }
+</style>
+
+</head>
+<body>
+
+<input type="checkbox" id="nav-toggle" class="nav-toggle">
+
+<div class="mobile-bar">
+  <div class="brand">
+    <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+    <span class="brand-name">fetchconfig</span>
+  </div>
+  <label for="nav-toggle">Menu</label>
+</div>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="brand-name">fetchconfig</span>
+    </div>
+    <div class="brand-meta">
+      <span class="pill">v9.72</span>
+      <span class="pill">GPL&#8209;2.0+</span>
+    </div>
+
+    <nav>
+<div class="nav-group"><a href="#972">9.72</a></div>
+<div class="nav-group"><a href="#971">9.71</a></div>
+<div class="nav-group"><a href="#970">9.70</a></div>
+<div class="nav-group"><a href="#969">9.69</a></div>
+<div class="nav-group"><a href="#968">9.68</a></div>
+<div class="nav-group"><a href="#966">9.66</a></div>
+<div class="nav-group"><a href="#965">9.65</a></div>
+<div class="nav-group"><a href="#964">9.64</a></div>
+<div class="nav-group"><a href="#963">9.63</a></div>
+<div class="nav-group"><a href="#962">9.62</a></div>
+<div class="nav-group"><a href="#961">9.61</a></div>
+<div class="nav-group"><a href="#960">9.60</a></div>
+<div class="nav-group"><a href="#959">9.59</a></div>
+<div class="nav-group"><a href="#958">9.58</a></div>
+<div class="nav-group"><a href="#957">9.57</a></div>
+<div class="nav-group"><a href="#956">9.56</a></div>
+<div class="nav-group"><a href="#025">0.25</a></div>
+<div class="nav-group"><a href="#024">0.24</a></div>
+<div class="nav-group"><a href="#023">0.23</a></div>
+<div class="nav-group"><a href="#022">0.22</a></div>
+<div class="nav-group"><a href="#021">0.21</a></div>
+<div class="nav-group"><a href="#020">0.20</a></div>
+<div class="nav-group"><a href="#019">0.19</a></div>
+<div class="nav-group"><a href="#018">0.18</a></div>
+<div class="nav-group"><a href="#017">0.17</a></div>
+<div class="nav-group"><a href="#016">0.16</a></div>
+<div class="nav-group"><a href="#015">0.15</a></div>
+<div class="nav-group"><a href="#014">0.14</a></div>
+<div class="nav-group"><a href="#013">0.13</a></div>
+<div class="nav-group"><a href="#012">0.12</a></div>
+<div class="nav-group"><a href="#011">0.11</a></div>
+<div class="nav-group"><a href="#010">0.10</a></div>
+<div class="nav-group"><a href="#09">0.9</a></div>
+<div class="nav-group"><a href="#08">0.8</a></div>
+<div class="nav-group"><a href="#07">0.7</a></div>
+<div class="nav-group"><a href="#06">0.6</a></div>
+<div class="nav-group"><a href="#05">0.5</a></div>
+<div class="nav-group"><a href="#04">0.4</a></div>
+<div class="nav-group"><a href="#03">0.3</a></div>
+<div class="nav-group"><a href="#02">0.2</a></div>
+<div class="nav-group"><a href="#01">0.1</a></div>
+    </nav>
+  </aside>
+
+  <div class="main-col">
+
+    <div class="hero">
+      <div class="hero-eyebrow">Changes</div>
+      <h1 class="hero-title">fetchconfig</h1>
+      <p class="lede">A single-file Perl CGI front-end for fetchconfig: a browser UI for browsing device backups, viewing and comparing configurations, checking run status, and editing the device table &mdash; backed by a PostgreSQL user database.</p>
+      
+      
+    </div>
+
+    <div class="content">
+
+
+<section id="972">
+<div class="section-kicker">01</div>
+<h2>9.72</h2>
+<p>+ Model-framework code-review fixes:</p>
+<ul><li>MikroTik: expect_enable_prompt_paging() called escape_brackets() as a package sub (&amp;escape_brackets), which does not exist in the MikroTik package and died on every fetch; it now calls the inherited $self-&gt;escape_brackets().</li></ul>
+<ul><li>ProCurveSSH: the final-line ANSI strip is now guarded against an empty config (matching ProCurve.pm) - a switch that answers the show command with nothing but its prompt no longer crashes.</li></ul>
+<ul><li>JunOS: chat_login() now returns undef (not 1) when the pager-disable command fails, so the caller treats it as a login failure instead of continuing with a bogus prompt.</li></ul>
+<ul><li>Generic template model: the template ssh_extra_opts directive is now actually passed to the ssh client (it was parsed but ignored); the procurve.tmpl directive is written in &quot;-o Key=Value&quot; form to match the ProCurveSSH model.</li></ul>
+<ul><li>mediant-sbc: the prompt_settle_ms option (default 150 ms) is now honoured on SSH (drain to idle before matching the prompt), as it already is for nexus-ssh and aruba-cx-ssh.</li></ul>
+<ul><li>Detector: device-table log masking now also masks community= values (previously only pass= and enable=).</li></ul>
+<p>+ Removed the generic-template prompt_settle directive. It was accepted by   the template parser and emitted by generate_template, but never consumed by   the generic engine, whose timing is governed by per-state timeouts and   fetch_delay. Removed from the parser, both template generators   (generate_template.pl / .py) and the shipped templates (procurve.tmpl,   cisco-ios.tmpl). The SSH-model option prompt_settle_ms is a different   option and is unaffected.</p>
+<p>+ Removed dead code: %holding and %started (fetchconfig.pl parallel-fetch   bookkeeping that was never read) and the unused entry_state() in   GenericTemplateParser. dump_options() (model::Abstract) is kept as a   documented debugging helper, with its call left commented out.</p>
+<p>+ Fixed the --help text: the --check-template and --template-syntax option   descriptions were spliced together; each now describes its own option.</p>
+</section>
+<section id="971">
+<div class="section-kicker">02</div>
+<h2>9.71</h2>
+<p>+ New DEVELOPER-GUIDE.md / .html: a comprehensive architecture and   engineering guide (execution model, the per-device pipeline, parallel   fetch, all data structures, the device-table format, the model API, the   security mechanisms and deliberate non-mitigations, extension recipes,   testing and conventions), with an ASCII fetch-pipeline sequence diagram   and an Abstract-API call graph, for engineers extending fetchconfig. The   How-To-add-a-model skeleton now sends the password with print_secret()   (not a raw print, which would reach the .debug log) and cross-references   the developer guide.</p>
+<p>+ debug=on now works for ALL device models. Previously only the SSH, HTTP   and SNMP models (and a few telnet models) wrote a &lt;dev_id&gt;.debug session   log; the remaining ~19 telnet models (cisco-ios, cisco-cat, cisco-pix,   cisco-iosxr, cisco-sg300, dell, junos, fortigate, hirschmann, mikrotik,   riverstone, acme, parks, mediant, terayon, coriant-8600, 3com-msr,   tellabs-msr, nec-univerge-ix, dmswitch, cisco-asa, mikrotik) ignored it   (cisco-asa and mikrotik had the debug attach commented out). A shared   open_telnet_debug_file() helper (in model::Abstract, mirroring   open_ssh_debug_file) now attaches the telnet dump_log to a 0600   &lt;repository&gt;/&lt;dev_id&gt;.debug for every telnet model. Login and enable   passwords stay out of the log because the models already send them with   print_secret(), which suspends the log around the send.</p>
+<p>+ The helper tools now report the release version and accept -V/--version:   generate_template.pl and md2html.py gained the option (record-session.pl   already had it), and every script under tools/ is pinned to the   fetchconfig version (9.71), so &quot;&lt;tool&gt; --version&quot; always matches the   package.</p>
+<p>+ The &quot;there is no latest config&quot; notice (logged when a freshly added   device has no previous backup yet) is now logged at info level, not   error, and appears inside the device&#x27;s own log block (after the   -----[dev]----- header) rather than before it. It is the normal   first-run state, not a failure.</p>
+<p>+ record-session.pl: fixed several capture bugs found while porting the   tool. Secret masking now runs once at end of session on COMPLETE lines,   so a secret, a -m token, or a typed password split across two network   reads is masked as a whole instead of leaking (a community that spanned   a read boundary was being saved as &quot;xxxlic&quot;); the .hex still keeps the   original per-read framing. Password masking now stops at the Enter even   when the next command arrives in the same read (it used to mask the   command too). The .txt render no longer leaks a charset select (&quot;ESC (   B&quot; shown as &quot;(B&quot;), an escape split across two reads, or telnet   negotiation bytes. Over telnet the tool now answers option negotiation   (accepts ECHO/SGA, offers TTYPE/NAWS); the raw IAC bytes stay in the   .hex so generate_template still detects telnet captures.</p>
+<p>+ Documentation build (&quot;make doc&quot;): each *.md now regenerates BOTH its   .html and its plain-text companion, so the shipped text files no longer   drift out of sync with the Markdown. The title now comes from a single   source: each .md&#x27;s &quot;# fetchconfig -- &lt;Subtitle&gt;&quot; H1 becomes the .html   &lt;title&gt; &quot;fetchconfig &mdash; &lt;Subtitle&gt;&quot; and the text&#x27;s first line   &quot;fetchconfig -- &lt;Subtitle&gt;&quot;. The four docs whose H1 used a different   wording were normalised to this format. DEVELOPER-GUIDE now ships a   plain-text version too, and md2html.py&#x27;s text renderer drops HTML comment   blocks (the &lt;!--MERMAID--&gt; diagram sources) so only the readable ASCII   diagrams remain in the text. CHANGES and DEPENDENCIES are now kept as   .md too (CHANGES.md, DEPENDENCIES.md), with their text and .html forms   generated the same way. Every shipped .md source is pure 7-bit ASCII.</p>
+<p>+ Styled HTML documentation (new tools/render-doc.py): the .html docs now render   as a sidebar/hero manual - scroll-spy navigation, numbered section kickers,   callouts, styled tables, dark code blocks, IBM Plex from a CDN with a   system-font fallback. README.md -&gt; README.html, X.md -&gt; X.html; the plain-text   (ASCII) companions and the verbatim LICENSE still come from md2html.py. Mermaid   diagrams (the &lt;!--MERMAID--&gt; blocks) render from the CDN with an embedded-SVG   fallback - pre-rendered into tools/mermaid-cache/ by tools/gen-mermaid-svg.py -   so the pages also work offline / on AIX; the plain-text docs keep the ASCII   diagram. The HTML is 7-bit-ASCII entity-encoded (VI-safe).</p>
+<p>+ The top-level README is now the single documentation source, converted to   Markdown (README.md): ALL-CAPS section headers became &quot;##&quot; sections (the   in-body &quot;IMPORTANT CHANGE ...&quot; / &quot;INSTALLATION (Windows)&quot; notes became &quot;###&quot;   sub-sections), and the DEVICE OPTIONS reference is now a consistent</p>
+<p>  &quot;Option | Description&quot; table per module group. Its H1 is   &quot;# fetchconfig -- README / Documentation&quot;, so the generated page &lt;title&gt; is   &quot;fetchconfig &mdash; README / Documentation&quot; (fetchconfig-web reads the   &lt;title&gt; to build its Help-menu entries). The hero carries the   testers/compatibility notice as a   red info box plus a pointer to the fetchconfig-web companion project. The old   hand-maintained fetchconfig-documentation.html has been removed: README.html   (generated from README.md) supersedes it and adds the pager_cmd option the old   page was missing.</p>
+<p>+ contrib/windows/: Python ports of the two developer tools -   record_session.py and generate_template.py - with the same command line   and the same .hex/.txt formats as the Perl versions. build.cmd packages   them into standalone record_session.exe and generate_template.exe with   PyInstaller, so Windows users need no Perl, PuTTY or OpenSSH; the .py   files also run on POSIX (paramiko for ssh). The notes are kept in   contrib/windows/README.windows.md, from which &quot;make doc&quot; derives the   README.windows text and .html like every other document.</p>
+<p>+ Licensing is now sourced from a single file, LICENSE.md: an H1 title   wrapping the verbatim GNU GPL version 2 in a fenced block. &quot;make doc&quot;   derives LICENSE (plain text) and LICENSE.html from it, and copies LICENSE   to COPYING. The license text is preserved byte-for-byte: md2html.py now   renders a document that is just a title plus one fenced block as a   verbatim pass-through (no heading, no indentation, no transliteration), so   LICENSE and COPYING are identical to the canonical FSF GPLv2 text; the   .html keeps the text verbatim inside a &lt;pre&gt;. The license is pure 7-bit   ASCII (the five form-feed page breaks are the FSF original&#x27;s).</p>
+<p>+ New LICENSE-ADDITIONS.md (with derived LICENSE-ADDITIONS text and .html): a   supplemental warranty and liability disclaimer for recipients in Germany   and the EU. It does not alter or restrict the GPL (it adds no term within   the meaning of GPL section 6); it clarifies how the GPLv2 warranty and   liability disclaimers (sections 11 and 12) apply under mandatory German/EU   law - excluding liability to the maximum extent permitted, keeping the   mandatory carve-outs (intent, gross negligence, injury to life/body/health,   Produkthaftungsgesetz, fraudulent concealment, Kardinalpflichten) and the   section 521 BGB limitation for gratuitous provision - with severability and   German governing law (CISG excluded).</p>
+<p>+ t/42-directory-allowlist.t now skips gracefully (plan skip_all) when   model::Detector cannot be loaded because the transport CPAN modules   (Net::Telnet, ...) are absent, matching the guard already used in   t/45/46/51. Previously it used require_ok and reported a hard failure on a   minimal host without the transports; the directory-allowlist logic it tests   needs no transport.</p>
+</section>
+<section id="970">
+<div class="section-kicker">03</div>
+<h2>9.70</h2>
+<p>+ The e-mail&#x27;s text/plain part now carries a plain-text summary - the   statistics block and a per-device table (auto-sized columns, no diffs),   matching the HTML data - so text-only clients and previews are useful,   not just a &quot;view in HTML&quot; notice.</p>
+<p>+ The HTML summary e-mail was restyled to match the fetchconfig-web mail:   a grey canvas, a white rounded card with a dark-blue (#1f4e79) header bar   carrying a small inline logo and &quot;fetchconfig vX.Y&quot;, and the copyright   footer placed below/outside the card. The logo is embedded in the mail as   multipart/related image (Content-ID &lt;fcwlogo&gt;) inside a multipart/related{   multipart/alternative{ text/plain; text/html }; image } structure matching the   fetchconfig-web mailer exactly - 12-byte random boundaries and folded   multipart Content-Type headers. The embedded logo is the complete   fetchconfig-web PNG (an earlier build shipped a truncated copy with no   IDAT/IEND, which mail clients could not render). The summary card is 820px   wide so the full-report link fits on one line on desktop. The full-report link   is now a styled button with a &quot;copy this link&quot; text fallback, and the   plain-text part carries the report URL too. The embedded mail logo is   independent of the report_logo= used in the on-disk HTML report, which is   unchanged.</p>
+<p>+ web_report_url is now the BASE URL of fetchconfig-web (the CGI itself,   no query string, e.g. https://host/cgi-bin/fetchconfig-web.cgi).   fetchconfig appends &quot;?action=view_report&amp;file=&lt;report&gt;&quot; automatically so   the e-mail&#x27;s &quot;full report&quot; link points at the specific report that was   written, not at the overview. Any query string already on the configured   value is ignored, so an existing &quot;?action=report&quot; setting keeps working.</p>
+<p>+ Documentation and source-comment consistency pass (README, HTML manual,   and in-source comments brought into line with the 9.69 code - the -D/-T   option descriptions, the same-second backup note now that writes use   O_EXCL, and the system-directory/allowlist wording), and a CHANGES   correction: the device-locking, O_EXCL, keep=/timeout validation and   permission-revert entries below were released in 9.69 and are filed   under 9.69.</p>
+</section>
+<section id="969">
+<div class="section-kicker">04</div>
+<h2>9.69</h2>
+<p>+ Device locking (lock=on, default off): before backing up a device,   fetchconfig takes an exclusive flock on a per-device lock file so two   runs cannot back up the same device at once (overlapping cron, or a   &quot;Backup Now&quot; over a cron run). On contention it retries lock_retry times   (default 5) at lock_retry_time-second intervals (default 10), then   records the device as &quot;skipped&quot; - the existing per-device backup state -   and continues; the process exit code is NOT changed by a lock-skip. The   lock is released automatically when the run ends (even on crash) and the   lock file is never unlinked. Options (per-device and default:):   lock=on|off, lock_dir=$TAG|/path, lock_retry=N (&gt;=0; 0 = skip on first   contention), lock_retry_time=N (&gt;=1 seconds). The lock directory is   lock_dir=, else &quot;&lt;dir of fetchconfig.pl&gt;/.lock&quot;, created 0700 if absent;   if it cannot be created or used, fetchconfig exits 10 after the run.   The lock key is sha256(dev_id). A new &quot;directory: lock $TAG /path&quot;   allowlist type restricts lock_dir= when an allowlist is in use. Lock   files are opened O_NOFOLLOW and created 0600. Use a LOCAL filesystem -   flock over NFS (AIX) is unreliable.</p>
+<p>+ A lock-skipped device is now reported as &quot;skipped&quot; in the e-mail   summary (its own statistics row and State column) instead of &quot;failed&quot;,   and its per-device status file is written correctly - the skip path now   records the repository and timing like the normal paths did. This also   covers the system-directory and allowlist skips.</p>
+<p>+ New --clean-lock-dir [N]: remove lock files older than N days (default   30, minimum 1) from the lock directory, then exit. A lock file is only   removed if it is not currently held (flock is tried first), so an in-use   lock is never deleted. With -T it is a dry run: it shows what would be   removed without removing anything.</p>
+<p>+ A backup is written with O_EXCL: if a backup with the exact same name   already exists - two runs completing within the same one-second   filename resolution - fetchconfig refuses rather than silently   truncating the earlier run&#x27;s completed file and then comparing it with   itself. (Device locking, lock=on, prevents the collision entirely; this   is the safety net for runs that do not use it.)</p>
+<p>+ keep= is validated when the device table is loaded: a value that is not   a positive integer (a typo, or an inherited default:) is rejected with a   clear error instead of being coerced to 0 and deleting every backup for   the device on the next run.</p>
+<p>+ timeout, fetch_timeout, banner_timeout and prompt_settle_ms are   validated: a non-positive-integer value is ignored (with a warning) so   the documented default applies, rather than coercing to 0 - where   Net::Telnet&#x27;s Timeout =&gt; 0 would block forever.</p>
+<p>+ Fix a permission regression from 9.68: backup files and their directories   were being forced to owner-only (0600/0700), which broke an unprivileged   reader - fetchconfig-web runs fetchconfig as &quot;nobody&quot; for -l (list), -g   (read content) and -g -m (diff), and could no longer traverse the   directories or read the files. Repository permissions again follow the   process umask, as before 9.68 (a setgid repository root still propagates,   e.g. drwxr-sr-x). Only the parallel-fetch worker scratch files, which   live in a private temp dir and are never read that way, stay owner-only.   Restrict the repository directory yourself if the host is shared.</p>
+</section>
+<section id="968">
+<div class="section-kicker">05</div>
+<h2>9.68</h2>
+<p>+ on_fetch_run is run without a shell: the value is split into a program   plus literal arguments (quoting honoured) and executed directly, so</p>
+<p>  shell syntax like &quot;;&quot;, &quot;|&quot; or &quot;$(...)&quot; is passed as plain text, not   interpreted. A start failure, signal or non-zero exit is logged. To run   a pipeline, put it in a script and name the script.</p>
+<p>+ repository=, template_dir= and the on_fetch_run program may not be a   system directory (/bin, /sbin, /lib<em>, /usr/bin, /usr/sbin, /usr/lib</em>,   /usr/share, /usr/include, /etc, /boot, /dev, /proc, /sys, /run,   /var/run, /var/lock, the root &quot;/&quot;, or anything under them). A device   value is rejected and the device skipped; a directory: allowlist line   that declares one is rejected at parse time.</p>
+<p>+ A directory: allowlist that fails to parse (a bad or system-directory   path, a duplicate or malformed tag) now aborts the run before any fetch   or lookup, instead of continuing with a silently reduced allowlist.   Each error is logged as before; the run exits non-zero.   --list-allowed-dirs is exempt, so it can still report the errors.</p>
+<p>+ Without a directory: allowlist, each distinct non-system repository=,   template_dir= and on_fetch_run directory in use is reported once per run   as a warning, so unrestricted paths are visible. (A system directory is   always rejected, as above - it never reaches this warning.) The   allowlist stays optional.</p>
+<p>+ mask_secrets() masks by key prefix: password=, passphrase=, secret=,   key= and token= are masked as well as pass=, enable= and community=,   and a quoted value (commas/spaces included) is masked whole.</p>
+<p>+ Parallel-fetch (-P) worker scratch files (in the private temp dir) are   created owner-only. Repository backup files and directories continue to   follow the process umask - an unprivileged reader such as fetchconfig-web   (running as &quot;nobody&quot; for -l/-g) must be able to read them, so a hardcoded   owner-only mode is wrong here; restrict the repository directory yourself   if the host is shared.</p>
+<p>+ comware-ssh, hirschmann, procurve and procurve-ssh now quote the learned   prompt with regexp_quote_keep_bytes() like the other models, so a   non-ASCII hostname cannot produce a prompt that never matches.</p>
+<p>+ Templates may declare the syntax of the config they produce with a   &quot;# syntax_style: &lt;token&gt;&quot; header comment (e.g. &quot;# syntax_style:   cisco-ios&quot;). It is a plain comment - the template parser and the backup   path ignore it entirely, so it is optional and backward-compatible and   cannot change how a device is backed up. It is metadata for a config   viewer (e.g. fetchconfig-web) to pick a syntax highlighter for a   generic-model backup, whose &quot;generic&quot; model name otherwise says nothing   about the output syntax. New option --template-syntax PATH reads one   template and prints its declared style to stdout (exit 0), or nothing   (exit 1) if undeclared, or an error (exit 2) if the file is unreadable;   log output stays on stderr so stdout carries only the value. The value   is a free-text token [A-Za-z0-9_-]+. The shipped cisco-ios.tmpl and   procurve.tmpl now declare their style as examples.</p>
+<p>+ -z and -Z gained -D and -T, mirroring -o/-e: with -D the zero-byte   backups found are deleted (each by one plain unlink on its exact path -   only the files, not directories; run -e -D afterwards to prune any   emptied day/month dirs), and -T previews them (&quot;would delete: unlink   ...&quot;). Without -D the behaviour is unchanged (list only). The exit   status is still that of the check (1 if any zero-byte backups were   found, 0 otherwise), whether or not they were deleted. -D now accepts   -o, -e, -z or -Z; -T still requires -D.</p>
+</section>
+<section id="966">
+<div class="section-kicker">06</div>
+<h2>9.66</h2>
+<p>+ cisco-asa-ssh and cisco-asa: a rejected enable password no longer hangs   the fetch for the whole fetch_timeout. The ASA re-prompts &quot;Password: &quot;   when the enable secret is wrong; the models now detect that second   prompt and fail immediately with &quot;enable failed: the device rejected   the enable password ...&quot; (the message points at a likely cause - a   missing device-specific enable= falling back to a default: enable= that   does not apply). The successful path (enable accepted, &quot;#&quot; prompt) is   unchanged.</p>
+<p>+ Change report: the Devices sidebar is hidden when the report is printed   (an @media print rule), so the printed page uses the full width.</p>
+<p>+ New documented device option &quot;site=&quot;: a free-text site/location tag, like   comment= (fetchconfig itself does not use it). It is intended for the   fetchconfig-web application, which uses it for per-site access control -   users see and edit only the devices whose site matches a site assigned in   their user record; a device with no site= is visible only to &quot;all sites&quot;   (site 0) users. Values should be single-byte characters. (The device-table   parser already accepted arbitrary key=value options, so no parser change   was needed - this documents site= as an official option.)</p>
+</section>
+<section id="965">
+<div class="section-kicker">07</div>
+<h2>9.65</h2>
+<p>+ Change report: the &quot;Changes&quot; count per device now counts diff hunks (the   number of places that differ) instead of old+new diff lines, which   double-counted each changed line (e.g. 2 changed lines showed as 4).</p>
+<p>+ Report masking: added the Hirschmann &quot;users passwd &lt;user&gt; :vN:&lt;hash&gt;:&quot;   form - the username is kept and only the hash is masked (the generic   passwd rule no longer masks the username on these lines). The :vN:&lt;hash&gt;:   token is masked wherever it appears.</p>
+<p>+ Report masking: added built-in masking for &quot;wpa-passphrase &lt;value&gt;&quot; and a   bare &quot;key &lt;hex&gt;&quot;. New email: report_hide=&lt;regex&gt; option (one per line,   accumulating) masks the matched substring with **** for secrets the   built-ins do not cover; invalid patterns are logged and skipped. All   masking (built-in and custom) is governed by the mask_secrets master.   The report_hide value is taken verbatim (the whole rest of the line), so a   regex may contain commas (e.g. {m,n}), = and spaces with no quoting.</p>
+<p>+ A first-ever backup is now reported as &quot;initial&quot; (not &quot;changed&quot;) in the   e-mail summary (its own statistics row and the device row) and in the   change report. A first backup has no previous config to compare against,   so marking it &quot;changed&quot; was misleading; &quot;initial&quot; is detected from the   absence of a previous backup at save time.</p>
+<p>+ Change report: a new device (one backup, no previous config) is now   detected from the backup count and reported as &quot;New&quot; without attempting a   diff - this removes the spurious, duplicated &quot;requested backup 2 but only   1 available&quot; error lines a first-ever backup produced.</p>
+<p>+ Change reports. After a run fetchconfig can write an HTML change report (a   summary table plus a coloured diff per changed device) to an allowlisted   &quot;report&quot; directory, and embed up to email_max_diff device diffs in the summary   e-mail (email_max_diff defaults to 0 - no diffs unless set) with a link to the   full report. New &quot;directory: report&quot; and &quot;directory: report none&quot; allowlist   entries (the allowlist, when present, now covers four types). New email:   options report_dir, write_report, email_max_diff, web_report_url, report_logo   (embedded, 250x50), report_days   (prune, exact-name unlink) and mask_secrets. Secret masking is best effort   (common forms, after diffing, both sides) - reports remain sensitive. Each   report diff is an &quot;armored&quot; &lt;div data-device=...&gt; for fetchconfig-web. No   new libraries (MIME::Base64 is core). report_dir should be group-owned by   the web server group with the setgid bit (g+s) so reports inherit the group   for fetchconfig-web; fetchconfig does not change ownership itself.</p>
+<p>+ procurve.tmpl: dropped the trailing space in the /Username:/ and   /Password:/ expects - on a VT100/telnet device the space can arrive in a   separate read, causing an intermittent login timeout. Validated over   telnet on R.11 (menu) and K.15 (direct-to-CLI) firmware.</p>
+<p>+ SECURITY FIX: the directory: allowlist was bypassed when repository=,   template_dir= or on_fetch_run= was set only on a default: line - the   check read the device line only. Enforcement now validates the effective   value (default + device) via a new dev_option_raw accessor.</p>
+<p>+ Template grammar: every state is now declared with the &quot;state&quot; keyword,   including the per-transport entry states (e.g. &quot;state state_login_ssh&quot;),   so a state header is always recognisable. An explicit &quot;-&gt; stay&quot; transition   is accepted (a plain expect with no arrow still defaults to stay). The two   shipped templates and generate_template.pl were updated accordingly.</p>
+<p>  INCOMPATIBLE grammar change - a template written for 9.64 or earlier will   no longer parse. To migrate, add the &quot;state&quot; keyword before each bare   entry-state header:       state_login_ssh        -&gt;  state state_login_ssh       state_password_ssh     -&gt;  state state_password_ssh       state_login_telnet     -&gt;  state state_login_telnet       state_password_telnet  -&gt;  state state_password_telnet   (goto targets and other states are unchanged.) Verify with   &quot;fetchconfig.pl --check-template PATH&quot;.</p>
+<p>+ generate_template.pl no longer emits the removed   first_config_line_starts_with directive (it emits capture_from), and uses   the new state syntax.</p>
+<p>+ Directory allowlist state is reset at each device-table load (safe for a   future long-lived process).</p>
+<p>+ Documentation: reorganised the HTML manual into a clearer flow (front   matter, getting started, configuration, supported devices, features,   reference), added a Key concepts intro and a Security cross-reference to   the allowlist, and documented the template lexical conventions and the   stay transition. Silenced two harmless &quot;used only once&quot; compile warnings.</p>
+</section>
+<section id="964">
+<div class="section-kicker">08</div>
+<h2>9.64</h2>
+<p>+ directory: $TAG aliases are now expanded centrally in dev_option, so ALL   commands that read repository=/template_dir=/on_fetch_run= (fetch, -g, -l,   -z, -Z, -e, -o, -s, -S, -t, --list-allowed-dirs) resolve a $TAG to its   real path - previously only fetch and -t did, so e.g. -l reported &quot;no   backups&quot; when the table used repository=$REPO1. -t still shows the   configured value (the $TAG) in its template_dir column.</p>
+<p>+ Fix -t/--list-template: a generic device that inherits template_dir from   the &quot;default: generic&quot; line was wrongly reported as a &quot;device&quot; entry   (duplicating the default directory). It is now correctly counted under the   default scope; only a device&#x27;s OWN template_dir= makes a &quot;device&quot; entry.</p>
+<p>+ Fix -t/--list-template with directory: $TAG aliases: a template_dir set to   a $TAG (as fetchconfig-web writes it) is now expanded to scan the real   directory instead of failing. The template_dir column shows the configured   value (the $TAG or literal path) so a consumer can match the device table;   full_path is always the real resolved path.</p>
+<p>+ directory: allowlist extended with a third type, fetch_run, constraining   on_fetch_run= to programs in allowed directories ($TAG expanded in place;   &quot;directory: fetch_run none&quot; forbids on_fetch_run). A directory: section   must now cover all three types (repository, template, fetch_run).</p>
+<p>+ New optional directory: allowlist in the device table. When present, a   device&#x27;s repository= and template_dir= must name a listed directory (by   $TAG or exact path, trailing slash ignored, paths checked for /../, /./ and   illegal characters, typed repository/template); an off-list value is rejected   at fetch time and the device skipped. Absent section = no enforcement. New   --list-allowed-dirs prints AND lints the allowlist (exit 2 if an entry is   malformed or its directory is missing). Intended to let a less-trusted editor   (fetchconfig-web) change devices without widening the set of usable   directories.</p>
+<p>+ -t/--list-template output changed to one TAB-separated row per template:   &lt;id&gt; &lt;section&gt; &lt;full_path&gt; &lt;model&gt; &lt;template_dir&gt;, where &lt;section&gt; is   &quot;default&quot; (the default: scope&#x27;s directory, or the program default) or   &quot;device&quot; (a device-specific template_dir=), so a consumer can populate the   defaults editor and the device editor from one cached query. Device   directories are deduplicated by configured path; a model may appear under   both sections. Every directory to be scanned must exist - a missing   configured path now exits 2.</p>
+<p>+ Fix -t/--list-template: template directories are now deduplicated by their   real (symlink-resolved) path, so the same physical templates directory   reached through different paths (e.g. an install-dir version symlink) is   scanned and listed once, not twice. Configured template_dir= paths are   listed before the default templates/ fallback.</p>
+<p>+ README/HTML/device_table.example: clarified that the generic model&#x27;s   model= (template selection) may be set on a &quot;default: generic&quot; line and is   inherited by all generic devices, with per-device override.</p>
+<p>+ README: renamed the &quot;OPTIONS&quot; section to &quot;DEVICE OPTIONS&quot; and restored the   blank line before &quot;PROCURVE SNMP BACKUPS&quot;.</p>
+<p>+ README/HTML: the generic model is now the first entry in the per-model   options list (README OPTIONS section) and the first row of the HTML   per-model option matrix (was missing from the matrix, and listed last in   the README).</p>
+<p>+ README/HTML: the command-line options are now grouped by purpose   (retrieval, housekeeping, template, fetching, output, generic) instead of   one flat list under &quot;retrieving a config&quot;; -t/--list-template and   --check-template are included in the reference. No behaviour change.</p>
+<p>+ -v / --version now prints just the program version to stdout and exits 0   (previously -v exited after the startup banner without a clean version   line).</p>
+<p>+ New -t / --list-template option: list the templates found in the default   templates/ directory (always scanned) and in every template_dir= a loaded   device configures, numbered, unique names; exit 0 if any found, 1 if none.   It reads template_dir from the generic model&#x27;s &quot;default: generic   template_dir=...&quot; line as well as from individual devices, and logs each   scanned directory as &quot;N. template dir: &lt;path&gt;&quot;.</p>
+<p>+ Makefile.PL: new &quot;make doc&quot; target regenerates the .md-derived docs   (README.*, How-To-add-a-model) via tools/md2html.py.</p>
+<p>+ New --check-template PATH option: structurally validate a generic-model   template (grammar plus the load-time validator) without a device, and   exit 0 (ok), 1 (errors) or 2 (file problem). PATH is the full path to the   .tmpl file (a bare name is not resolved, as the same name can exist in   different template_dir directories). It is a structural check only; it   does not verify the template against a real device.</p>
+<p>+ make test now validates every shipped templates/*.tmpl   (t/41-shipped-templates.t), so a structurally broken template cannot be   released.</p>
+<p>+ Orphaned-backup cleanup (-o) now also finds a removed device&#x27;s   &lt;dev_id&gt;.status and &lt;dev_id&gt;.debug files at the repository root, not only   its dated backup directories. They are listed by -o and, with -D, deleted   with the orphaned backups (exact-name match, each file individually). This   clears a decommissioned device&#x27;s debug log, which can contain credentials.</p>
+<p>+ Documentation: clarified in the generic-model and template-engine notes   that the SAVED CONFIG itself contains credentials (encrypted or not),   independent of the debug-log password masking, so a backup is sensitive   even though the debug log masks the passwords sent during login.</p>
+<p>+ Documentation: reworded the SECURITY NOTES in README and the HTML manual   to note that config secrets are not always hashed - SNMP communities and   some routing/VPN keys are cleartext, and Cisco type-7 passwords are   reversible - rather than implying everything is a one-way hash.</p>
+</section>
+<section id="963">
+<div class="section-kicker">09</div>
+<h2>9.63</h2>
+<p>+ The main README and fetchconfig-documentation.html now include a short   overview of the template-driven generic model, pointing to   README.generic-model, README.template_engine and README.record-session   (the HTML links to the .html versions).</p>
+<p>+ Added a template-driven &quot;generic&quot; model: a device can be backed up from   a template file (templates/&lt;name&gt;.tmpl) instead of a hand-written Perl   module. The template describes the login, enable, show and logout   interaction as a small state machine - expect/send steps with the   transport, prompt, timeouts, interrupt screens and ignore-lines as data</p>
+<ul><li>and the model fetchconfig/model/GenericTemplate.pm interprets it, reusing the shared SSH transport, prompt handling and escape stripping. A device selects it with model=&lt;name&gt;; transport is ssh or telnet. Per- transport entry states (state_login_ssh, state_login_telnet and their password states) let one template serve both transports. Verified against Cisco IOS-XE over telnet and SSH. The engine is new; verify a template against the target device before relying on it in production.</li></ul>
+<p>+ Added templates for two device families: cisco-ios.tmpl (clean CLI,   telnet and SSH) and procurve.tmpl (HP ProCurve menu/VT100 firmware,   using escape stripping, interrupt screens and menu navigation).</p>
+<p>+ Added tools/generate_template.pl, which scaffolds a template from a   session captured with record-session.pl. It infers the transport,   prompt, show command and capture boundaries and marks the remaining   judgement calls; the output is a draft to review and test.</p>
+<p>+ Added template directives to trim the saved configuration: capture_from   starts the file at the first line matching a regex, and skip_first drops   a fixed number of leading lines, so the echoed command and the   &quot;Building configuration...&quot; preamble are removed and the file starts at   the real configuration, as a direct TFTP backup would. The number of   lines dropped and the number saved are logged.</p>
+<p>+ Added the send_match template action, which selects a menu item by its   shown number (the captured group of an expect regex) rather than a   hard-coded key, so a device that renumbers its menu still works.</p>
+<p>+ Fixed clear-text passwords in the telnet session debug log: passwords   are now sent through a shared helper (print_secret) that suspends   dump_log around the write, so debug=on no longer records them. This   applies to every telnet-capable model, not only the generic one.</p>
+<p>+ Documentation (README.template_engine, README.generic-model,   README.record-session) is now written in Markdown, with the plain-text   and HTML versions generated by tools/md2html.py; &quot;md2html.py --all DIR&quot;   converts a whole tree.</p>
+</section>
+<section id="962">
+<div class="section-kicker">10</div>
+<h2>9.62</h2>
+<p>+ Replaced the hand-rolled command-line parser with Getopt::Long. The   single-dash option syntax is unchanged, and &quot;-g=value&quot; is now accepted   alongside &quot;-g value&quot;.</p>
+<p>+ Added tools/record-session.pl, a standalone helper that records a telnet   or SSH session with a device as a byte-accurate hex dump and a readable,   VT100-emulated transcript, for developing models and gathering test   fixtures. Known secrets and password-prompt input are masked; see   README.record-session.</p>
+<p>+ Added the DEPENDENCIES file, documenting which Perl modules are core and   which come from CPAN, per feature, for the supported Perl versions.</p>
+<p>+ Added a LICENSE file (GPL-2.0-or-later, matching COPYING) and a   .gitignore.</p>
+<p>+ Fixed the HTML manual&#x27;s sidebar navigation to follow the document&#x27;s   reading order.</p>
+</section>
+<section id="961">
+<div class="section-kicker">11</div>
+<h2>9.61</h2>
+<p>+ Moved the repository maintenance and lookup modes (-g, -l, -z, -Z, -o,   -e, -s, -S) out of fetchconfig.pl into a new module, fetchconfig/Tools.pm.   Behaviour is unchanged - every mode keeps its arguments and exit codes -   and fetchconfig.pl drops from about 1700 to under 600 lines.</p>
+<p>+ Added a test suite under t/, run with &quot;prove -I. t/&quot; or &quot;make test&quot;:   pure-function tests (escape stripping, prompt quoting, backup-filename   and timezone parsing, option handling) and filesystem tests against   temporary repositories (backup writing, latest-backup selection,   change comparison, directory maintenance). 178 assertions across eight   files; only core Perl is required.</p>
+<p>+ Added Makefile.PL. &quot;make test&quot; runs the suite; &quot;make&quot; and &quot;make install&quot;   are placeholders (fetchconfig is installed by hand, see the README).</p>
+</section>
+<section id="960">
+<div class="section-kicker">12</div>
+<h2>9.60</h2>
+<p>+ Added the mediant-sbc model for AudioCodes Mediant SBCs and gateways   with the current Cisco-style CLI, over SSH (default) or telnet. It   drives the device&#x27;s pager, enters enable mode, and reads the   configuration; an automatic transport fallback never downgrades a   credential from SSH to cleartext on an authentication failure.</p>
+<p>+ Added shared wait_for_command_prompt() handling for full-screen and   menu-driven CLIs, with a per-model hook for the banners and menus a   device interposes before its prompt; ProCurve now uses it.</p>
+<p>+ Added a &quot;How to add a model&quot; manual (Markdown and HTML) and a small,   dependency-free generator (tools/md2html.py) that produces the HTML   from the Markdown.</p>
+</section>
+<section id="959">
+<div class="section-kicker">13</div>
+<h2>9.59</h2>
+<p>+ Added a shared SSH transport (ssh_open) used by all SSH models, with a   per-model hook for the legacy key-exchange and cipher settings older   switches require. Removed the duplicated connection code from the   individual models.</p>
+<p>+ Fixed the debug trace for SSH models so that debug=on records the SSH   client&#x27;s own diagnostics followed by the session, in a 0600 file.</p>
+</section>
+<section id="958">
+<div class="section-kicker">14</div>
+<h2>9.58</h2>
+<p>+ Added shared expect_enable_prompt() handling with per-model hooks   (prompt prefix and suffix) for device-specific prompts, and migrated   the models to it, removing their private copies where no   model-specific behaviour was needed. Login and enable-mode behaviour   is unchanged.</p>
+<p>+ Added shared ANSI/VT100 escape-sequence stripping and migrated the   ProCurve models to it.</p>
+<p>+ Added parallel device fetching (-P N): independent devices are fetched   concurrently, with each device&#x27;s output shown as one uninterrupted   block in completion order. -P 1 (the default) is unchanged.</p>
+<p>+ Fixed ProCurve cursor-control and hide-cursor escape handling, and   stopped treating an empty configuration as valid data.</p>
+<ul><li>Fixed a race between parallel workers (-P) and the repository scan.</li></ul>
+</section>
+<section id="957">
+<div class="section-kicker">15</div>
+<h2>9.57</h2>
+<p>+ Added the nexus-ssh model for Cisco Nexus (NX-OS) over SSH.</p>
+<p>+ Made the per-device repository scan much faster by descending only   into the relevant directory instead of walking the whole tree.</p>
+<p>+ Completed the model list in the README.</p>
+</section>
+<section id="956">
+<div class="section-kicker">16</div>
+<h2>9.56</h2>
+<p>  This entry summarises how the 9.x fork differs from upstream 0.25.   Intermediate fork versions that were later superseded are not listed.</p>
+<p>MODELS AND TRANSPORTS</p>
+<p>+ Added SSH counterparts of the telnet models where the device allows it   (Cisco IOS, Cisco ASA, Comware, ProCurve). These transports do not   verify the SSH host key; the limitation is documented.</p>
+<p>+ Added new models and transports: Comware (SSH), Hirschmann, Zyxel,   PLANET (SSH), Aruba CX (SSH), TP-Link Easy Smart (web UI), ProCurve   1700 (web UI), and ProCurve ProVision (SNMP + TFTP).</p>
+<p>+ Improved prompt handling for devices that change their prompt between   login, enable, configuration and command modes.</p>
+<p>+ Added per-model handling of volatile configuration lines so that   values expected to change between fetches do not create spurious   differences.</p>
+<p>+ A failed fetch no longer replaces a good backup with an empty file.</p>
+<p>BACKUP FILES AND COMPARISON</p>
+<p>+ Preserved the trailing newline in saved configurations. + Parse backup timestamps and timezone tokens (numeric offset, AIX,   Solaris and Windows forms) and order backups by parsed time rather   than by filename. + Validated the filename suffix option (filename_append_suffix). + Gave operations a 30-second default timeout so they cannot wait   indefinitely.</p>
+<p>COMMAND-LINE OPTIONS</p>
+<p>+ Added maintenance and lookup options for listing, retrieving,   comparing and cleaning up stored configurations (-g, -m, -n, -l, -z,   -Z, -s, -S, -o, -e, -D, -T), and -f to write results to a file. + Clearer errors for invalid option combinations and values.</p>
+<p>E-MAIL</p>
+<p>+ Added an e-mail summary of each run, with options for recipients,   formatting and TLS, and without exposing passwords in diagnostics.</p>
+<p>STATUS</p>
+<p>+ Added a per-device status file recording the outcome of the last run,   so a failed fetch does not leave misleading success information.</p>
+<p>SECURITY</p>
+<p>+ Validated device identifiers and other externally supplied values. + Masked passwords and community strings in logs and e-mail. + Created debug files with restrictive (0600) permissions. + Used safer filesystem calls (three-argument open, File::Path). + Documented the security limitations of each transport.</p>
+<p>CORE</p>
+<p>+ Reduced duplicated per-model code by moving common behaviour into   shared helpers. + Improved error propagation so failures are reported rather than   silently treated as success. + Preserved command-line and backup compatibility throughout.</p>
+<p>DOCUMENTATION</p>
+<p>+ Updated the README, model documentation, command-line help and   configuration examples for the new models, transports and options.</p>
+</section>
+<section id="025">
+<div class="section-kicker">17</div>
+<h2>0.25</h2>
+<p>+ CiscoSG300.pm: support for Cisco SG300.</p>
+</section>
+<section id="024">
+<div class="section-kicker">18</div>
+<h2>0.24</h2>
+<p>+ Coriant8600.pm: support for Coriant 8600. + CiscoIOSXR.pm: support for Cisco IOS XR. + NECUnivergeIX.pm: support for NEC Univerge IX series.</p>
+</section>
+<section id="023">
+<div class="section-kicker">19</div>
+<h2>0.23</h2>
+<p>+ support for -line=string switch for passing device table lines   directly into the command-line. + option on_fetch_cat=1 issues current configuration to stdout. + Acme.pm: support for Oracle Acme Packet. + Mediant.pm: support for Audiocodes Mediant.</p>
+</section>
+<section id="022">
+<div class="section-kicker">20</div>
+<h2>0.22</h2>
+<p>+ JunOS.pm: support for Juniper JunOS.</p>
+</section>
+<section id="021">
+<div class="section-kicker">21</div>
+<h2>0.21</h2>
+<p>+ TellabsMSR.pm: support for Tellabs MSR Routers.</p>
+</section>
+<section id="020">
+<div class="section-kicker">22</div>
+<h2>0.20</h2>
+<p>+ CiscoPIX.pm: support for Cisco PIX.</p>
+</section>
+<section id="019">
+<div class="section-kicker">23</div>
+<h2>0.19</h2>
+<p>+ suport for Mikrotik RB800.</p>
+</section>
+<section id="018">
+<div class="section-kicker">24</div>
+<h2>0.18</h2>
+<p>+ support for 3Com MSR devices.</p>
+</section>
+<section id="017">
+<div class="section-kicker">25</div>
+<h2>0.17</h2>
+<p>+ bug #25475: Stuart Schneis added compatibility for Dell 6224P, 5324, 5424</p>
+</section>
+<section id="016">
+<div class="section-kicker">26</div>
+<h2>0.16</h2>
+<p>+ rip@devco.net added CiscoASA.pm sr #106606: Cisco ASA Support </p>
+</section>
+<section id="015">
+<div class="section-kicker">27</div>
+<h2>0.15</h2>
+<p>+ support equal &#x27;=&#x27; character in values for options.</p>
+</section>
+<section id="014">
+<div class="section-kicker">28</div>
+<h2>0.14</h2>
+<p>+ option timezone=hide omits timezone name from file name. + added DmSwitch.pm for Datacom DmSwitch devices.</p>
+</section>
+<section id="013">
+<div class="section-kicker">29</div>
+<h2>0.13</h2>
+<p>+ resort to strftime -%Z for tz name in systems which   lack support for strftime %z for tz offset (Solaris 7). + added FETCHCONFIG_DEV_ID and FETCHCONFIG_DEV_HOST   environmental variables to external on_fetch_run program.</p>
+</section>
+<section id="012">
+<div class="section-kicker">30</div>
+<h2>0.12</h2>
+<p>+ option on_fetch_run to call an external program whenever   a config backup is fetched. + append timezone offset to backup filename. + Sergey Alexanov added Terayon.pm for Old Terayon 3200/3500 CMTS.</p>
+</section>
+<section id="011">
+<div class="section-kicker">31</div>
+<h2>0.11</h2>
+<p>+ add retrieval timing info into log.</p>
+</section>
+<section id="010">
+<div class="section-kicker">32</div>
+<h2>0.10</h2>
+<p>+ bug #21501: Problem if device-specific-options are not specified</p>
+</section>
+<section id="09">
+<div class="section-kicker">33</div>
+<h2>0.9</h2>
+<p>+ Slightly better device table parser in order to support   options with blank spaces. Example: show_cmd=show run</p>
+</section>
+<section id="08">
+<div class="section-kicker">34</div>
+<h2>0.8</h2>
+<p>+ Julien Louis added Dell.pm for Dell PowerConnect switches.</p>
+</section>
+<section id="07">
+<div class="section-kicker">35</div>
+<h2>0.7</h2>
+<p>+ added Riverstone.pm for Alcatel Ethernet Routers.</p>
+</section>
+<section id="06">
+<div class="section-kicker">36</div>
+<h2>0.6</h2>
+<p>+ added Parks.pm. + log program version. (cmd line option: -v)</p>
+</section>
+<section id="05">
+<div class="section-kicker">37</div>
+<h2>0.5</h2>
+<p>+ added show_cmd option for older routers in CiscoIOS.pm. (Task 6204) + added FortiGate.pm.  (Doug Schaapveld / Task 6205) + modified CiscoIOS.pm, FortiGate.pm to strip leading &quot;show&quot; commands   and other info.  This results in clean configs that can be used   as-is to restore a device.  (Doug Schaapveld) + added ProCurve.pm for HP Procurve switches.  (Doug Schaapveld)</p>
+</section>
+<section id="04">
+<div class="section-kicker">38</div>
+<h2>0.4</h2>
+<p>+ added CiscoCAT.pm contributed by Marcos Sandez.</p>
+</section>
+<section id="03">
+<div class="section-kicker">39</div>
+<h2>0.3</h2>
+<p>+ ported to Windows.</p>
+</section>
+<section id="02">
+<div class="section-kicker">40</div>
+<h2>0.2</h2>
+<p>+ new filesystem layout. + FSF address updated.</p>
+</section>
+<section id="01">
+<div class="section-kicker">41</div>
+<h2>0.1</h2>
+<p>+ notes about the device id. + copyright notice at beginning of source files. + added this CHANGES file.</p>
+</section>
+
+    </div>
+
+    <div class="page-footer">
+      Generated from the fetchconfig README &middot; Rainer Tammer &middot; GPL&#8209;2.0-or-later
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Scroll-spy: highlight the sidebar link matching the section in view.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a'));
+    // Resolve by id, not by CSS selector: section ids can start with a digit
+    // (version numbers in CHANGES, numbered sections in DEVELOPER), which is a
+    // valid HTML id but an invalid CSS id selector, so passing the href to
+    // querySelector would throw. getElementById has no such restriction.
+    var sections = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); }).filter(Boolean);
+    if (!('IntersectionObserver' in window) || !sections.length) return;
+    var current = null;
+    function setActive(id){
+      if (id === current) return;
+      current = id;
+      links.forEach(function(a){ a.classList.toggle('active', a.getAttribute('href') === '#' + id); });
+    }
+    var observer = new IntersectionObserver(function(entries){
+      var visible = entries.filter(function(e){ return e.isIntersecting; });
+      if (visible.length){
+        visible.sort(function(a,b){ return a.boundingClientRect.top - b.boundingClientRect.top; });
+        setActive(visible[0].target.id);
+      }
+    }, { rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+    sections.forEach(function(s){ observer.observe(s); });
+    setActive(sections[0].id);
+    var toggle = document.getElementById('nav-toggle');
+    links.forEach(function(a){ a.addEventListener('click', function(){ if (toggle) toggle.checked = false; }); });
+  })();
+</script>
+
+</body>
+</html>

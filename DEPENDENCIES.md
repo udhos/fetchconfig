@@ -69,6 +69,10 @@ only when `email: tls=starttls` or `tls=ssl` is configured.
 
 Also the `ssh` client binary at runtime; core File::Spec/POSIX/Fcntl.
 
+On native Windows the SSH models are unavailable: `Net::OpenSSH` and `IO::Pty`
+do not run there, so Windows supports the telnet, web-UI and `procurve-snmp`
+models only. Under Cygwin/WSL the SSH models work as on Linux.
+
 ### Web-UI models (tplink-web-sg105e, procurve-web-1700)
 
 | Module | 5.26 | 5.28 | 5.40 | Used for |

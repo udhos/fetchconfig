@@ -2,6 +2,17 @@
 
 ## 9.72
 
++ Security: the planet model no longer writes the login and enable passwords
+  (or the switch's echo of them) to the debug session log. slow_print() types
+  credentials one character at a time and never touched the logs, and the
+  switch echoes the password back, so with debug=on both landed in clear text
+  in <repository>/<dev_id>.debug (mode 0600, but readable by anyone allowed to
+  read that file). The passwords and their echoes are now kept out of the log
+  (suspend_logs/restore_logs around each send and the read that consumes its
+  echo); typing speed and the type_delay option are unchanged. Existing debug
+  files from before this fix still contain the passwords - they are overwritten
+  on the next run of that device; delete them and rotate any captured password.
+
 + Model-framework code-review fixes:
 
   - MikroTik: expect_enable_prompt_paging() called escape_brackets() as a
@@ -44,6 +55,17 @@
 
 + Fixed the --help text: the --check-template and --template-syntax option
   descriptions were spliced together; each now describes its own option.
+
++ Windows portability: fetchconfig again starts and runs on native Windows
+  for telnet, web-UI and procurve-snmp devices. The SSH models no longer load
+  Net::OpenSSH at compile time (Abstract::ssh_open still requires it lazily,
+  only when an SSH device is fetched), so a Windows Perl without
+  Net::OpenSSH/IO::Pty no longer aborts at startup. On native Windows the SSH
+  models are unsupported; backup comparison (-g ... -m) and change-report
+  diffs are disabled with a clear error (they need an external diff); -P is
+  forced to 1 (no fork); and the lock-file O_NOFOLLOW flag is dropped where
+  Fcntl lacks it. Unix/AIX behaviour is unchanged; under Cygwin/WSL
+  fetchconfig behaves as on Linux.
 
 ## 9.71
 

@@ -49,7 +49,8 @@ package fetchconfig::model::NexusSSH; # fetchconfig/model/NexusSSH.pm
 use strict;
 use warnings;
 use Net::Telnet;
-use Net::OpenSSH;
+# Net::OpenSSH is loaded lazily by Abstract::ssh_open (optional dependency,
+# not available on native Windows); see PERL MODULE REQUIREMENTS.
 use IO::Handle;
 use fetchconfig::model::Abstract;
 

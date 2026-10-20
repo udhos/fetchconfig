@@ -193,7 +193,9 @@ result sink (section 2.4), not shared memory.
 ### 2.4 Parallel fetch (`-P N`)
 
 `run_fetch_phase($parallel)` runs devices concurrently when `-P N` is given
-(N >= 1 worker processes). The model is **fork-per-device-batch**:
+(N >= 1 worker processes). It relies on POSIX `fork`, so it is a no-op on
+native Windows -- `fetchconfig.pl` forces `-P 1` (sequential) there. The model
+is **fork-per-device-batch**:
 
 - The parent creates a private `File::Temp` work directory (0700, auto-cleaned).
 - It forks up to N workers; each worker runs `fetch_device` for its assigned

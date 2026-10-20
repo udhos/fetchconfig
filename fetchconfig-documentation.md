@@ -4,7 +4,7 @@
 34 | device platforms
 {version} | version
 Telnet / SSH / HTTP / SNMP | transports
-Linux / AIX / Windows | tested platforms
+Linux / AIX / Windows | tested platforms (Windows: no SSH/diff)
 <!--/stats-->
 
 A Perl script for retrieving and backing up the configuration of network devices at scale — over telnet, SSH or a device’s web UI, across dozens of vendors, with change tracking, e-mail summaries, and a repository you can script against.
@@ -13,7 +13,7 @@ A Perl script for retrieving and backing up the configuration of network devices
 
 ## Introduction {#introduction}
 
-fetchconfig is a Perl script for retrieving the configuration of multiple devices. It has been tested under Linux, AIX and Windows, and currently supports a variety of devices, including Cisco IOS, Cisco Catalyst, Cisco ASA, Cisco PIX, FortiGate Firewalls, ProCurve, Alcatel Ethernet Routers (aka Riverstone), Dell PowerConnect Switches, Terayon 3200/3500 CMTS, Datacom DmSwitch Switches, HP MSR Routers, Mikrotik Routers, Tellabs MSR Routers, Juniper EX Switch JunOS, Oracle Acme Packet, Audiocodes Mediant, Cisco IOS XR, NEC Univerge IX, Hirschmann Railswitch, Zyxel switches, PLANET managed switches, Aruba CX switches, Cisco Nexus switches, TP-Link Easy Smart switches, HP ProCurve 1700 series switches, and HP ProCurve ProVision (incl. 4000M/8000M) over SNMP+TFTP.
+fetchconfig is a Perl script for retrieving the configuration of multiple devices. It has been tested under Linux, AIX and Windows (on native Windows: telnet, web-UI and SNMP devices only, no SSH — see the Windows notes), and currently supports a variety of devices, including Cisco IOS, Cisco Catalyst, Cisco ASA, Cisco PIX, FortiGate Firewalls, ProCurve, Alcatel Ethernet Routers (aka Riverstone), Dell PowerConnect Switches, Terayon 3200/3500 CMTS, Datacom DmSwitch Switches, HP MSR Routers, Mikrotik Routers, Tellabs MSR Routers, Juniper EX Switch JunOS, Oracle Acme Packet, Audiocodes Mediant, Cisco IOS XR, NEC Univerge IX, Hirschmann Railswitch, Zyxel switches, PLANET managed switches, Aruba CX switches, Cisco Nexus switches, TP-Link Easy Smart switches, HP ProCurve 1700 series switches, and HP ProCurve ProVision (incl. 4000M/8000M) over SNMP+TFTP.
 
 **Key concepts.** A *device table* lists the devices to back up, one per line, each naming a *model* (how to talk to that kind of device) and options. fetchconfig connects to each device, retrieves its configuration, and stores it in a *repository* (a dated directory tree), keeping a configurable history. Reading on: [Device table](#device-table) defines the input, [Template model](#template-model) covers the flexible generic model, and [Options reference](#options) lists every command-line option.
 
@@ -55,7 +55,7 @@ ln -s fetchconfig-0.0 fetchconfig
 <!--tab: Windows-->
 
 1. fetchconfig.pl expects to find a Perl interpreter in the `PATH`.
-2. Install the Perl modules you need — see [Perl module requirements](#modules). Most are in the Perl core (5.26+); the non-core ones are `Net::Telnet` and `Net::SMTP` (every run), `Net::OpenSSH` (SSH devices), `LWP::UserAgent`/`HTTP::Request::Common` (web-UI models), and `Net::SNMP`/`Net::TFTP` (`procurve-snmp`).
+2. Install the Perl modules you need — see [Perl module requirements](#modules). Most are in the Perl core (5.26+); the non-core ones are `Net::Telnet` and `Net::SMTP` (every run), `Net::OpenSSH` (SSH devices), `LWP::UserAgent`/`HTTP::Request::Common` (web-UI models), and `Net::SNMP`/`Net::TFTP` (`procurve-snmp`). **On native Windows the SSH models do not run** (`Net::OpenSSH`/`IO::Pty` are unavailable there), so only telnet, web-UI and `procurve-snmp` devices work; backup comparison (`-g … -m`) and change-report diffs are disabled, `-P` always runs sequentially, and `chmod`/`umask` hardening is a no-op (rely on folder ACLs). Under Cygwin/WSL it behaves as on Linux.
 3. Unpack the fetchconfig tarball at a suitable location. From the command line, [gzip](http://www.gzip.org) and [tar](http://gnuwin32.sourceforge.net/packages/tar.htm) can be used — or a GUI archiver such as WinZip.
 
 ```cmd
@@ -68,6 +68,18 @@ move fetchconfig-0.0 fetchconfig
 ```
 
 <!--/tabs-->
+
+## Platform support {#platform-support} {nav: Platform support}
+
+fetchconfig runs on Linux, AIX and Windows. On Linux and AIX all features are available. On **native Windows** (Strawberry/ActivePerl) the features below rely on POSIX facilities and are unavailable; everything else works normally.
+
+- **SSH models are not supported.** `Net::OpenSSH` and `IO::Pty` do not run on native Windows, so the `*-ssh` models and the generic model's `transport=ssh` cannot connect. Telnet, web-UI and `procurve-snmp` devices work normally.
+- **Config diffs are not produced** (they need an external `diff`). The `-g … -m` backup comparison exits with an error. The change report and summary e-mail are still generated, but a changed device is shown as **`diff-unavailable`** instead of a diff; `email_max_diff` does not switch this off (it only caps how many diffs are embedded when diffs are available).
+- **`-P` always runs sequentially.** There is no `fork`, so `-P N>1` is accepted but reduced to `-P 1`.
+- **File-permission hardening is a no-op.** `chmod 0600` on `.debug` files and the `umask` on lock/backup files have no effect on Windows; confidentiality relies on the containing folder's NTFS ACLs.
+
+> [!note] Cygwin / WSL
+> Under Cygwin or WSL, fetchconfig behaves as on Linux — SSH, diffs and parallel fetch all work.
 
 ## Perl module requirements {#modules}
 
@@ -186,7 +198,7 @@ A value off the list, of the wrong type, an undefined tag, or with illegal conte
 
 ## Template-driven model (generic) {#template-model} {nav: Template model}
 
-Describe a device with a template instead of a Perl module.
+Describe a device with a template instead of a Perl module. On native Windows the template model's `transport=ssh` is unavailable (SSH needs `Net::OpenSSH`/`IO::Pty`); use `transport=telnet`. See [Platform support](#platform-support).
 
 Besides the per-device Perl models, fetchconfig has a `generic` model whose device interaction is described by a **template** file rather than Perl code. A template is a small state machine of expect/send steps, with the transport, prompt, timeouts, interrupt screens and ignore-lines as data. For a clean-CLI device this is a short file rather than a ~200-line module, and similar devices can share or clone one template.
 
@@ -227,6 +239,9 @@ The template parser is production-ready; the execution engine has been verified 
 ## Device support {#device-support}
 
 Known to be supported — not a comprehensive list. Other devices and versions are likely to work but haven't been verified.
+
+> [!note] Windows
+> The SSH models (`cisco-ios-ssh`, `cisco-asa-ssh`, `comware-ssh`, `procurve-ssh`, `planet-ssh`, `aruba-cx-ssh`, `nexus-ssh`) and the SSH transport of `mediant-sbc` are **not available on native Windows** (`Net::OpenSSH`/`IO::Pty` do not run there); their telnet counterparts, and `mediant-sbc` over telnet, work. See [Platform support](#platform-support).
 
 | Model name | Devices / OS supported |
 |---|---|
@@ -289,6 +304,8 @@ Everything else is unaffected: each device writes only its own directory, `.stat
 
 **Sizing `N`.** Start at 10 and raise it while watching for devices that refuse or delay logins: the limits are the switches’ concurrent-session caps, the TACACS+/RADIUS rate, and the links to remote sites — not the backup host. 10–25 is typical. `-P` applies to fetching only and cannot be combined with the lookup/maintenance modes, which stay single-process.
 
+On **native Windows** there is no `fork`, so `-P` always runs sequentially (`N>1` is reduced to `-P 1`); see [Platform support](#platform-support).
+
 ## E-mail notifications {#email-notifications}
 
 fetchconfig.pl can e-mail a summary of a run's backup results as an HTML table (Device‑ID, Date, Time, State, Size, Changes). This is entirely optional: unless an `email:` line is present, no SMTP connection is ever attempted.
@@ -335,6 +352,8 @@ Only reflects a changed-vs-previous comparison for devices where the run already
 ## Change reports {#change-reports}
 
 An HTML report of what changed, with coloured diffs; summary in e-mail, full report via fetchconfig-web.
+
+On **native Windows** the per-device diffs are disabled (they need an external `diff`); changed devices still appear in the report, marked "diff unavailable". See [Platform support](#platform-support).
 
 After a run fetchconfig can write a self-contained HTML change report (summary table plus a coloured diff per changed device) to an allowlisted `report` directory, and embed up to `email_max_diff` device diffs in the summary e-mail with a link to the full report. The report directory is presented by fetchconfig-web (view/download/delete) and is not meant to be served to users directly. Options on `email:` lines:
 
@@ -447,6 +466,8 @@ Configs on disk with no matching device in the table — e.g. left behind by a d
 
 Output matches the standard `diff older newer` convention: lines starting with `<` come from `-m` (older), lines starting with `>` come from `-n` (newer).
 
+**Not available on native Windows:** the comparison shells out to an external `diff` and is disabled there — it exits with an error instead of a diff. See [Platform support](#platform-support).
+
 > [!note] stdout stays clean
 > Log/diagnostic messages always go to stderr, so stdout only ever carries the retrieved config content — safe to pipe and redirect, e.g. `./fetchconfig.pl -devices=device_table -g fw01.acme.net > latest.cfg`.
 
@@ -455,7 +476,7 @@ Output matches the standard `diff older newer` convention: lines starting with `
 #### Retrieval options {.flag-group}
 
 <!--flag: -g dev_id | mutually exclusive with -l / -z / -Z / -o / -e / -s / -S-->
-Retrieval mode for `dev_id` instead of fetching from every device in the table(s). `dev_id` must match a device line's dev-unique-id.
+Retrieval mode for `dev_id` instead of fetching from every device in the table(s). `dev_id` must match a device line's dev-unique-id. Plain retrieval works on all platforms; the compare form (`-g … -m`) is not available on native Windows (see [Platform support](#platform-support)).
 <!--/flag-->
 
 <!--flag: -l dev_id | mutually exclusive with -g / -z / -Z / -o / -e / -s / -S-->
@@ -463,11 +484,11 @@ Listing mode: prints one line per backup on file, newest first — `<number>\t<s
 <!--/flag-->
 
 <!--flag: -n N | optional-->
-Selects which backup to retrieve, counting from the most recent: `N=1` latest (default), `N=2` the one before that, and so on.
+Selects which backup to retrieve, counting from the most recent: `N=1` latest (default), `N=2` the one before that, and so on. Selecting a backup works on all platforms; only the `-m` comparison it feeds is unavailable on native Windows.
 <!--/flag-->
 
 <!--flag: -m M | requires -g-->
-Compare mode: prints a diff between backup `M` (older) and backup `N` (newer) instead of printing backup `N`. `M` must be numerically higher than `N`.
+Compare mode: prints a diff between backup `M` (older) and backup `N` (newer) instead of printing backup `N`. `M` must be numerically higher than `N`. On native Windows this is disabled (it needs an external `diff`) and exits with an error.
 
 <!--exit-list-->
 - 0 | the two backups are identical
@@ -564,7 +585,7 @@ Prints the syntax style a generic-model template declares — the value of a `# 
 #### Fetching options {.flag-group}
 
 <!--flag: -P N | fetching only-->
-Fetch with `N` concurrent worker processes (default 1 = sequential, device-table order, live output). With `N>1` each device’s output is buffered while it runs and shown as **one uninterrupted block** when it finishes, in completion order — never interleaved with another device. Not combinable with `-g`/`-l`/`-z`/`-Z`/`-o`/`-e`/`-s`/`-S`. See [Parallel fetching](#parallel).
+Fetch with `N` concurrent worker processes (default 1 = sequential, device-table order, live output). With `N>1` each device’s output is buffered while it runs and shown as **one uninterrupted block** when it finishes, in completion order — never interleaved with another device. Not combinable with `-g`/`-l`/`-z`/`-Z`/`-o`/`-e`/`-s`/`-S`. See [Parallel fetching](#parallel). On Windows there is no fork, so `-P` always runs sequentially (`N>1` is reduced to 1).
 <!--/flag-->
 
 #### Output option {.flag-group}
@@ -708,7 +729,7 @@ Boolean, available for **all** models (since v9.71). If `debug=on` (default off)
 See also the [Directory allowlist](#directory-allowlist), which restricts the directories a device table may reference - important when the table is edited through a less-trusted front end.
 
 > [!warn] Debug files contain credentials
-> With `debug=on`, `<repository>/<dev_id>.debug` records the session verbatim — for the telnet/SSH models that includes the login and enable passwords exactly as typed, and for `procurve-snmp` the SNMP read-write community. Since v9.54 these files are created with mode `0600` regardless of the process umask. Still, enable `debug=on` only while troubleshooting and delete the file afterwards. Backup files, their directories and the `.status` file are created with the process umask — an unprivileged reader such as fetchconfig-web (running as `nobody` for `-l`/`-g`) must be able to read them, so they are deliberately **not** forced owner-only (parallel-fetch worker scratch files, in a private temp dir, are owner-only). Backups contain configuration secrets — and not always hashed: SNMP communities and some routing/VPN keys (BGP, OSPF, RADIUS/TACACS, IPsec pre-shared keys) are cleartext, and Cisco “type 7” passwords are reversible. Restrict the repository directory on a shared host and treat every backup as sensitive.
+> With `debug=on`, `<repository>/<dev_id>.debug` records the session verbatim — for the telnet/SSH models that includes the login and enable passwords exactly as typed, and for `procurve-snmp` the SNMP read-write community. Since v9.54 these files are created with mode `0600` regardless of the process umask. On native Windows these mode bits are a no-op (NTFS uses ACLs); confidentiality relies on the containing folder's ACLs — see [Platform support](#platform-support). Still, enable `debug=on` only while troubleshooting and delete the file afterwards. Backup files, their directories and the `.status` file are created with the process umask — an unprivileged reader such as fetchconfig-web (running as `nobody` for `-l`/`-g`) must be able to read them, so they are deliberately **not** forced owner-only (parallel-fetch worker scratch files, in a private temp dir, are owner-only). Backups contain configuration secrets — and not always hashed: SNMP communities and some routing/VPN keys (BGP, OSPF, RADIUS/TACACS, IPsec pre-shared keys) are cleartext, and Cisco “type 7” passwords are reversible. Restrict the repository directory on a shared host and treat every backup as sensitive.
 
 **SSH host keys are not verified.** The SSH models use `StrictHostKeyChecking=no` and `UserKnownHostsFile=/dev/null`: any host key is accepted and none remembered. This is deliberate — fetchconfig runs unattended, and a switch’s host key changes on every hardware swap, which would otherwise halt backups until someone edited `known_hosts`. The trade-off is that an on-path attacker could impersonate a device and capture the login password. Run fetchconfig on a trusted management network.
 

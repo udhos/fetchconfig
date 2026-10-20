@@ -122,6 +122,10 @@ sub device_diff {
     if (!defined($path_n) || !defined($path_m)) {
         return ([ 'diff unavailable - check' ], 0, $count);
     }
+    if ($^O eq 'MSWin32') {
+        $logger->error("dev=$dev_id: config diff currently not supported on Windows") if $logger;
+        return ([ 'diff currently not supported on Windows' ], 0, $count);
+    }
     local *DIFF;
     my $pid = open(DIFF, '-|');
     if (!defined($pid)) {

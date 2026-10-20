@@ -32,7 +32,8 @@ package fetchconfig::model::CiscoASASSH; # fetchconfig/model/CiscoASASSH.pm
 use strict;
 use warnings;
 use Net::Telnet;
-use Net::OpenSSH;
+# Net::OpenSSH is loaded lazily by Abstract::ssh_open (optional dependency,
+# not available on native Windows); see PERL MODULE REQUIREMENTS.
 use fetchconfig::model::Abstract;
 @fetchconfig::model::CiscoASASSH::ISA = qw(fetchconfig::model::Abstract);
 ####################################

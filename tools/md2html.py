@@ -468,15 +468,27 @@ def _verbatim_passthrough(md):
     return '\n'.join(body) + '\n'
 
 
-def to_text(md):
+def to_text(md, wrap_width=None):
     """Render Markdown to a readable plain-text version: strip the inline and
     block markup, keep the structure (headings underlined, list bullets,
     fenced code indented, pipe tables as aligned columns). Good enough for a
     README.foo companion to the README.foo.html, from a single README.foo.md
-    source."""
+    source. With wrap_width set, prose (paragraphs, list items, blockquotes)
+    is wrapped to that column count; code blocks, tables and headings are left
+    verbatim, and an over-long token (e.g. a URL) is never broken."""
     verbatim = _verbatim_passthrough(md)
     if verbatim is not None:
         return verbatim
+    import textwrap
+    def _wrap(text, initial='', subsequent=''):
+        if wrap_width is None:
+            return [initial + text]
+        text = _ascii(text)                  # measure width on the final ASCII
+        if not text.strip():
+            return ['']
+        return textwrap.wrap(text, width=wrap_width,
+                             initial_indent=initial, subsequent_indent=subsequent,
+                             break_long_words=False, break_on_hyphens=False)
     out = []
     # drop HTML comment blocks so they never leak into the plain-text render.
     # The <!--MERMAID ... MERMAID--> diagram sources are matched first and by
@@ -511,7 +523,10 @@ def to_text(md):
             while i < n and lines[i].strip().startswith('|'):
                 rows.append(_split_row(lines[i]))
                 i += 1
-            out.extend(_format_table(header, rows))
+            if wrap_width and len(header) == 2:
+                out.extend(_format_table_wrapped(header, rows, wrap_width))
+            else:
+                out.extend(_format_table(header, rows))
             continue
         # ASCII "####..." info box (rule line of >=8 '#'): keep verbatim so the
         # box is not mis-parsed as headings.
@@ -537,7 +552,9 @@ def to_text(md):
         li = re.match(r'^(\s*)([-*+]|\d+\.)\s+(.*)$', line)
         if li:
             indent, marker, text = li.group(1), li.group(2), li.group(3)
-            out.append('%s%s %s' % (indent, marker, _inline_text(text)))
+            prefix = '%s%s ' % (indent, marker)
+            cont = '%s%s' % (indent, ' ' * (len(marker) + 1))
+            out.extend(_wrap(_inline_text(text), initial=prefix, subsequent=cont))
             i += 1
             continue
         # horizontal rule
@@ -548,10 +565,10 @@ def to_text(md):
         # blockquote
         bq = re.match(r'^\s*>\s?(.*)$', line)
         if bq:
-            out.append('    ' + _inline_text(bq.group(1)))
+            out.extend(_wrap(_inline_text(bq.group(1)), initial='    ', subsequent='    '))
             i += 1
             continue
-        out.append(_inline_text(line))
+        out.extend(_wrap(_inline_text(line)))
         i += 1
     text = '\n'.join(out)
     text = re.sub(r'\n{3,}', '\n\n', text)   # collapse blank runs
@@ -587,6 +604,55 @@ def _format_table(header, rows):
     out.append('  '.join('-' * widths[c] for c in range(cols)))
     for r in rows:
         out.append(fmt(r))
+    out.append('')
+    return out
+
+
+def _format_table_wrapped(header, rows, width=80):
+    """Render a 2-column table wrapped to `width` columns: column 1 is left-
+    justified; column 2's text is wrapped, with continuation lines aligned
+    under the description column, matching the README option-table style. An
+    over-long column-1 cell goes on its own line; an unbreakable token (e.g. a
+    URL) may still exceed `width`."""
+    gap = 2
+    h0 = _ascii(header[0]) if header else ''
+    h1 = _ascii(header[1]) if len(header) > 1 else ''
+    cells = [(_ascii(r[0]) if len(r) > 0 else '',
+              _ascii(r[1]) if len(r) > 1 else '') for r in rows]
+    c1w = max([len(h0)] + [len(c[0]) for c in cells])
+    c1w = min(c1w, max(10, width - gap - 36))   # keep room for the description
+    c2start = c1w + gap
+    out = ['']
+
+    def emit(prefix, desc):
+        words = desc.split()
+        if not words:
+            out.append(prefix.rstrip())
+            return
+        avail = width - c2start           # same width for first and continuation
+        lines = []
+        cur = ''
+        for w in words:
+            if cur == '':
+                cur = w
+            elif len(cur) + 1 + len(w) <= avail:
+                cur += ' ' + w
+            else:
+                lines.append(cur); cur = w
+        if cur:
+            lines.append(cur)
+        out.append(prefix + lines[0])
+        for ln in lines[1:]:
+            out.append(' ' * c2start + ln)
+
+    out.append(h0.ljust(c1w) + ' ' * gap + h1)
+    out.append('-' * c1w + ' ' * gap + '-' * (width - c2start))
+    for c1, c2 in cells:
+        if len(c1) <= c1w:
+            emit(c1.ljust(c1w) + ' ' * gap, c2)
+        else:
+            out.append(c1)
+            emit(' ' * c2start, c2)
     out.append('')
     return out
 
@@ -627,8 +693,14 @@ def convert_file(src, want_html=True, want_text=True, title=None, help_subtitle=
         dst = base           # README.foo.md -> README.foo (plain text)
         if dst == src:       # avoid overwriting the source if no .md suffix
             dst = base + '.txt'
+        # README and DEVELOPER-GUIDE: wrap the plain-text companion to 80
+        # columns (prose only); the other companions keep their source line
+        # structure.
+        import os
+        stem = os.path.basename(base)
+        wrap_width = 80 if stem in ('README', 'DEVELOPER-GUIDE') else None
         with io.open(dst, 'w', encoding='utf-8') as f:
-            f.write(to_text(md))
+            f.write(to_text(md, wrap_width=wrap_width))
         made.append(dst)
     return made
 

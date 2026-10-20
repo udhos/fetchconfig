@@ -28,6 +28,11 @@ use File::Path qw(make_path);
 use POSIX qw(strftime);
 use Text::ParseWords ();
 use Fcntl qw(:DEFAULT :flock);
+
+# O_NOFOLLOW is POSIX-only; Windows Perl's Fcntl does not define it. Resolve
+# once (0 where unavailable, e.g. MSWin32); on Unix this is the real flag, so
+# behaviour is unchanged.
+my $O_NOFOLLOW = ($^O eq 'MSWin32') ? 0 : (eval { Fcntl::O_NOFOLLOW() } // 0);
 use Digest::SHA qw(sha256_hex);
 
 ####################################
@@ -1348,7 +1353,7 @@ sub acquire_device_lock {
 
     my $fh;
     # O_NOFOLLOW: never follow a symlink planted in the lock directory.
-    if (!sysopen($fh, $lock_path, O_RDWR | O_CREAT | O_NOFOLLOW, 0600)) {
+    if (!sysopen($fh, $lock_path, O_RDWR | O_CREAT | $O_NOFOLLOW, 0600)) {
 	$self->log_error("dev=$dev_id: could not open lock file $lock_path: $!");
 	return undef;
     }

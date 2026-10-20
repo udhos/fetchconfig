@@ -73,6 +73,10 @@ IO::Pty       CPAN  CPAN  CPAN  pseudo-terminal (Net::OpenSSH dependency)
 
 Also the ssh client binary at runtime; core File::Spec/POSIX/Fcntl.
 
+On native Windows the SSH models are unavailable: Net::OpenSSH and IO::Pty
+do not run there, so Windows supports the telnet, web-UI and procurve-snmp
+models only. Under Cygwin/WSL the SSH models work as on Linux.
+
 Web-UI models (tplink-web-sg105e, procurve-web-1700)
 ----------------------------------------------------
 

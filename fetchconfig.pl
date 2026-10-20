@@ -210,6 +210,10 @@ if (defined($compare_index) && ($compare_index !~ /^\d+$/ || $compare_index < 1)
 if ($parallel !~ /^\d+$/ || $parallel < 1) {
     $opt_fail->("-P requires a positive number of parallel workers");
 }
+if ($parallel > 1 && $^O eq 'MSWin32') {
+    $log->info("-P > 1 is not supported on Windows (no fork); running sequentially (-P 1)");
+    $parallel = 1;
+}
 
 # --check-template FILE: structurally validate one template and exit. This
 # needs neither a device table nor a repository, so it dispatches before the
@@ -484,10 +488,12 @@ sub usage_text {
     $t .= "                      uninterrupted block when it finishes, in completion order; never interleaved.\n";
     $t .= "                      Fetching only - not combinable with -g/-l/-z/-Z/-o/-e/-s/-S. Size N by what the\n";
     $t .= "                      devices tolerate (login limits, AAA rate, links); 10-25 is typical.\n";
+    $t .= "                      On Windows there is no fork; -P always runs sequentially.\n";
     $t .= "       -line=string   a single device table line given directly on the command line (repeatable)\n";
     $t .= "       -g dev_id      retrieve a backed up config for dev_id instead of fetching\n";
     $t .= "       -n N           select which backup to retrieve (1=latest, 2=next most recent, ...); default 1\n";
     $t .= "       -m M           compare backup N against the older backup M (M must be > N); output is a diff\n";
+    $t .= "                      (needs an external diff; not supported on Windows)\n";
     $t .= "       -l dev_id      list all backed up configs for dev_id (mutually exclusive with -g/-z/-Z/-o)\n";
     $t .= "       -z dev_id      list backed up configs for dev_id that are 0 bytes long (mutually exclusive with -g/-l/-Z/-o);\n";
     $t .= "                      exits 1 if any are found, 0 if all backups are non-empty. With -D the listed zero-byte\n";

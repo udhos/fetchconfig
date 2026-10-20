@@ -18,6 +18,11 @@ use warnings;
 use File::Path;
 use File::Basename;
 use Fcntl qw(:DEFAULT :flock);
+
+# O_NOFOLLOW is POSIX-only; Windows Perl's Fcntl does not define it. Resolve
+# once (0 where unavailable, e.g. MSWin32); on Unix this is the real flag, so
+# behaviour is unchanged.
+my $O_NOFOLLOW = ($^O eq 'MSWin32') ? 0 : (eval { Fcntl::O_NOFOLLOW() } // 0);
 use fetchconfig::model::Detector;
 use fetchconfig::model::Abstract;
 
@@ -221,6 +226,11 @@ sub retrieve_config {
 #
 sub compare_config {
     my ($dev_id, $n_index, $m_index, $out_file) = @_;
+
+    if ($^O eq 'MSWin32') {
+	$log->error("dev=$dev_id: backup comparison (diff) currently not supported on Windows");
+	exit 2;
+    }
 
     my ($path_n, $count) = locate_backup($dev_id, $n_index);
 
@@ -765,7 +775,7 @@ sub clean_lock_dir {
 	# Only remove if no one holds it. Open without following a symlink,
 	# try a non-blocking exclusive lock; if it is held, leave it alone.
 	my $fh;
-	if (!sysopen($fh, $path, O_RDWR | O_NOFOLLOW)) {
+	if (!sysopen($fh, $path, O_RDWR | $O_NOFOLLOW)) {
 	    $log->error("--clean-lock-dir: cannot open $path: $!");
 	    next;
 	}

@@ -15,7 +15,7 @@ A Perl tool for retrieving and archiving the running configuration of many netwo
 > [!NOTE]
 > Developers: DEVELOPER-GUIDE.md / .html is the architecture and engineering guide (internals, data structures, device-table format, security model, and how to extend); How-To-add-a-model.md / .html is the programming manual for writing a new device model; "perl Makefile.PL && make test" (or "prove -I. t/") runs the test suite under t/, and "make doc" regenerates the .md-derived docs via tools/render-doc.py and tools/md2html.py. Perl module requirements (core vs CPAN for Perl 5.26/5.28/5.40, by feature) are in the file DEPENDENCIES.
 
-fetchconfig is a Perl script for retrieving the configuration of multiple devices. It has been tested under Linux, AIX and Windows, and currently supports a variety of devices, including Cisco IOS, Cisco Catalyst, Cisco ASA, Cisco PIX, FortiGate Firewalls, ProCurve, Alcatel Ethernet Routers (aka Riverstone), Dell PowerConnect Switches, Terayon 3200/3500 CMTS, Datacom DmSwitch Switches, HP MSR Routers, Mikrotik Routers, Tellabs MSR Routers, Juniper EX Switch JunOS, Oracle Acme Packet, Audiocodes Mediant, Cisco IOS XR, NEC Univerge IX, Hirschmann Railswitch, Zyxel switches, PLANET managed switches, Aruba CX switches, Cisco Nexus switches, AudioCodes Mediant SBCs, TP-Link Easy Smart switches, HP ProCurve 1700 series switches, and HP ProCurve ProVision (incl. 4000M/8000M) over SNMP+TFTP.
+fetchconfig is a Perl script for retrieving the configuration of multiple devices. It has been tested under Linux, AIX and Windows (on native Windows: telnet, web-UI and SNMP devices only, no SSH -- see Windows limitations), and currently supports a variety of devices, including Cisco IOS, Cisco Catalyst, Cisco ASA, Cisco PIX, FortiGate Firewalls, ProCurve, Alcatel Ethernet Routers (aka Riverstone), Dell PowerConnect Switches, Terayon 3200/3500 CMTS, Datacom DmSwitch Switches, HP MSR Routers, Mikrotik Routers, Tellabs MSR Routers, Juniper EX Switch JunOS, Oracle Acme Packet, Audiocodes Mediant, Cisco IOS XR, NEC Univerge IX, Hirschmann Railswitch, Zyxel switches, PLANET managed switches, Aruba CX switches, Cisco Nexus switches, AudioCodes Mediant SBCs, TP-Link Easy Smart switches, HP ProCurve 1700 series switches, and HP ProCurve ProVision (incl. 4000M/8000M) over SNMP+TFTP.
 
 ### Important Change in 9.55 (filename_append_suffix)
 
@@ -86,6 +86,17 @@ move fetchconfig-0.0 fetchconfig
 
 *[ fetchconfig is now available under c:\fetchconfig ]*
 
+### Windows limitations
+
+On native Windows (Strawberry/ActivePerl) some features are unavailable; fetchconfig still backs up telnet, web-UI and procurve-snmp devices:
+
+- SSH models are not supported: Net::OpenSSH and IO::Pty do not run on native Windows, so the *-ssh models and the generic model's transport=ssh cannot connect. Telnet, web-UI and SNMP devices are unaffected.
+- Config diffs are not produced on native Windows (they need an external diff). The "-g ... -m" backup comparison exits with an error. The change report and summary e-mail are still generated, but a changed device is shown as "diff-unavailable" instead of a diff; email_max_diff does not switch this off (it only caps how many diffs are embedded when diffs are available).
+- -P always runs sequentially (there is no fork); -P N>1 is accepted but reduced to 1.
+- File-permission hardening (chmod 0600 on .debug files, umask on lock/backup files) is a no-op on Windows; confidentiality relies on the containing folder's NTFS ACLs.
+
+Under Cygwin or WSL, fetchconfig behaves as on Linux.
+
 ## Perl Module Requirements
 
 fetchconfig runs on Perl 5.26 or later. Most of the modules it uses are part of the Perl core on those versions and need no separate installation: Text::ParseWords, POSIX, IO::Handle, Time::HiRes, MIME::Base64, FindBin, File::Temp, File::Path, File::Basename, File::Compare, Getopt::Long, Digest::SHA and Net::SMTP.
@@ -96,7 +107,7 @@ The following modules are NOT in the Perl core and must be installed separately,
 |--------|-----------|
 | `Net::Telnet` | Needed on every run. Used for telnet devices, and also to drive the pseudo-terminal for all SSH devices. In practice fetchconfig cannot back up any device without it. |
 | `Net::SMTP` | Needed on every run. It is part of the "libnet" distribution and ships with most Perl installations, but it is not in the Perl core. Note that fetchconfig loads its mail/reporting code on every run - it writes the per-device status file (see STATUS FILE) even when no e-mail is configured - so Net::SMTP must be present regardless of whether summary e-mail is enabled. No SMTP connection is made unless an "email:" line is configured. |
-| `Net::OpenSSH` | Needed for all SSH-based models (cisco-ios-ssh, cisco-asa-ssh, comware-ssh, procurve-ssh, planet-ssh, aruba-cx-ssh and any other *-ssh model). Not needed if you only use telnet, web UI or SNMP devices. |
+| `Net::OpenSSH` | Needed for all SSH-based models (cisco-ios-ssh, cisco-asa-ssh, comware-ssh, procurve-ssh, planet-ssh, aruba-cx-ssh and any other *-ssh model). Not needed if you only use telnet, web UI or SNMP devices. Not available on native Windows, so the SSH models cannot run there (see Windows limitations). |
 | `LWP::UserAgent`, `HTTP::Request::Common` | Needed for the web-UI models (tplink-web-sg105e, procurve-web-1700), which have no CLI. Both come with the "libwww-perl" distribution. |
 | `Net::SNMP`, `Net::TFTP` | Needed for the procurve-snmp model (HP ProCurve ProVision, including the 4000M/8000M chassis), which backs up over SNMP + TFTP. |
 | `IO::Socket::SSL` (and its prerequisite `Net::SSLeay`) | Needed only if you enable TLS for the summary e-mail ("email: tls=starttls" or "tls=ssl"). Plain SMTP does not need it. Mozilla::CA is optional, for a CA bundle where the system has none. |
@@ -131,7 +142,7 @@ cd /usr/local/fetchconfig
 
 The fetchconfig.pl script will scan the "device_table" file, trying to retrieve the configuration for every device, storing configuration files under the "repository".
 
-By default the devices are fetched one after another, in device-table order. With many devices the run time is dominated by the network sessions; "-P N" fetches N devices concurrently - see PARALLEL FETCHING below.
+By default the devices are fetched one after another, in device-table order. With many devices the run time is dominated by the network sessions; "-P N" fetches N devices concurrently - see PARALLEL FETCHING below. On native Windows "-P N" always runs sequentially (no fork; see WINDOWS LIMITATIONS).
 
 ## Device Table
 
@@ -218,7 +229,7 @@ A device whose recipient was overridden this way is left out of no one's mail: i
 
 ## Change Reports
 
-fetchconfig can produce a change report after a run: an HTML page summarising which devices changed, with a coloured diff per changed device, plus up to a configurable number of diffs embedded in the summary e-mail. The report is written to an allowlisted "report" directory (see DIRECTORY ALLOWLIST) that fetchconfig-web presents (view/download/delete); it is NOT meant to be served to users directly. Options are set on "email:" lines:
+fetchconfig can produce a change report after a run: an HTML page summarising which devices changed, with a coloured diff per changed device, plus up to a configurable number of diffs embedded in the summary e-mail. The report is written to an allowlisted "report" directory (see DIRECTORY ALLOWLIST) that fetchconfig-web presents (view/download/delete); it is NOT meant to be served to users directly. On native Windows the per-device diffs are disabled (they need an external "diff"); changed devices still appear, marked "diff unavailable" (see WINDOWS LIMITATIONS). Options are set on "email:" lines:
 
 email: report_dir=$REP1         the report directory (a "report" allowlist entry, by $TAG or path). email: write_report=on|off      write the HTML report. With on and no from=/to=/smtp=, only the report is written and no e-mail is sent. email: email_max_diff=N         embed up to N changed devices' diffs in the e-mail (device-table order). Default 0 (no diffs); 0 or unset = no diffs in the e-mail. email: web_report_url=URL       base URL of fetchconfig-web (the CGI itself, with NO query string, e.g. https://host/cgi-bin/fetchconfig-web.cgi). fetchconfig appends "?action=view_report&file=<report>" automatically to build the "full report" link in the e-mail (only emitted when a report was actually written). Any query string already on the value is ignored. email: report_logo=FILE|none    a logo file IN report_dir, embedded in the HTML (self-contained). Recommended size 250x50 px. none = no logo. email: report_days=N            prune reports older than N days (only if N > 1; 0 or unset = no pruning). Deletes by exact filename, never a wildcard. email: mask_secrets=on|off      mask common secret forms in the diffs (default on). Master switch for all hiding; applies to the e-mail and the HTML report. email: report_hide=<regex>      additional custom regex, taken verbatim (whole rest of the line; one per line, accumulates); the matched substring is replaced with ****. Governed by mask_secrets. See CHANGE REPORTS below.
 
@@ -228,7 +239,10 @@ SECRET MASKING IS BEST EFFORT. When mask_secrets is on (the default), common Cis
 
 CUSTOM PATTERNS. For secrets the built-ins do not cover, add one or more regexes, one per line:
 
-email: report_hide=(?<=wpa-passphrase )\S+ email: report_hide=(?<=^key )[0-9a-f]{16,}
+```
+email: report_hide=(?<=wpa-passphrase )\S+
+email: report_hide=(?<=^key )[0-9a-f]{16,}
+```
 
 Only the substring each regex MATCHES is replaced with "****", so to keep the surrounding keyword visible, match only the value -- the examples above use a fixed-width lookbehind "(?<=KEYWORD )" so the keyword stays and only the value is hidden, e.g.
 
@@ -298,11 +312,7 @@ The numbers in the first column are exactly the numbers "-n" and "-m" expect (1=
 ./fetchconfig.pl -devices=device_table -z fw01.acme.net
 ```
 
-```
-If any are found, they are listed in the same format as
-        "-l" above, and fetchconfig.pl exits with status 1; if
-        none are found, nothing is printed and the exit status is 0.
-```
+If any are found, they are listed in the same format as "-l" above, and fetchconfig.pl exits with status 1; if none are found, nothing is printed and the exit status is 0.
 
 5. Run the same 0-byte check across every device in one go, instead of one device at a time, by using "-Z" (no dev_id) instead of "-z dev_id":
 
@@ -310,23 +320,13 @@ If any are found, they are listed in the same format as
 ./fetchconfig.pl -devices=device_table -Z
 ```
 
-```
-Sample output if e.g. one device has an empty backup
-        (tab-separated: dev_id, number, size in bytes, path):
-```
+Sample output if e.g. one device has an empty backup (tab-separated: dev_id, number, size in bytes, path):
 
 ```
 fw01.acme.net	1	0	/usr/local/fetchconfig/config/202608/20260825/fw01.acme.net/fw01.acme.net.run.20260825.001105CEST
 ```
 
-```
-As with "-z", nothing is printed and the exit status is 0
-        if no device has a 0-byte backup. A device whose repository
-        can't be read is logged (to stderr) and skipped, without
-        aborting the check for the remaining devices; that alone
-        does not make "-Z" exit non-zero -- only an actual 0-byte
-        backup does.
-```
+As with "-z", nothing is printed and the exit status is 0 if no device has a 0-byte backup. A device whose repository can't be read is logged (to stderr) and skipped, without aborting the check for the remaining devices; that alone does not make "-Z" exit non-zero -- only an actual 0-byte backup does.
 
 6. Delete the 0-byte backups that "-z"/"-Z" find, by adding "-D". This removes only the empty backup FILES (never directories), and only for devices still in the device table -- "-z"/"-Z" look only at loaded devices, so a decommissioned device's leftovers are untouched here (those are orphaned files; clean them with "-o", below). Since this is destructive, preview it first by also adding "-T" -- with "-T" the delete commands are only logged (to stderr) as "would delete: unlink <path>", nothing is removed:
 
@@ -342,13 +342,7 @@ Once the preview looks right, drop "-T" to delete for real:
 ./fetchconfig.pl -devices=device_table -Z -D
 ```
 
-```
-An emptied day/month directory is left in place; prune it
-        afterwards with "-e -D" (see below). The exit status is
-        unchanged by "-D": still 1 if any 0-byte backup was
-        found, 0 otherwise. "-D" requires one of "-o", "-e",
-        "-z" or "-Z"; "-T" requires "-D".
-```
+An emptied day/month directory is left in place; prune it afterwards with "-e -D" (see below). The exit status is unchanged by "-D": still 1 if any 0-byte backup was found, 0 otherwise. "-D" requires one of "-o", "-e", "-z" or "-Z"; "-T" requires "-D".
 
 7. Find backed up configs on disk that no longer have a matching device in the device table (e.g. a device that was decommissioned or renamed, leaving its old backups behind), with "-o":
 
@@ -356,44 +350,17 @@ An emptied day/month directory is left in place; prune it
 ./fetchconfig.pl -devices=device_table -o
 ```
 
-```
-Sample output if e.g. one old device's backups are found
-        (tab-separated: dev_id, file count, total size in bytes,
-        path to one date's worth of that device's backups):
-```
+Sample output if e.g. one old device's backups are found (tab-separated: dev_id, file count, total size in bytes, path to one date's worth of that device's backups):
 
 ```
 old-switch01	1	28221	/usr/local/fetchconfig/config/202607/20260715/old-switch01
 ```
 
-```
-As with "-z"/"-Z", nothing is printed and the exit status is
-        0 if nothing orphaned is found. "-o" scans every
-        "repository=" path configured by a device in the currently
-        loaded device table(s) (deduplicated -- most setups share
-        one or a few repository paths); a repository path used only
-        by a device no longer in the table won't be found this way,
-        since there's nothing left to read that path from.
-```
+As with "-z"/"-Z", nothing is printed and the exit status is 0 if nothing orphaned is found. "-o" scans every "repository=" path configured by a device in the currently loaded device table(s) (deduplicated -- most setups share one or a few repository paths); a repository path used only by a device no longer in the table won't be found this way, since there's nothing left to read that path from.
 
-```
-Besides the dated backup directories, "-o" also lists a
-        removed device's <dev_id>.status and <dev_id>.debug files,
-        which live at the repository root (not inside the dated
-        directory). They are reported as single-file entries, and
-        with "-D" they are deleted along with the orphaned backups.
-        This matters for the .debug file in particular: it can hold
-        credentials (see SECURITY NOTES), so orphan cleanup removes
-        a decommissioned device's debug log rather than leaving it
-        behind.
-```
+Besides the dated backup directories, "-o" also lists a removed device's <dev_id>.status and <dev_id>.debug files, which live at the repository root (not inside the dated directory). They are reported as single-file entries, and with "-D" they are deleted along with the orphaned backups. This matters for the .debug file in particular: it can hold credentials (see SECURITY NOTES), so orphan cleanup removes a decommissioned device's debug log rather than leaving it behind.
 
-```
-To actually delete what "-o" found, add "-D". Since this is
-        destructive, preview it first by also adding "-T" -- with
-        "-T", the delete commands are only logged (to stderr), not
-        run:
-```
+To actually delete what "-o" found, add "-D". Since this is destructive, preview it first by also adding "-T" -- with "-T", the delete commands are only logged (to stderr), not run:
 
 ```
 ./fetchconfig.pl -devices=device_table -o -D -T
@@ -405,43 +372,18 @@ Once the preview looks right, drop "-T" to delete for real:
 ./fetchconfig.pl -devices=device_table -o -D
 ```
 
-```
-The tab-separated listing on stdout (or "-f file") is the
-        same either way, so a script parsing it doesn't need to
-        care whether "-D"/"-T" were used; what "-D" does (or, with
-        "-T", would do) to each orphaned directory is logged
-        separately. "-D" requires "-o"; "-T" requires "-D" (both
-        report an error and exit otherwise). With "-D" but not
-        "-T", the exit status changes meaning: 1 if any deletion
-        failed, 0 if nothing needed deleting or everything found
-        was deleted successfully (with "-T", or with plain "-o",
-        the exit status still just reflects whether anything
-        orphaned was found).
-```
+The tab-separated listing on stdout (or "-f file") is the same either way, so a script parsing it doesn't need to care whether "-D"/"-T" were used; what "-D" does (or, with "-T", would do) to each orphaned directory is logged separately. "-D" requires "-o"; "-T" requires "-D" (both report an error and exit otherwise). With "-D" but not "-T", the exit status changes meaning: 1 if any deletion failed, 0 if nothing needed deleting or everything found was deleted successfully (with "-T", or with plain "-o", the exit status still just reflects whether anything orphaned was found).
 
-```
-6b. Check whether a device's backups have inconsistent
-        filename suffixes (e.g. after filename_append_suffix was
-        introduced on a device that already had backups), by using
-        "-s dev_id", or "-S" to check every loaded device at once:
-```
+8. Check whether a device's backups have inconsistent filename suffixes (e.g. after filename_append_suffix was introduced on a device that already had backups), by using "-s dev_id", or "-S" to check every loaded device at once:
 
 ```
 ./fetchconfig.pl -devices=device_table -s fw01.acme.net
 ./fetchconfig.pl -devices=device_table -S
 ```
 
-```
-Nothing is printed and the exit status is 0 if every device's
-        backups share one suffix (or none). Otherwise each inconsistent
-        device is listed, one line per distinct suffix, and the exit
-        status is 1.
-```
+Nothing is printed and the exit status is 0 if every device's backups share one suffix (or none). Otherwise each inconsistent device is listed, one line per distinct suffix, and the exit status is 1.
 
-```
-6c. Find (and, with "-D", remove) empty directories left behind
-        in the repositories, e.g. after deleting old backups by hand:
-```
+9. Find (and, with "-D", remove) empty directories left behind in the repositories, e.g. after deleting old backups by hand:
 
 ```
 ./fetchconfig.pl -devices=device_table -e
@@ -449,13 +391,13 @@ Nothing is printed and the exit status is 0 if every device's
 ./fetchconfig.pl -devices=device_table -e -D      (delete)
 ```
 
-8. Save the retrieved config to a file instead of printing it to stdout, by adding "-f":
+10. Save the retrieved config to a file instead of printing it to stdout, by adding "-f":
 
 ```
 ./fetchconfig.pl -devices=device_table -g fw01.acme.net -n 2 -f config.file
 ```
 
-9. Compare two backed up versions of the same device, by adding "-m" together with "-n". The following example compares the latest backup ("-n 1") against the backup before it ("-m 2"):
+11. Compare two backed up versions of the same device, by adding "-m" together with "-n". The following example compares the latest backup ("-n 1") against the backup before it ("-m 2"):
 
 ```
 ./fetchconfig.pl -devices=device_table -g fw01.acme.net -n 1 -m 2
@@ -473,10 +415,10 @@ The options below are grouped by purpose. The retrieval options read back a stor
 
 | Option | Description |
 |--------|-------------|
-| `-g dev_id` | Switches fetchconfig.pl to retrieval mode for dev_id, instead of fetching configuration from every device in the device table(s). dev_id must match the dev-unique-id column of a device line (see "DEVICE TABLE" above). Mutually exclusive with "-l", "-z", "-Z" and "-o". |
+| `-g dev_id` | Switches fetchconfig.pl to retrieval mode for dev_id, instead of fetching configuration from every device in the device table(s). dev_id must match the dev-unique-id column of a device line (see "DEVICE TABLE" above). Mutually exclusive with "-l", "-z", "-Z" and "-o". Plain retrieval works on all platforms; the compare form ("-g ... -m") is not available on native Windows (see WINDOWS LIMITATIONS). |
 | `-l dev_id` | Switches fetchconfig.pl to listing mode for dev_id: instead of retrieving a config, prints one line per backup on file, newest first, tab-separated as: <number>\t<size in bytes>\t<path> <number> is exactly what "-n"/"-m" expect. Mutually exclusive with "-g", "-z", "-Z" and "-o". |
-| `-n N` | Optional. Selects which backup to retrieve, counting from the most recent: N=1 the latest (most recent) backup [default] N=2 the backup before that N=3 the backup before that, and so on. If omitted, N=1 is assumed. |
-| `-m M` | Optional. Enables compare mode: instead of printing backup N, fetchconfig.pl prints a "diff" between backup M and backup N (M being the older one, N being the newer one). M is counted the same way as N (1=latest, 2=next most recent, ...), and requires "-g". M must be numerically higher than N (i.e. M must refer to an older backup than N); otherwise fetchconfig.pl reports an error and exits without comparing anything. |
+| `-n N` | Optional. Selects which backup to retrieve, counting from the most recent: N=1 the latest (most recent) backup [default] N=2 the backup before that N=3 the backup before that, and so on. If omitted, N=1 is assumed. Selecting a backup works on all platforms; only the "-m" comparison it feeds is unavailable on native Windows. |
+| `-m M` | Optional. Enables compare mode: instead of printing backup N, fetchconfig.pl prints a "diff" between backup M and backup N (M being the older one, N being the newer one). M is counted the same way as N (1=latest, 2=next most recent, ...), and requires "-g". M must be numerically higher than N (i.e. M must refer to an older backup than N); otherwise fetchconfig.pl reports an error and exits without comparing anything. Not available on native Windows: the comparison needs an external "diff" and is disabled there (it exits with an error; see WINDOWS LIMITATIONS). |
 
 ### Housekeeping options
 
@@ -505,7 +447,7 @@ The options below are grouped by purpose. The retrieval options read back a stor
 
 | Option | Description |
 |--------|-------------|
-| `-P N` | Fetches with N concurrent worker processes (default 1 = sequential, device-table order, live output). With N>1 each device's output is buffered and shown as one uninterrupted block when it finishes, in completion order. Fetching only - not combinable with any of the retrieval/housekeeping/ template listing modes. See PARALLEL FETCHING below. |
+| `-P N` | Fetches with N concurrent worker processes (default 1 = sequential, device-table order, live output). With N>1 each device's output is buffered and shown as one uninterrupted block when it finishes, in completion order. Fetching only - not combinable with any of the retrieval/housekeeping/ template listing modes. See PARALLEL FETCHING below. On native Windows there is no fork, so "-P" always runs sequentially (N>1 is reduced to 1; see WINDOWS LIMITATIONS). |
 
 ### Output option
 
@@ -523,7 +465,7 @@ The options below are grouped by purpose. The retrieval options read back a stor
 
 If dev_id is unknown, or if the device has no "repository" option configured, fetchconfig.pl reports an error and exits with a non-zero status; nothing is written to stdout or to "-f". The same applies if "-n" (or, with "-m", "-m" itself) refers to a backup that does not exist (e.g. "-n 5" when only 2 backups are on file) -- use "-l" beforehand if unsure how many backups exist.
 
-When `-m` is used, fetchconfig.pl's exit status follows the same convention as the `diff` command itself: **0** the two backups are identical; **1** the two backups differ; **>1** an error occurred (see above). This makes `-m` convenient for scripting, e.g. to detect whether a config actually changed between two backups.
+When `-m` is used, fetchconfig.pl's exit status follows the same convention as the `diff` command itself: **0** the two backups are identical; **1** the two backups differ; **>1** an error occurred (see above). This makes `-m` convenient for scripting, e.g. to detect whether a config actually changed between two backups. (The "-m" comparison is not available on native Windows; see WINDOWS LIMITATIONS.)
 
 Log/diagnostic messages (as produced by the existing fetchconfig.pl logger) are always sent to stderr, so stdout only ever carries the retrieved config content; this makes "-g" safe to use in pipelines and redirections, e.g.:
 
@@ -545,6 +487,8 @@ NOTE: compare mode ("-m") runs the standard "diff" utility behind the scenes, so
 ## Device Support
 
 The following devices are known to be supported.  This is not a comprehensive list.  Other devices and versions are likely to work but have not been verified.
+
+On native Windows the SSH models (cisco-ios-ssh, cisco-asa-ssh, comware-ssh, procurve-ssh, planet-ssh, aruba-cx-ssh, nexus-ssh) and the SSH transport of mediant-sbc are not available (Net::OpenSSH/IO::Pty do not run there); their telnet counterparts, and mediant-sbc over telnet, work. See WINDOWS LIMITATIONS.
 
 | Model Name | Devices / OS Supported |
 |---|---|
@@ -593,7 +537,7 @@ A device selects it in the device table with the model "generic" and a template 
 	generic  sw1  10.0.0.1  model=cisco-ios,transport=ssh,user=...
 ```
 
-This loads templates/cisco-ios.tmpl. transport is ssh or telnet. Templates for Cisco IOS/IOS-XE (both transports) and HP ProCurve (menu/VT100) are provided as worked examples.
+This loads templates/cisco-ios.tmpl. transport is ssh or telnet. Templates for Cisco IOS/IOS-XE (both transports) and HP ProCurve (menu/VT100) are provided as worked examples. On native Windows only transport=telnet works (SSH needs Net::OpenSSH/IO::Pty; see WINDOWS LIMITATIONS).
 
 Two companion tools support the workflow: tools/record-session.pl captures a real telnet/SSH session as a byte-accurate log to build a template from, and tools/generate_template.pl scaffolds a template draft from such a capture.
 
@@ -643,7 +587,7 @@ The generic module (GenericTemplate) recognizes the following options. It is the
 | Option | Description |
 |--------|-------------|
 | `model` | Mandatory. The template to load: templates/<model>.tmpl (e.g. model=cisco-ios). The only option with no template-file equivalent. Like any option it may be set on a "default: generic" line, so all generic devices sharing one template need not repeat it - a device line can still override it (e.g. one device on model=procurve while the default is model=cisco-ios). |
-| `transport` | Which transport to use, "ssh" or "telnet". If omitted, the template's first-listed transport is used. |
+| `transport` | Which transport to use, "ssh" or "telnet". If omitted, the template's first-listed transport is used. On native Windows only "telnet" works (see WINDOWS LIMITATIONS). |
 | `user` | Login username. Mandatory for SSH; for telnet it is sent at the device's "Username:" prompt if the template's login sequence uses it. |
 | `pass` | Login password. Mandatory for SSH; for telnet as above. |
 | `enable` | Enable password, if the template enters enable mode. |
@@ -1150,7 +1094,7 @@ The mediant-sbc module recognizes the following options: (See above cisco-ios/ci
 | `user` | Mandatory. Login name (SSH or telnet). |
 | `pass` | Mandatory. Login password. |
 | `enable` | Mandatory. The "enable" password: the CLI lands on the unprivileged "hostname> " prompt and the config is read from the privileged "hostname# " prompt. A wrong enable password is reported as such. |
-| `transport` | Optional. "ssh" (default), "telnet" or "auto". "auto" tries SSH first and falls back to telnet ONLY if no SSH service answers (connection refused, unreachable, timed out). It never falls back on an authentication, key-exchange or host-key failure: that would retry the password over a second channel (lockouts, alarms) and move a credential from an encrypted to a cleartext channel. A fallback is logged at info level so a downgrade is always visible. |
+| `transport` | Optional. "ssh" (default), "telnet" or "auto". "auto" tries SSH first and falls back to telnet ONLY if no SSH service answers (connection refused, unreachable, timed out). It never falls back on an authentication, key-exchange or host-key failure: that would retry the password over a second channel (lockouts, alarms) and move a credential from an encrypted to a cleartext channel. A fallback is logged at info level so a downgrade is always visible. On native Windows the SSH path is unavailable, so use "telnet" (see WINDOWS LIMITATIONS). |
 | `repository` | Mandatory. |
 | `keep` | Mandatory. |
 | `timeout` | Optional, default 30 seconds (see the cisco-ios/ cisco-cat section). |
@@ -1245,9 +1189,11 @@ Everything else is unaffected by concurrency: each device writes only its own di
 
 Sizing N. Start at 10 and raise it while watching for devices that refuse or delay logins: the limits are the switches' concurrent-session caps, the TACACS+/RADIUS server's rate, and the links to remote sites - not the backup host. 10-25 is the typical range. "-P" applies to fetching only; it cannot be combined with the lookup/maintenance modes (-g, -l, -z, -Z, -o, -e, -s, -S), which stay single-process.
 
+On native Windows there is no fork, so "-P" always runs sequentially (N>1 is reduced to -P 1); see WINDOWS LIMITATIONS.
+
 ## Security Notes
 
-Debug files contain credentials. With debug=on, the per-device debug file <repository>/<dev_id>.debug records the session verbatim - for the telnet/SSH models that includes the login and enable passwords exactly as typed, and for procurve-snmp the SNMP read-write community. For the SSH models the file begins with the ssh client's debug trace (LogLevel=DEBUG, the same output as "ssh -v": key exchange, host key, authentication methods tried, "Authentication succeeded"); ssh never writes the password itself into that trace. Starting with 9.54 these files are created with mode 0600 (owner read/write only) regardless of the process umask. Still: only enable debug=on while troubleshooting, and delete the .debug file afterwards. Backup files, their directories and the .status file are created with the process umask - an unprivileged reader such as fetchconfig-web (running as "nobody" for -l/-g) must be able to read them, so they are deliberately NOT forced owner-only. (Parallel-fetch worker scratch files, which live in a private temp dir and are never read that way, are owner-only.) The backups do contain configuration secrets - and not always hashed: SNMP communities and some routing/VPN keys (BGP, OSPF, RADIUS/TACACS, IPsec pre-shared keys) are stored in cleartext, and Cisco "type 7" passwords are trivially reversible. Restrict the repository directory itself if the host is shared, and treat every backup as sensitive.
+Debug files contain credentials. With debug=on, the per-device debug file <repository>/<dev_id>.debug records the session verbatim - for the telnet/SSH models that includes the login and enable passwords exactly as typed, and for procurve-snmp the SNMP read-write community. For the SSH models the file begins with the ssh client's debug trace (LogLevel=DEBUG, the same output as "ssh -v": key exchange, host key, authentication methods tried, "Authentication succeeded"); ssh never writes the password itself into that trace. Starting with 9.54 these files are created with mode 0600 (owner read/write only) regardless of the process umask. On native Windows these mode bits are a no-op (NTFS uses ACLs); confidentiality relies on the containing folder's ACLs (see WINDOWS LIMITATIONS). Still: only enable debug=on while troubleshooting, and delete the .debug file afterwards. Backup files, their directories and the .status file are created with the process umask - an unprivileged reader such as fetchconfig-web (running as "nobody" for -l/-g) must be able to read them, so they are deliberately NOT forced owner-only. (Parallel-fetch worker scratch files, which live in a private temp dir and are never read that way, are owner-only.) The backups do contain configuration secrets - and not always hashed: SNMP communities and some routing/VPN keys (BGP, OSPF, RADIUS/TACACS, IPsec pre-shared keys) are stored in cleartext, and Cisco "type 7" passwords are trivially reversible. Restrict the repository directory itself if the host is shared, and treat every backup as sensitive.
 
 SSH host keys are not verified. The SSH models connect with StrictHostKeyChecking=no and UserKnownHostsFile=/dev/null, i.e. any host key is accepted and none is remembered. This is deliberate: fetchconfig runs as an unattended job, and a switch's host key changes on every hardware swap, which would otherwise stop the backup until someone edited known_hosts. The consequence is that an attacker on the network path could impersonate a device and capture the login password. Run fetchconfig on a trusted management network.
 

@@ -96,6 +96,15 @@
 #         cation succeeded (password)" or the reason it didn't), then
 #         the switch session. Without debug the master stays at
 #         LogLevel=ERROR as before.
+# Change: 20261020a (Rainer) with debug=on the login and enable passwords
+#         were written to the dump_log debug file: slow_print() types them
+#         one character at a time and never touched the logs, and the switch
+#         echoes the password back on the next read. Both the typed password
+#         and its echo are now kept out of the file - suspend_logs() /
+#         restore_logs() turn dump_log/input_log off from just before each
+#         secret is typed until just after the read that consumes its echo,
+#         leaving the breadcrumb "# [secret sent - not logged]". The typing
+#         (slow_print, type_delay) is unchanged.
 #
 # $Id: PLANET.pm,v 1.7 2026/09/10 10:00:00 tammer Exp $
 
@@ -104,7 +113,8 @@ package fetchconfig::model::PLANET; # fetchconfig/model/PLANET.pm
 use strict;
 use warnings;
 use Net::Telnet;
-use Net::OpenSSH;
+# Net::OpenSSH is loaded lazily by Abstract::ssh_open (optional dependency,
+# not available on native Windows); see PERL MODULE REQUIREMENTS.
 use IO::Handle;
 use Time::HiRes qw(usleep);
 use fetchconfig::model::Abstract;
@@ -180,6 +190,32 @@ sub slow_print {
     $t->put("\r");
 }
 
+#
+# suspend_logs / restore_logs - turn the session logs off around a secret and
+# put them back. slow_print() types a password one character at a time and this
+# switch echoes it back (Change: 20260909a), so both the written password and
+# its echo would land in dump_log; wrapping the send AND the following read with
+# these keeps them out. Net::Telnet returns "" (not undef) from dump_log/
+# input_log when no log is set, so test for a real, truthy handle. Local to
+# PLANET: it is the only model that types secrets slowly - the others mask with
+# Abstract::print_secret().
+#
+sub suspend_logs {
+    my ($self, $t) = @_;
+    my $dl = $t->dump_log;   $dl = undef unless (ref($dl) || (defined($dl) && $dl ne '' && $dl ne '0'));
+    my $il = $t->input_log;  $il = undef unless (ref($il) || (defined($il) && $il ne '' && $il ne '0'));
+    $t->dump_log(undef)  if defined $dl;
+    $t->input_log(undef) if defined $il;
+    return [$dl, $il];
+}
+
+sub restore_logs {
+    my ($self, $t, $saved) = @_;
+    my ($dl, $il) = @$saved;
+    if (defined $dl) { print { $dl } "\n# [secret sent - not logged]\n"; $t->dump_log($dl); }
+    $t->input_log($il) if defined $il;
+}
+
 sub chat_login {
     my ($self, $t, $dev_id, $dev_host, $dev_opt_tab) = @_;
 
@@ -202,6 +238,9 @@ sub chat_login {
 
     my ($prematch, $match);
     my $steps = 0;
+    # log state while a just-typed password's echo is still pending: suspended
+    # before the send, restored after the read that consumes the echo
+    my $pw_logs;
 
     while (1) {
 	if (++$steps > 6) {
@@ -212,6 +251,9 @@ sub chat_login {
 	# chat_banner is used to allow temporary modification
 	# of timeout throught the 'banner_timeout' option
 	($prematch, $match) = $self->chat_banner($t, $dev_opt_tab, $login_pattern);
+	# The echo of a password typed on the previous pass arrives in this
+	# read; restore the logs now that it has been consumed (and not logged).
+	if ($pw_logs) { $self->restore_logs($t, $pw_logs); $pw_logs = undef; }
 	if (!defined($prematch)) {
 	    $self->log_error("could not find login prompt or command prompt: $login_pattern");
 	    return undef;
@@ -243,8 +285,10 @@ sub chat_login {
 
 	if ($match =~ /^Password:/) {
 	    $self->log_debug("found password prompt");
+	    $pw_logs = $self->suspend_logs($t);   # keep the password AND its echo out of the log
 	    $ok = $self->slow_print($t, $dev_pass);
 	    if (!$ok) {
+		$self->restore_logs($t, $pw_logs); $pw_logs = undef;
 		$self->log_error("could not send login password");
 		return undef;
 	    }
@@ -253,6 +297,8 @@ sub chat_login {
 
 	last; # command prompt
     }
+
+    $self->restore_logs($t, $pw_logs) if $pw_logs; $pw_logs = undef;
 
     $self->log_debug("found command prompt: [$match]");
 
@@ -277,13 +323,16 @@ sub chat_login {
 	    my $dev_enable = $self->dev_option($dev_opt_tab, "enable");
 	    $dev_enable = $dev_pass unless defined($dev_enable);
 
+	    my $en_logs = $self->suspend_logs($t);   # password + its echo out of the log
 	    $ok = $self->slow_print($t, $dev_enable);
 	    if (!$ok) {
+		$self->restore_logs($t, $en_logs);
 		$self->log_error("could not send enable password");
 		return undef;
 	    }
 
 	    ($prematch, $match) = $t->waitfor(Match => '/[^\r\n]*[^\r\n\s>#][ ]*# ?$/');
+	    $self->restore_logs($t, $en_logs);       # echo consumed; logs back on
 	    if (!defined($prematch)) {
 		$self->log_error("could not find enable command prompt (wrong enable password?)");
 		return undef;

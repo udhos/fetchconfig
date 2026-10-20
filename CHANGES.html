@@ -597,6 +597,7 @@
 <section id="972">
 <div class="section-kicker">01</div>
 <h2>9.72</h2>
+<p>+ Security: the planet model no longer writes the login and enable passwords   (or the switch&#x27;s echo of them) to the debug session log. slow_print() types   credentials one character at a time and never touched the logs, and the   switch echoes the password back, so with debug=on both landed in clear text   in &lt;repository&gt;/&lt;dev_id&gt;.debug (mode 0600, but readable by anyone allowed to   read that file). The passwords and their echoes are now kept out of the log   (suspend_logs/restore_logs around each send and the read that consumes its   echo); typing speed and the type_delay option are unchanged. Existing debug   files from before this fix still contain the passwords - they are overwritten   on the next run of that device; delete them and rotate any captured password.</p>
 <p>+ Model-framework code-review fixes:</p>
 <ul><li>MikroTik: expect_enable_prompt_paging() called escape_brackets() as a package sub (&amp;escape_brackets), which does not exist in the MikroTik package and died on every fetch; it now calls the inherited $self-&gt;escape_brackets().</li></ul>
 <ul><li>ProCurveSSH: the final-line ANSI strip is now guarded against an empty config (matching ProCurve.pm) - a switch that answers the show command with nothing but its prompt no longer crashes.</li></ul>
@@ -607,6 +608,7 @@
 <p>+ Removed the generic-template prompt_settle directive. It was accepted by   the template parser and emitted by generate_template, but never consumed by   the generic engine, whose timing is governed by per-state timeouts and   fetch_delay. Removed from the parser, both template generators   (generate_template.pl / .py) and the shipped templates (procurve.tmpl,   cisco-ios.tmpl). The SSH-model option prompt_settle_ms is a different   option and is unaffected.</p>
 <p>+ Removed dead code: %holding and %started (fetchconfig.pl parallel-fetch   bookkeeping that was never read) and the unused entry_state() in   GenericTemplateParser. dump_options() (model::Abstract) is kept as a   documented debugging helper, with its call left commented out.</p>
 <p>+ Fixed the --help text: the --check-template and --template-syntax option   descriptions were spliced together; each now describes its own option.</p>
+<p>+ Windows portability: fetchconfig again starts and runs on native Windows   for telnet, web-UI and procurve-snmp devices. The SSH models no longer load   Net::OpenSSH at compile time (Abstract::ssh_open still requires it lazily,   only when an SSH device is fetched), so a Windows Perl without   Net::OpenSSH/IO::Pty no longer aborts at startup. On native Windows the SSH   models are unsupported; backup comparison (-g ... -m) and change-report   diffs are disabled with a clear error (they need an external diff); -P is   forced to 1 (no fork); and the lock-file O_NOFOLLOW flag is dropped where   Fcntl lacks it. Unix/AIX behaviour is unchanged; under Cygwin/WSL   fetchconfig behaves as on Linux.</p>
 </section>
 <section id="971">
 <div class="section-kicker">02</div>

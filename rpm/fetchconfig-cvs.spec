@@ -30,7 +30,8 @@ Requires: perl(Net::Telnet)
 
 %description
 fetchconfig is a Perl script for retrieving the configuration of
-multiple devices. It has been tested under Linux, AIX and Windows, and
+multiple devices. It has been tested under Linux, AIX and Windows (on
+native Windows: telnet, web-UI and SNMP devices only, no SSH), and
 currently supports a variety of devices (see the Device Support section
 of the README, and DEPENDENCIES for the per-feature module requirements).
 

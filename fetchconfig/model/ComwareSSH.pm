@@ -36,7 +36,8 @@ package fetchconfig::model::ComwareSSH; # fetchconfig/model/ComwareSSH.pm
 use strict;
 use warnings;
 use Net::Telnet;
-use Net::OpenSSH;
+# Net::OpenSSH is loaded lazily by Abstract::ssh_open (optional dependency,
+# not available on native Windows); see PERL MODULE REQUIREMENTS.
 use fetchconfig::model::Abstract;
 
 @fetchconfig::model::ComwareSSH::ISA = qw(fetchconfig::model::Abstract);

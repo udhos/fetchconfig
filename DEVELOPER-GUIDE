@@ -56,16 +56,37 @@ Key properties that shape the whole design:
 --------------
 
 File                           Role
------------------------------  -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-fetchconfig.pl                 Driver: CLI option parsing, device-table loading, dispatch to a maintenance/lookup mode or the fetch phase, the parallel-fetch (-P) fork loop, final exit code.
-fetchconfig/model/Detector.pm  The registry and the per-device pipeline. Holds the in-memory device table, parses default:/email:/directory:/device lines, enforces the directory allowlist, and runs fetch_device() per device.
-fetchconfig/model/Abstract.pm  The base class for every model. Provides the shared API: SSH/telnet session helpers, prompt handling, backup write/compare/expire, option accessors, secret handling, the debug-file helpers, locking primitives.
-fetchconfig/model/*.pm         The device models (34 device models + AbstractHTTP base + GenericTemplate/GenericTemplateParser). Each implements do_fetch() for its transport/CLI dialect.
-fetchconfig/Tools.pm           The maintenance/lookup modes (-g, -l, -z/-Z, -o, -e, -s/-S, --list-allowed-dirs, --clean-lock-dir, etc.) and their shared filesystem helpers.
-fetchconfig/Mailer.pm          SMTP delivery and the result record: record_result(), the per-recipient grouping, the HTML + plain-text summary mail.
-fetchconfig/Report.pm          The on-disk HTML change report and the config-diff masking (mask_line).
+-----------------------------  -------------------------------------------------
+fetchconfig.pl                 Driver: CLI option parsing, device-table loading,
+                               dispatch to a maintenance/lookup mode or the
+                               fetch phase, the parallel-fetch (-P) fork loop,
+                               final exit code.
+fetchconfig/model/Detector.pm  The registry and the per-device pipeline. Holds
+                               the in-memory device table, parses
+                               default:/email:/directory:/device lines, enforces
+                               the directory allowlist, and runs fetch_device()
+                               per device.
+fetchconfig/model/Abstract.pm  The base class for every model. Provides the
+                               shared API: SSH/telnet session helpers, prompt
+                               handling, backup write/compare/expire, option
+                               accessors, secret handling, the debug-file
+                               helpers, locking primitives.
+fetchconfig/model/*.pm         The device models (34 device models +
+                               AbstractHTTP base +
+                               GenericTemplate/GenericTemplateParser). Each
+                               implements do_fetch() for its transport/CLI
+                               dialect.
+fetchconfig/Tools.pm           The maintenance/lookup modes (-g, -l, -z/-Z, -o,
+                               -e, -s/-S, --list-allowed-dirs, --clean-lock-dir,
+                               etc.) and their shared filesystem helpers.
+fetchconfig/Mailer.pm          SMTP delivery and the result record:
+                               record_result(), the per-recipient grouping, the
+                               HTML + plain-text summary mail.
+fetchconfig/Report.pm          The on-disk HTML change report and the
+                               config-diff masking (mask_line).
 fetchconfig/Constants.pm       version() and a few constants.
-fetchconfig/Logger.pm          The logger object (prefix, levels: debug/info/error).
+fetchconfig/Logger.pm          The logger object (prefix, levels:
+                               debug/info/error).
 
 2.2 The two phases
 ------------------
@@ -166,7 +187,9 @@ result sink (section 2.4), not shared memory.
 -------------------------
 
 run_fetch_phase($parallel) runs devices concurrently when -P N is given
-(N >= 1 worker processes). The model is fork-per-device-batch:
+(N >= 1 worker processes). It relies on POSIX fork, so it is a no-op on
+native Windows -- fetchconfig.pl forces -P 1 (sequential) there. The model
+is fork-per-device-batch:
 
 - The parent creates a private File::Temp work directory (0700, auto-cleaned).
 - It forks up to N workers; each worker runs fetch_device for its assigned
@@ -221,13 +244,19 @@ the .pm that declares them.
       }
 
 - The directory-allowlist structures (populated from directory: lines):
-  - %dir_allow_tag : $TAG -> { type => repository|template|fetch_run|lock, path => <abs path> }. The $TAG indirection a device value uses.
+  - %dir_allow_tag : $TAG -> { type => repository|template|fetch_run|lock, path
+    => <abs path> }. The $TAG indirection a device value uses.
   - %dir_allow_path : normalised allowed path -> type, for membership tests.
-  - $dir_allow_present : true once any directory: line has been seen (switches the allowlist from "off/opt-in" to "enforced").
+  - $dir_allow_present : true once any directory: line has been seen (switches
+    the allowlist from "off/opt-in" to "enforced").
   - @dir_allow_rows : ordered [type, tag, path] for --list-allowed-dirs.
-  - @dir_allow_errors : [reason, ...] for each rejected directory: line; a non-empty list aborts the run before any fetch (section 9) and is what --list-allowed-dirs lints.
-  - $dir_allow_fetch_run_none / $dir_allow_report_none : set by directory: fetch_run none / directory: report none (disable that capability).
-  - %warned_unlisted_dir : dedup set for the "no allowlist entry" warning, reset per device-table load.
+  - @dir_allow_errors : [reason, ...] for each rejected directory: line; a
+    non-empty list aborts the run before any fetch (section 9) and is what
+    --list-allowed-dirs lints.
+  - $dir_allow_fetch_run_none / $dir_allow_report_none : set by directory:
+    fetch_run none / directory: report none (disable that capability).
+  - %warned_unlisted_dir : dedup set for the "no allowlist entry" warning, reset
+    per device-table load.
 
 - @SYSTEM_DIRS : the list of directories (/bin, /etc, /usr/lib, ...)
   that are never acceptable as a repository/template/fetch_run directory,
@@ -428,9 +457,19 @@ The methods a model (or an extender) relies on. Signatures are indicative;
 read Abstract.pm for exact argument lists.
 
 Session / transport
-- ssh_open($dev_host, $dev_user, $dev_pass, $dev_timeout, $debug_fh, $dev_opt_tab) -- open a Net::OpenSSH session (SSH models). Host-key policy is set here (section 9, deliberate non-mitigation).
-- open_ssh_debug_file(...) / open_telnet_debug_file($t, $dev_opt_tab, $repo, $dev_id, $dev_host) -- when debug=on, open <dev_id>.debug (0600) and attach it as the SSH/telnet session log. The telnet helper (9.71) is what gives every telnet model debug=; call it right after the connection opens and close() the returned handle at session end.
-- wait_for_command_prompt(...), expect_enable_prompt(...), expect_enable_prompt_paging_auto(...), drain_until_idle(...), chat_banner(...), chat_show_conf(...) -- prompt and login helpers. Models override prompt_head() / prompt_tail() / interrupt_screens() / ssh_extra_opts() to tune behaviour.
+- ssh_open($dev_host, $dev_user, $dev_pass, $dev_timeout, $debug_fh,
+  $dev_opt_tab) -- open a Net::OpenSSH session (SSH models). Host-key policy is
+  set here (section 9, deliberate non-mitigation).
+- open_ssh_debug_file(...) / open_telnet_debug_file($t, $dev_opt_tab, $repo,
+  $dev_id, $dev_host) -- when debug=on, open <dev_id>.debug (0600) and attach it
+  as the SSH/telnet session log. The telnet helper (9.71) is what gives every
+  telnet model debug=; call it right after the connection opens and close() the
+  returned handle at session end.
+- wait_for_command_prompt(...), expect_enable_prompt(...),
+  expect_enable_prompt_paging_auto(...), drain_until_idle(...),
+  chat_banner(...), chat_show_conf(...) -- prompt and login helpers. Models
+  override prompt_head() / prompt_tail() / interrupt_screens() /
+  ssh_extra_opts() to tune behaviour.
 
 Backup write / compare / expire
 - dump_config($dev_id, $dev_opt_tab, \@lines) -- write the backup
@@ -500,7 +539,8 @@ just returns the written path.
 ------------------
 
 Follow How-To-add-a-model (the authoritative recipe) together with the
-data-flow context in section 2.3/section 5.2. In short: create fetchconfig/model/Yours.pm
+data-flow context in section 2.3/section 5.2. In short: create
+fetchconfig/model/Yours.pm
 as an Abstract subclass, implement label and do_fetch, send credentials
 with print_secret, call open_telnet_debug_file/open_ssh_debug_file so
 debug= works, write the config with dump_config, and register the model.
@@ -543,16 +583,24 @@ stored backups (never fetch), and exit. Summary (see README command-line
 reference for exact behaviour):
 
 Flag                    Purpose
-----------------------  -----------------------------------------------------------------------------------------------------------------------------------
--g dev                  print the latest backup of dev to stdout (-f file to write it).
+----------------------  --------------------------------------------------------
+-g dev                  print the latest backup of dev to stdout (-f file to
+                        write it).
 -l dev                  list the backups of dev.
--z dev / -Z             find zero-byte backups for one device / all devices; -D also deletes the files, -T previews.
--o / -e                 orphaned-device / empty-directory report; -D deletes, -T previews.
+-z dev / -Z             find zero-byte backups for one device / all devices; -D
+                        also deletes the files, -T previews.
+-o / -e                 orphaned-device / empty-directory report; -D deletes, -T
+                        previews.
 -s dev / -S             suffix check for one / all devices.
---check-template PATH   structural check of a generic-model template; exits 0 ok / 1 errors / 2 file problem. No device table needed; no allowlist applied.
---template-syntax PATH  print a template's # syntax_style: value for a config viewer.
+--check-template PATH   structural check of a generic-model template; exits 0 ok
+                        / 1 errors / 2 file problem. No device table needed; no
+                        allowlist applied.
+--template-syntax PATH  print a template's # syntax_style: value for a config
+                        viewer.
 --list-allowed-dirs     print and lint the directory: allowlist.
---clean-lock-dir [N]    remove lock files older than N days (default 30, min 1); -T previews; flock-first so a held lock is never removed.
+--clean-lock-dir [N]    remove lock files older than N days (default 30, min 1);
+                        -T previews; flock-first so a held lock is never
+                        removed.
 
 Exit codes of note: 0 success; 2 usage/allowlist-abort/bad-argument;
 10 lock directory unusable; 255 fatal die; lookup modes also use 1
@@ -737,7 +785,8 @@ See section 5.3 + How-To-add-a-model.
    $lookup_only set so no fetch phase runs.
 2. Implement the work in Tools.pm, reusing its filesystem helpers
    (parse_backup_filename, sort_backups_desc, dir_is_empty, ...).
-3. Pick an exit code consistent with section 7; document in README + HTML + usage.
+3. Pick an exit code consistent with section 7; document in README + HTML +
+   usage.
 4. Add a test.
 
 11.4 Add a per-device result field (e.g. a new mail column)
@@ -815,16 +864,18 @@ tagging a release. On a bare dev box, test the pure helpers directly.
 14. Document map
 ================
 
-To learn...                                          Read...
----------------------------------------------------  ----------------------------------
-How to use fetchconfig, every option                 README
-Internals, data structures, security, how to extend  this guide
-How to add a device model (recipe)                   How-To-add-a-model
-The template-driven generic model                    README.generic-model
-The template grammar and parser                      README.template_engine
-Capturing a device session for a new model           README.record-session
-The Perl module dependency matrix                    DEPENDENCIES
-The SSH host-key verification design (deferred)      fetchconfig-F3-ssh-hostkey-plan.md
+To learn...                                 Read...
+------------------------------------------  ------------------------------------
+How to use fetchconfig, every option        README
+Internals, data structures, security, how to extend
+                                            this guide
+How to add a device model (recipe)          How-To-add-a-model
+The template-driven generic model           README.generic-model
+The template grammar and parser             README.template_engine
+Capturing a device session for a new model  README.record-session
+The Perl module dependency matrix           DEPENDENCIES
+The SSH host-key verification design (deferred)
+                                            fetchconfig-F3-ssh-hostkey-plan.md
 
     The two diagrams in this guide are ASCII in the Markdown (readable on
     GitHub and offline) and rendered Mermaid in the generated HTML. The HTML

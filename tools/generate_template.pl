@@ -38,7 +38,7 @@ use Getopt::Long qw(:config no_ignore_case bundling);
 # Kept in step with fetchconfig's version by hand. NOT imported from
 # fetchconfig::Constants, so this tool is self-contained and can be copied
 # and run on its own.
-my $VERSION = '9.72';
+my $VERSION = '9.73';
 my (%opt, $show_help, $show_version);
 GetOptions(
     'f|hex=s'       => \$opt{hex},

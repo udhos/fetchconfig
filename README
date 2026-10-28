@@ -25,9 +25,10 @@ Introduction
     how to extend); How-To-add-a-model.md / .html is the programming manual for
     writing a new device model; "perl Makefile.PL && make test" (or "prove -I.
     t/") runs the test suite under t/, and "make doc" regenerates the
-    .md-derived docs via tools/render-doc.py and tools/md2html.py. Perl module
-    requirements (core vs CPAN for Perl 5.26/5.28/5.40, by feature) are in the
-    file DEPENDENCIES.
+    .md-derived docs via tools/render-doc.py and tools/md2html.py (launched
+    through tools/pyrun, which selects python3 on Linux and python on AIX). Perl
+    module requirements (core vs CPAN for Perl 5.26/5.28/5.40, by feature) are
+    in the file DEPENDENCIES.
 
 fetchconfig is a Perl script for retrieving the configuration of multiple
 devices. It has been tested under Linux, AIX and Windows (on native Windows:
@@ -253,6 +254,11 @@ Usage
 The fetchconfig.pl script will scan the "device_table" file, trying to retrieve
 the configuration for every device, storing configuration files under the
 "repository".
+
+A relative "-devices=" name is looked for in the current directory first, then
+beside fetchconfig.pl (its own directory), so a device table kept with the
+script is found from any working directory - a cron job, say - without a "cd"
+first. An absolute path is used exactly as given.
 
 By default the devices are fetched one after another, in device-table order.
 With many devices the run time is dominated by the network sessions; "-P N"

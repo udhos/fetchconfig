@@ -39,7 +39,7 @@ import sys
 
 # Kept in step with fetchconfig's version by hand, so this tool is
 # self-contained and can be copied and run on its own.
-VERSION = '9.72'
+VERSION = '9.73'
 PROG = 'generate_template'
 
 HEX_LINE = re.compile(rb'^([<>])\s+0x([0-9a-f]+):\s+((?:[0-9a-f]{2}\s?)+)')

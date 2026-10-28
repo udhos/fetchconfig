@@ -1,6 +1,6 @@
 Summary: fetchconfig device configuration retrieval software
 Name: fetchconfig
-Version: 9.72
+Version: 9.73
 Release: 1
 Group: Applications/System
 Url: http://savannah.nongnu.org/projects/fetchconfig
@@ -93,6 +93,10 @@ rm -rf $RPM_BUILD_ROOT
 %doc CHANGES COPYING CREDITS README DEPENDENCIES
 
 %changelog
+* Wed Oct 21 2026 Rainer Tammer <tammer@tammer.net> 9.73-1
+- -devices= relative path is now searched in the current directory, then the
+  directory of fetchconfig.pl (FindBin); absolute paths are unchanged.
+
 * Mon Oct 19 2026 Rainer Tammer <tammer@tammer.net> 9.72-1
 - Model-framework code-review fixes: MikroTik escape_brackets() call (fatal),
   ProCurveSSH empty-config guard, JunOS chat_login() failure return,

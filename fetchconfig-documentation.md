@@ -122,6 +122,8 @@ cd /usr/local/fetchconfig
 
 fetchconfig.pl scans the `device_table` file, tries to retrieve the configuration for every device, and stores the configuration files under the `repository`.
 
+A relative `-devices=` name is looked for in the current directory first, then beside `fetchconfig.pl` (its own directory), so a device table kept with the script is found from any working directory — a cron job, say — without a `cd` first. An absolute path is used exactly as given.
+
 <!--nav-group: Configuration-->
 
 ## Device table {#device-table}
@@ -608,7 +610,7 @@ Removes device lock files older than `N` days (by mtime) from the lock directory
 #### Generic options {.flag-group}
 
 <!--flag: -v, --version | version-->
-Prints just the program version to stdout (one line, e.g. `9.72`) and exits with status 0. Nothing else is written — no banner, nothing on stderr — so a script can parse it safely.
+Prints just the program version to stdout (one line, e.g. `9.73`) and exits with status 0. Nothing else is written — no banner, nothing on stderr — so a script can parse it safely.
 <!--/flag-->
 
 <!--flag: -?, -h, --help | help-->

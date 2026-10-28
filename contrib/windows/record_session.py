@@ -92,7 +92,7 @@ import socket
 import sys
 import time
 
-VERSION = '9.72'
+VERSION = '9.73'
 PROG = 'record-session'
 IS_WIN = (os.name == 'nt')
 TERM_TYPE = 'xterm'

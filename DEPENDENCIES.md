@@ -313,7 +313,9 @@ DES-only or v1/v2c.
 | `ExtUtils::MakeMaker` | -- | -- | -- | NOT used; Makefile.PL writes the Makefile itself (no dependency) |
 
 tools/md2html.py and tools/render-doc.py are Python (2.7/3.x), unrelated to
-the Perl runtime.
+the Perl runtime. "make doc" launches them through tools/pyrun, which selects
+the host interpreter (python3 on Linux, python on AIX; override with
+PYTHON=/path/to/python).
 
 
 ## Summary: minimum CPAN modules to install

@@ -7,7 +7,7 @@ record_session.py     Python port of record-session.pl (telnet + SSH)
 generate_template.py  Python port of generate_template.pl
 build.cmd             builds record_session.exe and generate_template.exe
 requirements.txt      pinned build dependencies
-ver-*.txt             PyInstaller version resources (9.72)
+ver-*.txt             PyInstaller version resources (9.73)
 ```
 
 Same command line, same .hex/.txt formats as the Perl tools. The .exe files
@@ -29,6 +29,14 @@ Output: dist\record_session.exe, dist\generate_template.exe
 paramiko is pinned to 3.5.1: 4.x/5.x removed diffie-hellman-group1-sha1,
 diffie-hellman-group14-sha1 and ssh-rsa, which older Cisco IOS and ProCurve
 SSH servers still require.
+
+This deliberately keeps SHA-1 RSA signatures (ssh-rsa), which CVE-2026-44405
+(Low; CVSS 3.4, adjacent-network, integrity-only) flags in paramiko up to fix
+commit a448945. It does not apply in practice here: record_session.py is an
+operator-run capture tool that already does not verify the host key (see
+Transports), and these legacy algorithms are required by the old devices
+above. Do not unpin to "fix" it - 4.x/5.x remove those algorithms and break
+SSH to that gear.
 
 
 ## Transports

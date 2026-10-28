@@ -532,7 +532,7 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.72</span>
+      <span class="pill">v9.73</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
@@ -691,7 +691,7 @@ apt install libio-socket-ssl-perl libnet-ssleay-perl</code></pre>
 <div class="section-kicker">05</div>
 <h2>Development only (not needed to run fetchconfig)</h2>
 <div class="table-wrap"><table><thead><tr><th>Tool</th><th>5.26</th><th>5.28</th><th>5.40</th><th>Used for</th></tr></thead><tbody><tr><td><code>Test::More</code> / <code>prove</code></td><td>core</td><td>core</td><td>core</td><td>the t/ test suite</td></tr><tr><td><code>ExtUtils::MakeMaker</code></td><td>--</td><td>--</td><td>--</td><td>NOT used; Makefile.PL writes the Makefile itself (no dependency)</td></tr></tbody></table></div>
-<p>tools/md2html.py and tools/render-doc.py are Python (2.7/3.x), unrelated to the Perl runtime.</p>
+<p>tools/md2html.py and tools/render-doc.py are Python (2.7/3.x), unrelated to the Perl runtime. &quot;make doc&quot; launches them through tools/pyrun, which selects the host interpreter (python3 on Linux, python on AIX; override with PYTHON=/path/to/python).</p>
 </section>
 <section id="summary-minimum-cpan-modules-to-install">
 <div class="section-kicker">06</div>

@@ -532,7 +532,7 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.72</span>
+      <span class="pill">v9.73</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
@@ -553,7 +553,7 @@
       <h1 class="hero-title">fetchconfig</h1>
       <p class="lede">A Perl script for retrieving and backing up the configuration of network devices at scale &#8212; over telnet, SSH or a device&#8217;s web UI, across dozens of vendors, with change tracking, e-mail summaries, and a repository you can script against.</p>
       
-      <div class="hero-stats"><div class="hero-stat"><span class="num">34</span><span class="label">device platforms</span></div><div class="hero-stat"><span class="num">9.72</span><span class="label">version</span></div><div class="hero-stat"><span class="num">Telnet / SSH / HTTP / SNMP</span><span class="label">transports</span></div><div class="hero-stat"><span class="num">Linux / AIX / Windows</span><span class="label">tested platforms (Windows: no SSH/diff)</span></div></div>
+      <div class="hero-stats"><div class="hero-stat"><span class="num">34</span><span class="label">device platforms</span></div><div class="hero-stat"><span class="num">9.73</span><span class="label">version</span></div><div class="hero-stat"><span class="num">Telnet / SSH / HTTP / SNMP</span><span class="label">transports</span></div><div class="hero-stat"><span class="num">Linux / AIX / Windows</span><span class="label">tested platforms (Windows: no SSH/diff)</span></div></div>
     </div>
 
     <div class="content">
@@ -622,6 +622,7 @@ vi device_table</code></pre>
 <pre><code>cd /usr/local/fetchconfig
 ./fetchconfig.pl <span class="k">-devices=</span>device_table</code></pre>
 <p>fetchconfig.pl scans the <code>device_table</code> file, tries to retrieve the configuration for every device, and stores the configuration files under the <code>repository</code>.</p>
+<p>A relative <code>-devices=</code> name is looked for in the current directory first, then beside <code>fetchconfig.pl</code> (its own directory), so a device table kept with the script is found from any working directory &#8212; a cron job, say &#8212; without a <code>cd</code> first. An absolute path is used exactly as given.</p>
 </section>
 <section id="device-table">
 <div class="section-kicker">07</div>
@@ -814,7 +815,7 @@ parks		lab209r		10.30.0.6	to=lab-owner@acme.com</code></pre>
 <div class="callout warn"><div class="callout-title">Format change for parsers (v9.55)</div><p>Anything that parses these listings &#8212; fetchconfig-web in particular &#8212; must skip lines starting with <code>#</code>. Before v9.55 a check that found nothing produced a 0-byte file.</p></div></div>
 <div class="flag-card"><div class="flag-head"><span class="flag-tag">--clean-lock-dir [N]</span><span class="flag-req">no device table</span></div><p>Removes device lock files older than <code>N</code> days (by mtime) from the lock directory, then exits. With <code>-T</code>, only shows what <strong>would</strong> be removed (dry run). <code>N</code> defaults to <code>30</code>, minimum <code>1</code>. A lock file is removed <strong>only if it is not currently held</strong> &#8212; the cleaner <code>flock()</code>s each candidate first and keeps any live lock &#8212; so an in-use lock is never deleted. The lock directory is <code>&lt;dir of fetchconfig.pl&gt;/.lock</code> by default; pass <code>-devices=</code> if a custom <code>lock_dir=</code> applies. Exits <code>0</code> on success, <code>2</code> on a bad <code>N</code> or an unusable lock directory.</p></div>
 <h4 class="flag-group">Generic options</h4>
-<div class="flag-card"><div class="flag-head"><span class="flag-tag">-v, --version</span><span class="flag-req">version</span></div><p>Prints just the program version to stdout (one line, e.g. <code>9.72</code>) and exits with status 0. Nothing else is written &#8212; no banner, nothing on stderr &#8212; so a script can parse it safely.</p></div>
+<div class="flag-card"><div class="flag-head"><span class="flag-tag">-v, --version</span><span class="flag-req">version</span></div><p>Prints just the program version to stdout (one line, e.g. <code>9.73</code>) and exits with status 0. Nothing else is written &#8212; no banner, nothing on stderr &#8212; so a script can parse it safely.</p></div>
 <div class="flag-card"><div class="flag-head"><span class="flag-tag">-?, -h, --help</span><span class="flag-req">help</span></div><p>Prints the usage/help text to stdout and exits with status 0. (Before v9.55, <code>-?</code> was treated as an unknown argument: it printed an error, the usage to stderr, and ended with &#8220;Died at &#8230;&#8221;.)</p></div>
 <div class="callout warn"><div class="callout-title">Unknown device or missing backup</div><p>If <code>dev_id</code> is unknown, or the device has no <code>repository</code> configured, fetchconfig.pl reports an error and exits non-zero; nothing is written to stdout or <code>-f</code>. Same if <code>-n</code> (or <code>-m</code>) refers to a backup that doesn&#x27;t exist &#8212; use <code>-l</code> first if unsure how many backups exist. <code>-m</code> shells out to the standard <code>diff</code> utility, which must be available in <code>PATH</code>.</p></div>
 </section>

@@ -1,2 +1,2 @@
 pyinstaller==6.22.3
-paramiko==3.5.1
+paramiko==3.5.1  # pinned for legacy ssh-rsa / DH-group1; CVE-2026-44405 (SHA-1) accepted, see README.windows

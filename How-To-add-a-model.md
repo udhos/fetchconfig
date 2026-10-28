@@ -1,6 +1,6 @@
 # fetchconfig -- How to Add a Device Model
 
-*Programming manual for writing a new configuration extractor. Applies to fetchconfig 9.72.*
+*Programming manual for writing a new configuration extractor. Applies to fetchconfig 9.73.*
 
 ---
 
@@ -434,4 +434,4 @@ Devices send bytes: UTF-8 hostnames, `\r\r\n`, NULs, cursor escapes, backspaces.
 
 ---
 
-*Generated documentation: `How-To-add-a-model.html` is produced from this file by `tools/md2html.py` (Python 2.7 / 3.x, no dependencies): `python tools/md2html.py How-To-add-a-model.md How-To-add-a-model.html`.*
+*Generated documentation: `How-To-add-a-model.html` is produced from this file by `tools/md2html.py` (Python 2.7 / 3.x, no dependencies): `sh tools/pyrun tools/md2html.py How-To-add-a-model.md How-To-add-a-model.html`. `tools/pyrun` picks the host's interpreter (python3 on Linux, python on AIX).*

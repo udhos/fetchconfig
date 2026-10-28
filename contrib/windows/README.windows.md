@@ -7,7 +7,7 @@ record_session.py     Python port of record-session.pl (telnet + SSH)
 generate_template.py  Python port of generate_template.pl
 build.cmd             builds record_session.exe and generate_template.exe
 requirements.txt      pinned build dependencies
-ver-*.txt             PyInstaller version resources (9.72)
+ver-*.txt             PyInstaller version resources (9.73)
 ```
 
 Same command line, same .hex/.txt formats as the Perl tools. The .exe files

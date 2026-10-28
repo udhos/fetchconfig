@@ -532,7 +532,7 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.72</span>
+      <span class="pill">v9.73</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
@@ -554,7 +554,7 @@
     <div class="hero">
       <div class="hero-eyebrow">How to Add a Device Model</div>
       <h1 class="hero-title">fetchconfig</h1>
-      <p class="lede"><em>Programming manual for writing a new configuration extractor. Applies to fetchconfig 9.72.</em></p>
+      <p class="lede"><em>Programming manual for writing a new configuration extractor. Applies to fetchconfig 9.73.</em></p>
       
       
     </div>
@@ -875,7 +875,7 @@ sub config_equal { my ($self, @a) = @_; $self-&gt;config_equal_ignoring_lines(@a
 <h3 id="97-debug-file">9.7 Debug file</h3>
 <p><code>debug=on</code> must produce <code>&lt;repository&gt;/&lt;dev_id&gt;.debug</code>, mode 0600, and it should be the complete raw session: for SSH models the shared <code>open_ssh_debug_file</code> + <code>ssh_open</code> give the ssh client&#x27;s <code>-v</code> trace followed by the session dump; for telnet, the shared <code>open_telnet_debug_file</code> attaches <code>dump_log</code> to the live connection. <code>debug=</code> is a global option that works in every model: its on/off/0600/password semantics are documented once (the README&#x27;s &quot;available for all models&quot; block and the HTML&#x27;s <code>debug</code> heading), and <code>device_table.example</code> carries <code>debug=off</code> on every <code>default:</code> block -- so do not re-document whether your model supports debug. Add a short per-model note only on what the <code>.debug</code> file <em>contains</em> when the transport makes it non-obvious (the ssh auth trace, SNMP sets plus a TFTP transfer, or raw HTTP request/response), the way the SSH, SNMP and web models do.</p>
 <hr>
-<p><em>Generated documentation: <code>How-To-add-a-model.html</code> is produced from this file by <code>tools/md2html.py</code> (Python 2.7 / 3.x, no dependencies): <code>python tools/md2html.py How-To-add-a-model.md How-To-add-a-model.html</code>.</em></p>
+<p><em>Generated documentation: <code>How-To-add-a-model.html</code> is produced from this file by <code>tools/md2html.py</code> (Python 2.7 / 3.x, no dependencies): <code>sh tools/pyrun tools/md2html.py How-To-add-a-model.md How-To-add-a-model.html</code>. <code>tools/pyrun</code> picks the host&#x27;s interpreter (python3 on Linux, python on AIX).</em></p>
 </section>
 
     </div>

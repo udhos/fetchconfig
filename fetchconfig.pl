@@ -23,6 +23,7 @@
 
 use FindBin qw($Bin);
 use Cwd ();
+use File::Spec ();
 use strict;
 
 use lib "$FindBin::Bin/";
@@ -482,7 +483,8 @@ sub usage_text {
     $t .= "       $me [-devices=file] [-line=string] -e [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -e -D [-T] [-f file]\n";
     $t .= "\n";
-    $t .= "       -devices=file  device table file to load (repeatable)\n";
+    $t .= "       -devices=file  device table file to load (repeatable); a relative name is looked for in the\n";
+    $t .= "                      current directory first, then beside fetchconfig.pl (its own directory)\n";
     $t .= "       -P N           fetch with N parallel worker processes (default 1 = sequential, device-table\n";
     $t .= "                      order, live output). With N>1 each device's output is buffered and shown as one\n";
     $t .= "                      uninterrupted block when it finishes, in completion order; never interleaved.\n";
@@ -744,17 +746,41 @@ sub replay_device_block {
     unlink "$base.err", "$base.out", "$base.res";
 }
 
+#
+# Resolve a -devices= argument to a path to open. A fully-qualified (absolute)
+# path is used exactly as given. A relative name is looked for in the current
+# working directory first, then beside fetchconfig.pl itself (FindBin) - so a
+# run from another directory, e.g. a cron job, still finds a table that lives
+# with the script, the same way the shipped templates/ dir is found. If neither
+# exists the as-asked form is returned so the error names what was requested.
+#
+sub resolve_device_file {
+    my ($filename) = @_;
+    return $filename if File::Spec->file_name_is_absolute($filename);
+    return $filename if -f $filename;                          # current directory
+    my $beside = File::Spec->catfile($FindBin::Bin, $filename);
+    return $beside if -f $beside;                              # beside the script
+    return $filename;
+}
+
 sub load_device_list {
     my ($filename, $lookup_only) = @_;
 
+    my $path = resolve_device_file($filename);
+
     local *IN;
 
-    if (!open(IN, '<', $filename)) {
-	$log->error("could not read device list: $filename: $!");
+    if (!open(IN, '<', $path)) {
+	if (File::Spec->file_name_is_absolute($filename)) {
+	    $log->error("could not read device list: $filename: $!");
+	}
+	else {
+	    $log->error("could not read device list: $filename (looked in the current directory and $FindBin::Bin): $!");
+	}
 	return;
     }
 
-    $log->debug("loading device list: $filename");
+    $log->debug("loading device list: $path");
 
     my $line_num = 0;
 
@@ -767,7 +793,7 @@ sub load_device_list {
 
 	next if (/^\s*(#|$)/);
 
-        fetchconfig::model::Detector->parse($filename, $line_num, $_, $lookup_only);
+        fetchconfig::model::Detector->parse($path, $line_num, $_, $lookup_only);
     }
 
     close IN;

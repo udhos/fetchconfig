@@ -13,7 +13,7 @@ A Perl tool for retrieving and archiving the running configuration of many netwo
 > Need a browser-based UI? A companion project, fetchconfig-web, provides a web front-end on top of fetchconfig for browsing backups, viewing and comparing configurations, checking run status, and editing the device table: https://github.com/rainer-tammer/fetchconfig-web
 
 > [!NOTE]
-> Developers: DEVELOPER-GUIDE.md / .html is the architecture and engineering guide (internals, data structures, device-table format, security model, and how to extend); How-To-add-a-model.md / .html is the programming manual for writing a new device model; "perl Makefile.PL && make test" (or "prove -I. t/") runs the test suite under t/, and "make doc" regenerates the .md-derived docs via tools/render-doc.py and tools/md2html.py. Perl module requirements (core vs CPAN for Perl 5.26/5.28/5.40, by feature) are in the file DEPENDENCIES.
+> Developers: DEVELOPER-GUIDE.md / .html is the architecture and engineering guide (internals, data structures, device-table format, security model, and how to extend); How-To-add-a-model.md / .html is the programming manual for writing a new device model; "perl Makefile.PL && make test" (or "prove -I. t/") runs the test suite under t/, and "make doc" regenerates the .md-derived docs via tools/render-doc.py and tools/md2html.py (launched through tools/pyrun, which selects python3 on Linux and python on AIX). Perl module requirements (core vs CPAN for Perl 5.26/5.28/5.40, by feature) are in the file DEPENDENCIES.
 
 fetchconfig is a Perl script for retrieving the configuration of multiple devices. It has been tested under Linux, AIX and Windows (on native Windows: telnet, web-UI and SNMP devices only, no SSH -- see Windows limitations), and currently supports a variety of devices, including Cisco IOS, Cisco Catalyst, Cisco ASA, Cisco PIX, FortiGate Firewalls, ProCurve, Alcatel Ethernet Routers (aka Riverstone), Dell PowerConnect Switches, Terayon 3200/3500 CMTS, Datacom DmSwitch Switches, HP MSR Routers, Mikrotik Routers, Tellabs MSR Routers, Juniper EX Switch JunOS, Oracle Acme Packet, Audiocodes Mediant, Cisco IOS XR, NEC Univerge IX, Hirschmann Railswitch, Zyxel switches, PLANET managed switches, Aruba CX switches, Cisco Nexus switches, AudioCodes Mediant SBCs, TP-Link Easy Smart switches, HP ProCurve 1700 series switches, and HP ProCurve ProVision (incl. 4000M/8000M) over SNMP+TFTP.
 
@@ -141,6 +141,8 @@ cd /usr/local/fetchconfig
 ```
 
 The fetchconfig.pl script will scan the "device_table" file, trying to retrieve the configuration for every device, storing configuration files under the "repository".
+
+A relative "-devices=" name is looked for in the current directory first, then beside fetchconfig.pl (its own directory), so a device table kept with the script is found from any working directory - a cron job, say - without a "cd" first. An absolute path is used exactly as given.
 
 By default the devices are fetched one after another, in device-table order. With many devices the run time is dominated by the network sessions; "-P N" fetches N devices concurrently - see PARALLEL FETCHING below. On native Windows "-P N" always runs sequentially (no fork; see WINDOWS LIMITATIONS).
 

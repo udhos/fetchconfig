@@ -1,5 +1,15 @@
 # fetchconfig -- Changes
 
+## 9.73
+
++ -devices= now finds a relative device-table name in the current directory
+  first, then beside fetchconfig.pl (FindBin); an absolute path is used as
+  given. A table kept with the script is found from any working directory.
+
++ Build: "make doc" now launches the Python doc tools through tools/pyrun,
+  which selects the host interpreter (python3 on Linux, python on AIX)
+  instead of assuming an unversioned "python".
+
 ## 9.72
 
 + Security: the planet model no longer writes the login and enable passwords

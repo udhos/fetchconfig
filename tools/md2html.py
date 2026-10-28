@@ -30,7 +30,7 @@ import sys
 # Kept in step with fetchconfig's version by hand. NOT imported from
 # fetchconfig::Constants, so this tool is self-contained and can be copied
 # and run on its own.
-VERSION = '9.72'
+VERSION = '9.73'
 
 try:                       # Python 3
     from html import escape as _escape

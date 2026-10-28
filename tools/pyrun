@@ -1,0 +1,16 @@
+#!/bin/sh
+# pyrun - run a fetchconfig doc tool under the host's Python.
+#
+# The doc generators (tools/*.py) run unchanged on both Python 2.7 (AIX's
+# own Python) and Python 3.x (Linux), but their launcher must not assume an
+# unversioned "python": current Linux (RHEL/SLES/Debian) ship only "python3",
+# while AIX ships "python" (2.x) in the base PATH. This wrapper execs the
+# first interpreter it finds on PATH. Override with  PYTHON=/path/to/python
+# in the environment (e.g.  make doc PYTHON=/usr/bin/python3).
+#
+#   usage:  sh tools/pyrun tools/render-doc.py --all .
+for p in "$PYTHON" python3 python python2; do
+    [ -n "$p" ] && command -v "$p" >/dev/null 2>&1 && exec "$p" "$@"
+done
+echo "pyrun: no Python interpreter found (set PYTHON=/path/to/python3)" >&2
+exit 1

@@ -34,6 +34,10 @@ print $fh <<"MAKEFILE";
 
 PERL  = $perl
 PROVE = prove
+# Launcher for the Python doc tools (tools/*.py). They run on both Python 2.7
+# (AIX) and 3.x (Linux); tools/pyrun execs the host interpreter (python3 on
+# Linux, python on AIX). Override:  make doc PYTHON=/path/to/python
+PYRUN = sh tools/pyrun
 
 # Default target: not implemented yet.
 all:
@@ -60,9 +64,9 @@ test-verbose:
 # companion is removed. Titles come from each .md's H1. (Diagrams: run
 # tools/gen-mermaid-svg.py only when a diagram changes; "make doc" embeds the cache.)
 doc:
-\t\$(PERL) tools/render-doc.py --all .
-\t\$(PERL) tools/md2html.py --all . --text-only
-\t\$(PERL) tools/md2html.py LICENSE.md LICENSE.html
+\t\$(PYRUN) tools/render-doc.py --all .
+\t\$(PYRUN) tools/md2html.py --all . --text-only
+\t\$(PYRUN) tools/md2html.py LICENSE.md LICENSE.html
 \tcp -f LICENSE COPYING
 \trm -f fetchconfig-documentation
 

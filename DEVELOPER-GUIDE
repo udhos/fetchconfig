@@ -20,7 +20,7 @@ remain authoritative for their topics and are referenced from here:
 Where this guide found those documents lacking a detail an extender needs,
 that detail is added here and noted as such.
 
-Target version: 9.72. Perl floor: 5.26.
+Target version: 9.73. Perl floor: 5.26.
 
 ------------------------------------------------------------
 
@@ -857,7 +857,9 @@ tagging a release. On a bare dev box, test the pure helpers directly.
   delete every backup).
 - Version/CHANGES discipline. Bump Constants.pm, add a CHANGES entry
   (<=80-char lines, LF-only), and keep README + the HTML manual in step with
-  the code -- the HTML is generated from its .md via tools/md2html.py.
+  the code -- the HTML is generated from its .md via tools/md2html.py
+  (run by make doc, which launches the Python tools through tools/pyrun:
+  python3 on Linux, python on AIX).
 
 ------------------------------------------------------------
 

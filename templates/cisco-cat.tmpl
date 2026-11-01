@@ -1,0 +1,49 @@
+# cisco-cat.tmpl - Cisco Catalyst CatOS over telnet.
+#
+# syntax_style: generic
+#
+# Derived from fetchconfig::model::CiscoCAT. CatOS uses "set"-style config and
+# an enable prompt "host> (enable) ". The show command is fixed ("sh config"),
+# so there is no show_cmd override.
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+prompt_head    ''
+prompt_tail    '> \(enable\) $'
+
+# drop the echoed "sh config" command line
+skip_first     1
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /Username: $/   -> send user         -> goto pw
+    expect /Password: $/   -> send_secret pass   -> goto after_login
+
+state pw
+    expect /Password: $/   -> send_secret pass   -> goto after_login
+
+# user-mode prompt "host> ": enter enable
+state after_login
+    expect /(\S+)> $/      -> send "enable"     -> goto enable
+
+# response to "enable": the enable-password prompt, or the enable prompt
+state enable
+    expect /Password: $/   -> send_secret enable -> goto pager
+    expect prompt          -> send "set len 0"   -> goto show
+
+state pager
+    expect prompt          -> send "set len 0"   -> goto show
+
+state show
+    expect prompt          -> send "sh config"   -> goto capture
+
+state capture
+    capture_start
+    expect prompt          -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done

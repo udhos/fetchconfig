@@ -38,7 +38,7 @@ use Getopt::Long qw(:config no_ignore_case bundling);
 # Kept in step with fetchconfig's version by hand. NOT imported from
 # fetchconfig::Constants, so this tool is self-contained and can be copied
 # and run on its own.
-my $VERSION = '9.73';
+my $VERSION = '9.74';
 my (%opt, $show_help, $show_version);
 GetOptions(
     'f|hex=s'       => \$opt{hex},
@@ -134,6 +134,16 @@ strip_ansi     @{[ $saw_ansi ? 'yes' : 'no' ]}
 
 prompt_head    @{[ $saw_ansi ? "'(?:\\\\x1b\\\\[[\\\\d;?]*[A-Za-z])*'" : "''" ]}
 prompt_tail    '$prompt_tail'
+
+# TODO: timing directives - leave them commented unless a fetch misbehaves.
+# They are no-ops while commented, and a capture cannot reveal whether they
+# are needed (the .hex has no timing). They matter mostly over SSH:
+#   prompt_settle_ms N   let the channel go quiet (N ms) before matching the
+#                        prompt - for SSH CLIs whose banner races it.
+#   type_delay_ms N      type char-by-char (N ms apart) - for devices that
+#                        drop fast/pasted input.
+@{[ $transport eq 'ssh' ? "# (SSH capture: uncomment these first if a fetch is flaky)\n" : "" ]}# prompt_settle_ms 150
+# type_delay_ms   100
 
 # TODO: add volatile lines to ignore when comparing backups. A single
 # capture cannot reveal these - compare two captures taken minutes apart

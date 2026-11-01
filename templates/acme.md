@@ -1,0 +1,106 @@
+# acme template -- state machine
+
+State machine of the `acme` generic-model template (selected with
+`model=acme`), parsed from `templates/acme.tmpl`. Acme Packet / Oracle SBC over telnet. See
+[README.template_engine.html](../README.template_engine.html) for the engine
+and grammar and [README.generic-model.html](../README.generic-model.html) for
+selecting the model in the device table.
+
+## Template settings
+
+- status: DRAFT - please verify on real hardware.
+- transport: `telnet`
+- prompt: head `''`, tail `'[#>] ?$'` (the bareword `prompt` = head + learned hostname + tail)
+- show command: `show conf`
+- `skip_first 1` (drop leading echoed line(s))
+- timeouts: banner 30s, fetch 120s, max_visits 8
+
+## State machine
+
+```text
+  entry:
+    transport telnet -> state_login_telnet
+
+  state_login_telnet
+      username           -> send user              -> pw
+      password           -> send password          -> show
+  pw
+      password           -> send password          -> show
+  show
+      at prompt          -> send show command      -> capture
+  capture
+      at prompt          -> capture_stop           -> logout
+      (capture_start on entry)
+  logout
+      (send)             -> send exit              -> done
+```
+<!--MERMAID
+stateDiagram-v2
+    [*] --> state_login_telnet: transport telnet
+    state_login_telnet --> pw: username, send user
+    state_login_telnet --> show: password, send password
+    pw --> show: password, send password
+    show --> capture: at prompt, send show command
+    capture --> logout: at prompt, capture_stop
+    logout --> [*]: send exit
+MERMAID-->
+
+## States
+
+| State | Waits for (expect) | Action | Next |
+|-------|--------------------|--------|------|
+| `state_login_telnet` | `/Username: ?$/` | `send user` | `pw` |
+|  | `/Password: ?$/` | `send_secret pass` | `show` |
+| `pw` | `/Password: ?$/` | `send_secret pass` | `show` |
+| `show` | `prompt` | `send show_cmd` | `capture` |
+| `capture` | `prompt` | `capture_start` on entry, then `capture_stop` | `logout` |
+| `logout` | (standalone send) | `send "exit"` | `done` |
+
+States with more than one expect try them in order; the first match wins.
+
+## Template source
+
+Full source of `templates/acme.tmpl`:
+
+```
+# acme.tmpl - Acme Packet / Oracle SBC over telnet.
+#
+# syntax_style: generic
+#
+# Derived from fetchconfig::model::Acme. No enable, no pager. The prompt sign
+# varies between user ">" and privileged "#"; one prompt_tail covers both.
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+show_cmd       'show conf'
+
+# drop the echoed "show conf" command line
+skip_first     1
+
+prompt_head    ''
+prompt_tail    '[#>] ?$'
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /Username: ?$/  -> send user        -> goto pw
+    expect /Password: ?$/  -> send_secret pass   -> goto show
+
+state pw
+    expect /Password: ?$/  -> send_secret pass   -> goto show
+
+state show
+    expect prompt          -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect prompt          -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done
+```
+
+_Generated from `templates/acme.tmpl` by `tools/gen-template-docs.pl`._

@@ -1,0 +1,140 @@
+# hirschmann template -- state machine
+
+State machine of the `hirschmann` generic-model template (selected with
+`model=hirschmann`), parsed from `templates/hirschmann.tmpl`. Hirschmann industrial switch over telnet. See
+[README.template_engine.html](../README.template_engine.html) for the engine
+and grammar and [README.generic-model.html](../README.generic-model.html) for
+selecting the model in the device table.
+
+## Template settings
+
+- status: Verified on real hardware.
+- transport: `telnet`
+- prompt: head (default), tail (default) (the bareword `prompt` = head + learned hostname + tail)
+- show command: `show running-config all`
+- saved file starts at: `capture_from /^!/`
+- compare-only canon (salt/volatile field normalised before the compare):
+  - `canon /(?<=:v1:[0-9a-fA-F]{18})[0-9a-fA-F]+(?=:)/<v1-salt>/`
+- timeouts: banner 30s, fetch 120s, max_visits 8
+
+## State machine
+
+```text
+  entry:
+    transport telnet -> state_login_telnet
+
+  state_login_telnet
+      username           -> send user              -> pw
+      password           -> send password          -> after_login
+  pw
+      password           -> send password          -> after_login
+  after_login
+      /\([^)]*\)\s?[>#]$/ -> send enable            -> enable
+  enable
+      password           -> send enable secret     -> show
+      at prompt          -> send show command      -> capture
+  show
+      at prompt          -> send show command      -> capture
+  capture
+      at prompt          -> capture_stop           -> logout
+      (capture_start on entry)
+  logout
+      (send)             -> send exit              -> logout_op
+  logout_op
+      at prompt          -> send logout            -> done
+```
+<!--MERMAID
+stateDiagram-v2
+    [*] --> state_login_telnet: transport telnet
+    state_login_telnet --> pw: username, send user
+    state_login_telnet --> after_login: password, send password
+    pw --> after_login: password, send password
+    after_login --> enable: send enable
+    enable --> show: password, send enable secret
+    enable --> capture: at prompt, send show command
+    show --> capture: at prompt, send show command
+    capture --> logout: at prompt, capture_stop
+    logout --> logout_op: send exit
+    logout_op --> [*]: at prompt, send logout
+MERMAID-->
+
+## States
+
+| State | Waits for (expect) | Action | Next |
+|-------|--------------------|--------|------|
+| `state_login_telnet` | `/User: ?$/` | `send user` | `pw` |
+|  | `/Password: ?$/` | `send_secret pass` | `after_login` |
+| `pw` | `/Password: ?$/` | `send_secret pass` | `after_login` |
+| `after_login` | `/\([^)]*\)\s?[>#]$/` | `send "enable"` | `enable` |
+| `enable` | `/Password: ?$/` | `send_secret enable` | `show` |
+|  | `/\([^)]*\)\s?#$/` | `send show_cmd` | `capture` |
+| `show` | `/\([^)]*\)\s?#$/` | `send show_cmd` | `capture` |
+| `capture` | `/\([^)]*\)\s?#$/` | `capture_start` on entry, then `capture_stop` | `logout` |
+| `logout` | (standalone send) | `send "exit"` | `logout_op` |
+| `logout_op` | `/\([^)]*\)\s?>$/` | `send "logout"` | `done` |
+
+States with more than one expect try them in order; the first match wins.
+
+## Template source
+
+Full source of `templates/hirschmann.tmpl`:
+
+```
+# hirschmann.tmpl - Hirschmann industrial switch over telnet.
+#
+# syntax_style: cisco-ios
+#
+# Derived from fetchconfig::model::Hirschmann. The prompt is "(Name) #" and the
+# name may contain spaces, so the prompt is matched by an explicit regex rather
+# than the hostname-learning "prompt" token. No pager.
+# Note: Verified on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+show_cmd       'show running-config all'
+
+capture_from   /^!/
+
+# The "users passwd <user> :v1:<hash>:" field re-salts on every read: the first
+# 18 hex (9 bytes) are password-derived and stable, the rest is random salt.
+# Collapse the salt before the changes_only comparison so churn is not a false
+# change (a real password change still alters the prefix). Compare-only; the
+# saved backup keeps the exact hash.
+canon /(?<=:v1:[0-9a-fA-F]{18})[0-9a-fA-F]+(?=:)/<v1-salt>/
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /User: ?$/     -> send user        -> goto pw
+    expect /Password: ?$/ -> send_secret pass   -> goto after_login
+
+state pw
+    expect /Password: ?$/ -> send_secret pass   -> goto after_login
+
+# prompt "(Name) >" (operator) or "(Name) #" (privileged)
+state after_login
+    expect /\([^)]*\)\s?[>#]$/ -> send "enable" -> goto enable
+
+state enable
+    expect /Password: ?$/      -> send_secret enable -> goto show
+    expect /\([^)]*\)\s?#$/    -> send show_cmd       -> goto capture
+
+state show
+    expect /\([^)]*\)\s?#$/    -> send show_cmd       -> goto capture
+
+state capture
+    capture_start
+    expect /\([^)]*\)\s?#$/    -> capture_stop        -> goto logout
+
+# Hirschmann logout is two steps: at the privileged "#" prompt "exit" only
+# drops to the operator ">" prompt; the session ends with "logout" at ">".
+state logout
+    send "exit" -> goto logout_op
+
+state logout_op
+    expect /\([^)]*\)\s?>$/ -> send "logout" -> done
+```
+
+_Generated from `templates/hirschmann.tmpl` by `tools/gen-template-docs.pl`._

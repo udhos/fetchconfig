@@ -1,0 +1,41 @@
+# mikrotik.tmpl - MikroTik RouterOS over telnet.
+#
+# syntax_style: generic
+#
+# Derived from fetchconfig::model::MikroTik. IMPORTANT: the Perl model appends
+# "+ct" to the username (disable colour, auto-detect terminal); a template
+# cannot, so set the device option user=<name>+ct (e.g. user=admin+ct). The
+# prompt is "[user@name] > ". No enable.
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+# RouterOS config dump "export"; override per device with show_cmd=.
+show_cmd       'export'
+
+# drop the echoed "export"; the "# <date> by RouterOS ..." line is volatile
+skip_first     1
+ignore  /^# .* by RouterOS/
+interrupt /--More--/ -> send_nolf " "
+
+# ---- telnet entry: interactive login (no enable) ----
+state state_login_telnet
+    expect /Login: ?$/    -> send user        -> goto pw
+    expect /Password: ?$/ -> send_secret pass   -> goto show
+
+state pw
+    expect /Password: ?$/ -> send_secret pass   -> goto show
+
+# prompt "[user@name] > "
+state show
+    expect /\[[^\]]+\] ?> ?$/ -> send show_cmd  -> goto capture
+
+state capture
+    capture_start
+    expect /\[[^\]]+\] ?> ?$/ -> capture_stop   -> goto logout
+
+state logout
+    send "quit" -> done

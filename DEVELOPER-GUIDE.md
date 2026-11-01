@@ -19,7 +19,7 @@ remain authoritative for their topics and are referenced from here:
 Where this guide found those documents lacking a detail an extender needs,
 that detail is added here and noted as such.
 
-Target version: 9.73. Perl floor: 5.26.
+Target version: 9.74. Perl floor: 5.26.
 
 ---
 
@@ -856,7 +856,87 @@ tagging a release. On a bare dev box, test the pure helpers directly.
 
 ---
 
-## 14. Document map
+## 14. Backup-history DB writer (optional)
+
+Off unless a `db:` line is set (default: level). It records two timelines to
+PostgreSQL for a dashboard; the engine only writes, never issues DDL. Module:
+`fetchconfig/History.pm`. DBI/DBD::Pg load only when `db:` is set. The `.status`
+file is unchanged.
+
+Two timelines (different cardinality):
+
+- Run / health history: one row per device per run, success or not. Dense. Table
+  `backup_runs`.
+- Change history: one row per SAVED backup (with a sha1). Sparse. Table
+  `backup_versions`. A per-device current snapshot is kept denormalized in
+  `backup_current`.
+
+Data path (parent only; never in -P workers):
+
+1. During the fetch, nothing touches the DB. `Detector::fetch_device` records the
+   run through `Mailer::record_result`, now also carrying `size_bytes`, `path`,
+   `file_timestamp` and `sha1` for a RETAINED backup (the metadata
+   `Abstract::dump_config` stashes on the model instance as `{saved}`). Expiry
+   emits `Mailer::record_expire` events. Under -P these ride the result sink and
+   are replayed into the parent.
+2. At end of run (`fetchconfig.pl`, after `run_fetch_phase`, before
+   `send_summaries`), `History::finish` builds the ops from the replayed results
+   and writes a per-repository WRITE-AHEAD spool file (`<repo>/.db-<pid>-<ts>`, a
+   dotfile, temp+rename).
+3. It then drains every spool file into the DB, oldest first, one transaction per
+   file; a file is unlinked only after COMMIT. On the first failure it stops and
+   leaves that file (and later ones) for the next run. Spool files older than
+   `db_max_outbox_days` are dropped.
+4. `History::finish` logs its own `-----[DB writer]-----` section (same 92-char
+   width as the mail's `-----[email]-----`): the divider first, then any spool or
+   drain warnings, then the result line `History::status_line` ("all N record(s)
+   written; outbox empty", or the INCOMPLETE form). This runs before
+   `send_summaries` and independent of "email:", so a no-mail run still reports
+   the DB outcome. When "email:" is set, the main summary mail also renders a
+   status box inside the card from `History::mail_status` (green = written, red =
+   incomplete, grey = no `db:`); `_db_status_box_html` builds it and the per-device
+   override mails omit it. Log and mail read the one `%summary` that `finish` set.
+   `db_sslmode` defaults to `disable` (a local DB on the same box); set `require`
+   or stronger for a DB across a WAN. Mail markup is Outlook-safe: the report
+   button is a VML `<v:roundrect>` and the status pill a one-cell `<td>` badge,
+   each behind `[if mso]` with the plain `<a>`/`<span>` behind `[if !mso]` (VML
+   namespaces + an `OfficeDocumentSettings` DPI block are in `build_report_html`'s
+   `<head>`); the box title and pill are separate `<td>`s; and the summary tables
+   use soft zebra shading (`@ROW_BG`) to separate rows instead of grid lines. Each
+   cell sets its colour via both the `bgcolor` attribute and CSS (OWA's sanitizer
+   can drop a cell's CSS background). The table uses `border-collapse: collapse`
+   with no cell borders: that removes the sub-pixel inter-row gap Word would
+   otherwise paint with the table background (the faint 1px seam it drew under the
+   darker band), so each row's own shade is all that shows - no single table or
+   border colour has to stand in for both shades.
+   `send_mail` sends the HTML part as **quoted-printable** (not 8bit): the markup
+   has long lines (a table row is one line), and an MTA that folds a raw line past
+   the 998-octet SMTP limit corrupts the HTML mid-tag; QP soft-wraps at 76 chars.
+
+Write-ahead means the records hit disk before the DB is touched, so a DB outage
+only defers the drain (the run always completes) and nothing is lost. Idempotent
+keys cover the commit-then-crash window.
+
+Pre-9.5 PostgreSQL (production is 8.2.23): no ON CONFLICT/MERGE/jsonb. Append-only
+inserts use `INSERT ... SELECT ... WHERE NOT EXISTS (<key>)`; `backup_current` is
+UPDATE-else-INSERT (a successful run advances `last_good_at`/`last_good_size`, a
+failed run leaves them untouched; two UPDATE shapes avoid a boolean bind in a
+CASE). All DML uses DBI placeholders. The writer role needs SELECT as well as
+INSERT/UPDATE on the three tables, because the idempotency subqueries and the
+UPDATE WHERE/value expressions read them; that grant is created by fetchconfig-web
+(`fetchconfig-web-dbsetup.pl --upgrade`), not by the engine.
+
+All DB timestamps (`run_end`, `last_good_at`, `expired_at`, `file_timestamp`) use
+one convention: the box's LOCAL wall-clock encoded as seconds (via `timegm` of the
+local parts), not a true UTC instant. fetchconfig and its fetchconfig-web run on a
+single box in a single timezone, so the stored values are directly the local time
+and fetchconfig-web renders them as-is, with no timezone conversion.
+`file_timestamp` is derived from the same parts at save and at expiry
+(`Abstract::backup_epoch_from_parts`), so the keyed row matches; the filename tz
+token is ignored, and `timegm` does not consult the host zone. (Spool file-age
+pruning uses real elapsed time, independent of this display convention.)
+
+## 15. Document map
 
 | To learn... | Read... |
 |-----------|-------|

@@ -1,0 +1,47 @@
+# fortigate.tmpl - Fortinet FortiGate over telnet.
+#
+# syntax_style: generic
+#
+# Derived from fetchconfig::model::FortiGate. No enable. The pager is disabled
+# with a three-command sequence; the whole config comes from one "show". The
+# Perl model restores the pager afterwards (omitted here, cosmetic).
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+# drop the echoed "show" command line
+skip_first     1
+
+prompt_head    ''
+prompt_tail    ' ?[#$] ?$'
+
+# ---- telnet entry: interactive login (no enable) ----
+state state_login_telnet
+    expect /login: $/    -> send user        -> goto pw
+    expect /Password: $/ -> send_secret pass   -> goto pager_open
+
+state pw
+    expect /Password: $/ -> send_secret pass   -> goto pager_open
+
+# disable the pager: config system console / set output standard / end
+state pager_open
+    expect prompt -> send "config system console" -> goto pager_set
+
+state pager_set
+    expect prompt -> send "set output standard"   -> goto pager_end
+
+state pager_end
+    expect prompt -> send "end"                   -> goto show
+
+state show
+    expect prompt -> send "show"                  -> goto capture
+
+state capture
+    capture_start
+    expect prompt -> capture_stop                 -> goto logout
+
+state logout
+    send "exit" -> done

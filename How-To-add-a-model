@@ -1,7 +1,7 @@
 fetchconfig -- How to Add a Device Model
 ========================================
 
-Programming manual for writing a new configuration extractor. Applies to fetchconfig 9.73.
+Programming manual for writing a new configuration extractor. Applies to fetchconfig 9.74.
 
 ------------------------------------------------------------
 
@@ -32,6 +32,8 @@ Values containing commas or spaces are double-quoted. Your model reads options w
 Fetch pipeline (owned by the core, Detector::fetch_device). For each device: call $model->fetch(...) -> if it returned a saved file, compare with the previous backup (config_equal, which your model may override) -> discard if unchanged and changes_only -> expire beyond keep=N -> record the result for the status file and the summary mail. A model that fails returns an empty list; the core logs the failure, records it, and moves to the next device. A model never terminates the run.
 
 Repository. <repository>/YYYYMM/YYYYMMDD/<dev_id>/<dev_id>.run.<timestamp><tz><suffix>. Your model never builds this path; dump_config() does.
+
+Optional DB history (nothing to do if you use dump_config()). When a db: line is configured, the core records per-run health and per-backup change history to PostgreSQL. The per-backup change fields (path, file_timestamp, sha1) are computed by Abstract::dump_config() and stashed on the model instance as $self->{saved}, which fetch_device reads; size_bytes is the saved file's size, which fetch_device takes with stat. Inherit dump_config() (the normal case) and this is automatic. Only a model that writes the backup file by some other means would need to set $self->{saved} itself to appear in the change timeline; the run/health history is recorded regardless.
 
 3. The Model Contract
 =====================

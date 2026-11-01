@@ -31,6 +31,7 @@ use warnings;
 my %DIRECTIVE_SCALAR = map { $_ => 1 } qw(
     banner_timeout fetch_timeout fetch_delay max_visits
     strip_ansi prompt_head prompt_tail ssh_extra_opts skip_first
+    prompt_settle_ms type_delay_ms show_cmd
 );
 
 sub parse {
@@ -40,6 +41,7 @@ sub parse {
         transports => [],
         interrupts => [],
         ignores    => [],
+        canons     => [],       # [{pattern, replacement}] canonicalise-before-compare
         states     => [],       # ordered
         state_by   => {},       # name -> state href
         errors     => [],
@@ -89,6 +91,18 @@ sub parse {
         # ignore (global)
         if ($line =~ m{^ignore\s+/(.*)/\s*$}) {
             push @{$t{ignores}}, { regex => $1, line => $lineno };
+            next;
+        }
+
+        # canon (global): canonicalise part of each line before the
+        # changes_only comparison - "canon /PATTERN/REPLACEMENT/". Unlike
+        # ignore (whole-line drop), this rewrites only the matched part, so a
+        # field a device re-serialises on every read (e.g. a re-salted hash)
+        # does not count as a change while a real change still does. The
+        # REPLACEMENT is literal (no $1 backref - use look-behind/-ahead).
+        # Neither PATTERN nor REPLACEMENT may contain an unescaped "/".
+        if ($line =~ m{^canon\s+/((?:\\.|[^/])*)/((?:\\.|[^/])*)/\s*$}) {
+            push @{$t{canons}}, { pattern => $1, replacement => $2, line => $lineno };
             next;
         }
 
@@ -194,7 +208,7 @@ sub _parse_action {
     if ($s =~ /^(send|send_nolf|send_secret)\s+(.+)$/) {
         my ($verb, $arg) = ($1, $2);
         if ($arg =~ /^"(.*)"$/) { return ({ op => $verb, kind => 'literal', text => $1 }, undef); }
-        if ($arg =~ /^(user|pass|enable)$/) { return ({ op => $verb, kind => 'option', name => $1 }, undef); }
+        if ($arg =~ /^(user|pass|enable|show_cmd)$/) { return ({ op => $verb, kind => 'option', name => $1 }, undef); }
         return (undef, "bad send argument: $arg");
     }
     return (undef, "unrecognised action: $s");
@@ -241,6 +255,20 @@ sub _validate {
     }
     push @e, "template must contain exactly one capture_start (found $cs)" if $cs != 1;
     push @e, "template must contain exactly one capture_stop (found $ce)"  if $ce != 1;
+
+    # millisecond timing directives, if present, must be non-negative integers
+    for my $k (qw(prompt_settle_ms type_delay_ms)) {
+        my $v = $t->{directives}{$k};
+        next unless defined $v;
+        push @e, "$k must be a non-negative integer (got '$v')" unless $v =~ /^\d+$/;
+    }
+
+    # each canon pattern must compile as a regex
+    for my $c (@{$t->{canons}}) {
+        my $ok = eval { qr/$c->{pattern}/; 1 };
+        push @e, "line $c->{line}: canon pattern does not compile: $c->{pattern}"
+            unless $ok;
+    }
 
     # every goto targets an existing state; self-loops must be bounded
     my $global_mv = $t->{directives}{max_visits};

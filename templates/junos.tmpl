@@ -1,0 +1,46 @@
+# junos.tmpl - Juniper JunOS over telnet.
+#
+# syntax_style: generic
+#
+# Derived from fetchconfig::model::JunOS. Log in to operational mode "host>",
+# disable the pager, enter "configure" (prompt becomes "host#"), then "show".
+# The prompt sign changes between operational ">" and configuration "#".
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+# config command "show" (run in configuration mode); override with show_cmd=.
+show_cmd       'show'
+
+# drop the echoed command; the "## Last commit:" line is rewritten every read
+skip_first     1
+ignore  /^## Last commit/
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /login: $/      -> send user        -> goto pw
+    expect /Password:\s*$/ -> send_secret pass   -> goto op
+
+state pw
+    expect /Password:\s*$/ -> send_secret pass   -> goto op
+
+# operational mode "host> ": disable paging, then enter configuration
+state op
+    expect /\S+>\s$/       -> send "set cli screen-length 0" -> goto op_ready
+
+state op_ready
+    expect /\S+>\s$/       -> send "configure"  -> goto conf
+
+# configuration mode "host# ": run the show command
+state conf
+    expect /\S+#\s$/       -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect /\S+#\s$/       -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done

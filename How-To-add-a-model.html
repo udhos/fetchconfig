@@ -532,7 +532,7 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.73</span>
+      <span class="pill">v9.75</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
@@ -554,7 +554,7 @@
     <div class="hero">
       <div class="hero-eyebrow">How to Add a Device Model</div>
       <h1 class="hero-title">fetchconfig</h1>
-      <p class="lede"><em>Programming manual for writing a new configuration extractor. Applies to fetchconfig 9.73.</em></p>
+      <p class="lede"><em>Programming manual for writing a new configuration extractor. Applies to fetchconfig 9.74.</em></p>
       
       
     </div>
@@ -581,6 +581,7 @@
 <p>Values containing commas or spaces are double-quoted. Your model reads options with <code>dev_option()</code>; you decide which are mandatory and reject a device that lacks them.</p>
 <p><strong>Fetch pipeline (owned by the core, <code>Detector::fetch_device</code>).</strong> For each device: call <code>$model-&gt;fetch(...)</code> -&gt; if it returned a saved file, compare with the previous backup (<code>config_equal</code>, which your model may override) -&gt; discard if unchanged and <code>changes_only</code> -&gt; expire beyond <code>keep=N</code> -&gt; record the result for the status file and the summary mail. A model that fails returns an empty list; the core logs the failure, records it, and moves to the next device. <strong>A model never terminates the run.</strong></p>
 <p><strong>Repository.</strong> <code>&lt;repository&gt;/YYYYMM/YYYYMMDD/&lt;dev_id&gt;/&lt;dev_id&gt;.run.&lt;timestamp&gt;&lt;tz&gt;&lt;suffix&gt;</code>. Your model never builds this path; <code>dump_config()</code> does.</p>
+<p><strong>Optional DB history (nothing to do if you use <code>dump_config()</code>).</strong> When a <code>db:</code> line is configured, the core records per-run health and per-backup change history to PostgreSQL. The per-backup change fields (<code>path</code>, <code>file_timestamp</code>, <code>sha1</code>) are computed by <code>Abstract::dump_config()</code> and stashed on the model instance as <code>$self-&gt;{saved}</code>, which <code>fetch_device</code> reads; <code>size_bytes</code> is the saved file&#x27;s size, which <code>fetch_device</code> takes with <code>stat</code>. Inherit <code>dump_config()</code> (the normal case) and this is automatic. Only a model that writes the backup file by some other means would need to set <code>$self-&gt;{saved}</code> itself to appear in the change timeline; the run/health history is recorded regardless.</p>
 </section>
 <section id="3-the-model-contract">
 <div class="section-kicker">03</div>

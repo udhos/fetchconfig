@@ -1,0 +1,93 @@
+aruba-cx-ssh template -- state machine
+======================================
+
+State machine of the aruba-cx-ssh generic-model template (selected with
+model=aruba-cx-ssh), parsed from templates/aruba-cx-ssh.tmpl. Aruba CX. See
+README.template_engine.html (../README.template_engine.html) for the engine
+and grammar and README.generic-model.html (../README.generic-model.html) for
+selecting the model in the device table.
+
+Template settings
+=================
+
+- status: DRAFT - please verify on real hardware.
+- transport: ssh
+- prompt: head '', tail '# ?$' (the bareword prompt = head + learned hostname + tail)
+- show command: show running-config
+- saved file starts at: capture_from /^!/
+- timing: prompt_settle_ms 150
+- timeouts: banner 30s, fetch 120s, max_visits 8
+
+State machine
+=============
+
+      entry:
+        transport ssh    -> state_login_ssh
+    
+      state_login_ssh
+          at prompt          -> send no page           -> show
+      show
+          at prompt          -> send show command      -> capture
+      capture
+          at prompt          -> capture_stop           -> logout
+          (capture_start on entry)
+      logout
+          (send)             -> send exit              -> done
+
+States
+======
+
+State            Waits for (expect)  Action                                     Next
+---------------  ------------------  -----------------------------------------  -------
+state_login_ssh  prompt              send "no page"                             show
+show             prompt              send show_cmd                              capture
+capture          prompt              capture_start on entry, then capture_stop  logout
+logout           (standalone send)   send "exit"                                done
+
+Template source
+===============
+
+Full source of templates/aruba-cx-ssh.tmpl:
+
+    # aruba-cx-ssh.tmpl - Aruba CX (AOS-CX) over SSH.
+    #
+    # syntax_style: aruba-cx
+    #
+    # Derived from fetchconfig::model::ArubaCXSSH. SSH lands authenticated at the
+    # admin "#" prompt (no enable). prompt_settle_ms lets the login banner finish
+    # before the prompt is matched (the model drains to idle first). NOTE: a
+    # hostname containing spaces/Unicode (e.g. "sw01 UG Buero#") is only partially
+    # learned by the generic prompt matcher - adjust prompt_tail if needed.
+    # Note: DRAFT - please verify on real hardware.
+    
+    transport        ssh
+    banner_timeout   30
+    fetch_timeout    120
+    max_visits       8
+    prompt_settle_ms 150
+    
+    prompt_head      ''
+    prompt_tail      '# ?$'
+    
+    # show "show running-config"; override per device with show_cmd=.
+    show_cmd         'show running-config'
+    
+    # config begins at the first "!" line (drops "Current configuration:" preamble)
+    capture_from     /^!/
+    
+    # ---- SSH entry: authenticated; at the admin prompt, disable paging ----
+    state state_login_ssh
+        expect prompt  -> send "no page"   -> goto show
+    
+    state show
+        expect prompt  -> send show_cmd    -> goto capture
+    
+    state capture
+        capture_start
+        expect prompt  -> capture_stop     -> goto logout
+    
+    state logout
+        send "exit" -> done
+
+_Generated from templates/aruba-cx-ssh.tmpl by tools/gen-template-docs.pl._
+

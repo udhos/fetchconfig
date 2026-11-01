@@ -1,0 +1,49 @@
+# riverstone.tmpl - Riverstone RS over telnet.
+#
+# syntax_style: generic
+#
+# Derived from fetchconfig::model::Riverstone. The console must be activated
+# with a RETURN first; paging is disabled from configuration mode. The show
+# command is fixed ("system show active-config"). The Perl model restores paging
+# afterwards (omitted here, cosmetic).
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+# drop the echoed "system show active-config" command line
+skip_first     1
+
+# ---- telnet entry: activate console, then interactive login ----
+state state_login_telnet
+    expect /Press RETURN to activate console/ -> send ""          -> goto state_login_telnet
+    expect /Username:\s*$/ -> send user         -> goto state_login_telnet
+    expect /Password:\s*$/ -> send_secret pass    -> goto state_login_telnet
+    expect /\S+>\s*$/      -> send "enable"     -> goto enable
+    expect /\S+#\s*$/      -> nop                -> goto pager_conf
+
+state enable
+    expect /Password:\s*$/ -> send_secret enable -> goto pager_conf
+    expect /\S+#\s*$/      -> nop                -> goto pager_conf
+
+# enter configuration mode to disable paging
+state pager_conf
+    expect /\S+#\s*$/          -> send "conf"                        -> goto pager_set
+
+state pager_set
+    expect /\S+\(config\)#\s*$/ -> send "system set terminal rows 0" -> goto pager_exit
+
+state pager_exit
+    expect /\S+\(config\)#\s*$/ -> send "exit"                       -> goto show
+
+state show
+    expect /\S+#\s*$/          -> send "system show active-config"   -> goto capture
+
+state capture
+    capture_start
+    expect /\S+#\s*$/          -> capture_stop                       -> goto logout
+
+state logout
+    send "exit" -> done

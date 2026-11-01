@@ -1,0 +1,48 @@
+# cisco-pix.tmpl - Cisco PIX over telnet.
+#
+# syntax_style: cisco-ios
+#
+# Derived from fetchconfig::model::CiscoPIX.
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+prompt_head    ''
+prompt_tail    '# ?$'
+
+# show "show run"; override with show_cmd= (show_cmd=wrterm -> "write term").
+show_cmd       'show run'
+
+# PIX config starts at the ": Saved" / ": ..." header (keeps "PIX Version")
+capture_from  /^:/
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /Username: ?$/  -> send user        -> goto pw
+    expect /Password: ?$/  -> send_secret pass  -> goto after_login
+
+state pw
+    expect /Password: ?$/  -> send_secret pass  -> goto after_login
+
+state after_login
+    expect /(\S+)[>#] ?$/  -> send "enable"   -> goto enable
+
+state enable
+    expect /Password: ?$/  -> send_secret enable -> goto pager
+    expect prompt          -> send "pager 0"     -> goto show
+
+state pager
+    expect prompt          -> send "pager 0"     -> goto show
+
+state show
+    expect prompt          -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect prompt          -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done

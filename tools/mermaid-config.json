@@ -1,0 +1,7 @@
+{
+  "theme": "neutral",
+  "themeVariables": {
+    "fontFamily": "IBM Plex Sans, ui-sans-serif, sans-serif",
+    "fontSize": "14px"
+  }
+}

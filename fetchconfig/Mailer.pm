@@ -54,6 +54,7 @@ use strict;
 use warnings;
 use Net::SMTP;
 use MIME::Base64 qw(encode_base64);
+use MIME::QuotedPrint qw(encode_qp);
 use POSIX qw(strftime);
 use Text::ParseWords ();
 use fetchconfig::Constants;
@@ -64,6 +65,13 @@ my $email_seen = 0; # true once at least one "email:" line has been parsed
 my %email_config;   # from=, to=, smtp=, user=, password=
 
 my @results; # list of { dev_id, dev_host, ts, success, size, changed, to }
+my @expires; # list of { dev_id, repository, file_timestamp } - expired backups
+             # for the optional DB history writer (see fetchconfig::History)
+
+# Accessors for the optional DB history writer (fetchconfig::History), read in
+# the parent after run_fetch_phase has replayed all worker results.
+sub results { @results }
+sub expires { @expires }
 my ($rep_email_diffs, $rep_n_changed, $rep_max_diff, $rep_url, $rep_mask);  # change-report e-mail material
 my @report_hide;  # accumulated report_hide=<regex> patterns (custom masking)
 
@@ -286,9 +294,12 @@ my $MAIL_HEADER_BG = '#1f4e79';
 my $MAIL_FOOTER_FG = '#8a929b';
 
 my $HEADER_BG = '#1f4e79';   # match the mail card header
-my @ROW_BG    = ('#cfcfcf', '#afafaf');
-my $FAILED_FG  = '#ff0000';
-my $CHANGED_FG = '#0000ff';
+# Soft zebra shading separates rows (no cell borders - see build_stats/device):
+# borderless + alternating background renders cleanly in Word/Gecko/Blink and
+# removes the 1px seam Word drew between bordered rows.
+my @ROW_BG    = ('#e9ebee', '#d8dce1');
+my $FAILED_FG  = '#c0272d';
+my $CHANGED_FG = '#1f50c8';
 
 #
 # remove heading and trailing blanks (same rule as
@@ -374,7 +385,10 @@ sub red_if_failed {
 
     return $text unless defined($text) && $text eq 'failed';
 
-    "<span style=\"color: $FAILED_FG; font-weight: bold;\">failed</span>";
+    # Colour only, no other inline styling: a styled run on a dark zebra row is
+    # what Word drew a 1px seam under (a plain dark row renders clean). The cell's
+    # zebra background is the only background; the text sets just its colour.
+    "<span style=\"color: $FAILED_FG;\">failed</span>";
 }
 
 #
@@ -387,8 +401,8 @@ sub red_if_failed {
 sub colour_state {
     my ($text) = @_;
     return $text unless defined($text);
-    return '<span style="color: #2451c4; font-weight: bold;">changed</span>' if $text eq 'changed';
-    return '<span style="color: #0e7c8c; font-weight: bold;">initial</span>' if $text eq 'initial';
+    return '<span style="color: #2451c4;">changed</span>' if $text eq 'changed';
+    return '<span style="color: #0e7c8c;">initial</span>' if $text eq 'initial';
     return $text;
 }
 
@@ -397,16 +411,19 @@ sub blue_if_changed {
 
     return $text unless defined($text) && $text eq 'changed';
 
-    "<span style=\"color: $CHANGED_FG; font-weight: bold;\">changed</span>";
+    "<span style=\"color: $CHANGED_FG;\">changed</span>";
 }
 
 sub header_row_html {
     my (@cols) = @_;
 
+    # bgcolor attribute as well as the CSS background: OWA's HTML sanitizer can
+    # drop a cell's CSS background-color (seen on the last header cell), but it
+    # honors the bgcolor attribute.
     my $html = '<tr>';
     foreach my $col (@cols) {
-	$html .= '<th style="background-color: ' . $HEADER_BG . '; color: #ffffff; '
-	    . 'padding: 4px 8px; border: 1px solid #888888; text-align: left; '
+	$html .= '<th bgcolor="' . $HEADER_BG . '" style="background-color: ' . $HEADER_BG . '; color: #ffffff; '
+	    . 'padding: 5px 10px; text-align: left; '
 	    . 'font-family: ' . $FONT_FAMILY . '; '
 	    . 'line-height: 100%; mso-line-height-rule: exactly;">'
 	    . escape_html($col) . '</th>';
@@ -425,9 +442,14 @@ sub body_row_html {
 
     my $bg = $ROW_BG[$row_index % 2];
 
-    my $html = '<tr style="background-color: ' . $bg . ';">';
+    # Zebra background on the row and each cell (bgcolor attribute + CSS, so OWA's
+    # sanitiser keeps it). No cell borders: the table uses border-collapse so Word
+    # leaves no inter-row gap to paint, which is what produced the faint seam under
+    # the darker band. With the gap gone, each row's own shade is all that shows.
+    my $html = '<tr bgcolor="' . $bg . '" style="background-color: ' . $bg . ';">';
     foreach my $cell (@cell_html) {
-	$html .= '<td style="padding: 4px 8px; border: 1px solid #888888; font-family: ' . $FONT_FAMILY
+	$html .= '<td bgcolor="' . $bg . '" style="background-color: ' . $bg . '; padding: 5px 10px; '
+	    . 'font-family: ' . $FONT_FAMILY
 	    . '; line-height: 100%; mso-line-height-rule: exactly;">' . $cell . '</td>';
     }
     $html .= "</tr>\n";
@@ -510,33 +532,53 @@ sub set_result_sink {
     $result_sink = $path;
 }
 
+# Append one escaped row to the result sink (worker mode). One row per line:
+# tab-separated key=value; values escaped so tabs/newlines/backslashes survive;
+# undef kept distinct from '' (as "~") so the replay reproduces it exactly.
+sub _sink_append {
+    my ($class, $args) = @_;
+    if (open(my $fh, '>>', $result_sink)) {
+	my @kv;
+	foreach my $k (sort keys %$args) {
+	    my $v = $args->{$k};
+	    if (!defined($v)) { push @kv, "$k=~"; next; }
+	    $v =~ s/\\/\\\\/g; $v =~ s/\t/\\t/g; $v =~ s/\n/\\n/g;
+	    push @kv, "$k=$v";
+	}
+	print $fh join("\t", @kv), "\n";
+	close $fh;
+    }
+    else {
+	$log->error("cannot write result sink $result_sink: $!");
+    }
+}
+
 sub record_result {
     my ($class, %args) = @_;
 
     if (defined($result_sink)) {
-	# One row per line: key=value pairs, tab-separated. Values are
-	# escaped so tabs/newlines/backslashes survive; undef is kept
-	# distinct from '' (as "~") so the replay reproduces it exactly.
-	if (open(my $fh, '>>', $result_sink)) {
-	    my @kv;
-	    foreach my $k (sort keys %args) {
-		my $v = $args{$k};
-		if (!defined($v)) { push @kv, "$k=~"; next; }
-		$v =~ s/\\/\\\\/g; $v =~ s/\t/\\t/g; $v =~ s/\n/\\n/g;
-		push @kv, "$k=$v";
-	    }
-	    print $fh join("\t", @kv), "\n";
-	    close $fh;
-	}
-	else {
-	    $log->error("cannot write result sink $result_sink: $!");
-	}
+	$class->_sink_append(\%args);
 	return;
     }
 
     push @results, { %args };
 
     $class->write_status_file(\%args);
+}
+
+# Record an expired (rotated-out) backup for the optional DB history writer.
+# Same worker/parent split as record_result; tagged _op=expire in the sink so
+# the replay can dispatch it. Does NOT touch the .status file.
+sub record_expire {
+    my ($class, %args) = @_;
+
+    if (defined($result_sink)) {
+	$args{_op} = 'expire';
+	$class->_sink_append(\%args);
+	return;
+    }
+
+    push @expires, { %args };
 }
 
 sub replay_result_file {
@@ -556,7 +598,13 @@ sub replay_result_file {
 	    $v =~ s/\\n/\n/g; $v =~ s/\\t/\t/g; $v =~ s/\\\\/\\/g;
 	    $args{$k} = $v;
 	}
-	$class->record_result(%args);
+	my $op = delete $args{_op};
+	if (defined($op) && $op eq 'expire') {
+	    $class->record_expire(%args);
+	}
+	else {
+	    $class->record_result(%args);
+	}
     }
     close $fh;
 }
@@ -709,6 +757,10 @@ sub build_stats_table_html {
 	$changed_count{defined($row->{changed}) ? $row->{changed} : 'n/a'}++;
     }
 
+    # Borderless, border-collapse table: rows are separated by the zebra background
+    # (@ROW_BG) alone. border-collapse removes the sub-pixel inter-row gap Word would
+    # otherwise paint with the table background, which was the faint seam under the
+    # darker band. No cell borders and no table-level overlay colour are needed.
     my $html = "<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse: collapse;\">\n";
     $html .= header_row_html('Statistic', 'Count');
 
@@ -743,6 +795,10 @@ sub row_state {
 sub build_device_table_html {
     my ($class, $rows_ref) = @_;
 
+    # Borderless, border-collapse table: rows are separated by the zebra background
+    # (@ROW_BG) alone. border-collapse removes the sub-pixel inter-row gap Word would
+    # otherwise paint with the table background, which was the faint seam under the
+    # darker band. No cell borders and no table-level overlay colour are needed.
     my $html = "<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse: collapse;\">\n";
     $html .= header_row_html('Device-ID', 'Date', 'Time', 'State', 'Size', 'Changes');
 
@@ -774,8 +830,51 @@ sub build_device_table_html {
 # in production - nothing calls it except the test suite.
 sub _test_set_rep { ($rep_email_diffs,$rep_n_changed,$rep_max_diff,$rep_url,$rep_mask)=([],0,0,$_[1],0); }
 
+# One status callout for the optional DB-history writer, shown inside the card
+# body. Email-safe (nested tables + inline styles; border-radius degrades
+# gracefully in Outlook). $state selects the palette - 'ok' green, 'incomplete'
+# red, 'off' grey; $label is the pill word; $detail the message (the box title
+# carries the context, so no "DB history:" prefix).
+sub _db_status_box_html {
+    my ($class, $state, $label, $detail) = @_;
+    my %pal = (
+	ok         => { bg=>'#edf7ee', bd=>'#cfe8d2', ac=>'#2e7d32', disc=>'#2e7d32',
+	                glyph=>'&#10003;', pill=>'#2e7d32', title=>'#1b5e20', tx=>'#33543a' },
+	incomplete => { bg=>'#fdecec', bd=>'#f3cccc', ac=>'#c62828', disc=>'#c62828',
+	                glyph=>'!',        pill=>'#c62828', title=>'#b71c1c', tx=>'#6e2a2a' },
+	off        => { bg=>'#f1f3f5', bd=>'#dfe3e7', ac=>'#8a929b', disc=>'#8a929b',
+	                glyph=>'i',        pill=>'#6b7680', title=>'#44515a', tx=>'#5b6770' },
+    );
+    my $p  = $pal{$state} || $pal{off};
+    my $ff = $FONT_FAMILY;
+    my $L  = escape_html($label);
+    my $D  = escape_html($detail);
+
+    # Pill: Outlook (Word) renders VML text at this small size illegibly and drops
+    # inline <span> padding, so for Outlook use a one-cell table badge - Word
+    # honors <td> background + padding, giving crisp text in a properly sized box
+    # (square corners, which is fine). Every other client keeps the rounded <span>
+    # (the size Thunderbird already shows).
+    my $pill = qq{<!--[if mso]>}
+	     . qq{<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:$p->{pill};color:#ffffff;font-family:$ff;font-size:11px;font-weight:700;padding:2px 10px;line-height:14px;mso-line-height-rule:exactly;">$L</td></tr></table>}
+	     . qq{<![endif]-->}
+	     . qq{<!--[if !mso]><!--><span style="font-size:11px;font-weight:700;color:#ffffff;background:$p->{pill};border-radius:10px;padding:2px 9px;letter-spacing:0.03em;">$L</span><!--<![endif]-->};
+
+    return
+	  qq{<div style="height:20px;line-height:20px;font-size:1px;">&nbsp;</div>\n}
+	. qq{<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>}
+	. qq{<td style="background:$p->{bg};border:1px solid $p->{bd};border-left:4px solid $p->{ac};border-radius:8px;padding:12px 16px;">}
+	. qq{<table role="presentation" cellpadding="0" cellspacing="0"><tr>}
+	. qq{<td style="vertical-align:middle;width:24px;"><div style="width:22px;height:22px;border-radius:50%;background:$p->{disc};text-align:center;"><span style="color:#ffffff;font-size:14px;line-height:22px;font-weight:700;font-family:$ff;">$p->{glyph}</span></div></td>}
+	. qq{<td style="vertical-align:middle;padding-left:10px;font-family:$ff;white-space:nowrap;"><span style="font-size:14px;font-weight:700;color:$p->{title};">Backup history database</span></td>}
+	. qq{<td style="vertical-align:middle;padding-left:8px;font-family:$ff;">$pill</td>}
+	. qq{</tr></table>}
+	. qq{<div style="font-family:$ff;font-size:13px;color:$p->{tx};margin-top:7px;padding-left:34px;">$D</div>}
+	. qq{</td></tr></table>\n};
+}
+
 sub build_report_html {
-    my ($class, $rows_ref, $heading) = @_;
+    my ($class, $rows_ref, $heading, $db_status) = @_;
 
     my $ver = escape_html(fetchconfig::Constants::version());
     my $ff  = $FONT_FAMILY;
@@ -784,9 +883,13 @@ sub build_report_html {
     # carrying the inline logo (cid:fcwlogo) and "fetchconfig vX.Y". The
     # copyright footer is emitted OUTSIDE/below the card (see the end of this
     # sub). Email-safe: nested tables + inline styles only, no <style> block.
-    my $html = '<!DOCTYPE html><html><head>'
+    # VML namespaces + the MSO DPI block let Outlook (Word engine) render the
+    # "bulletproof" VML button at the right size; other clients ignore both.
+    my $html = '<!DOCTYPE html><html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head>'
 	. '<meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
-	. '<meta name="viewport" content="width=device-width, initial-scale=1"></head>' . "\n"
+	. '<meta name="viewport" content="width=device-width, initial-scale=1">'
+	. '<!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->'
+	. '</head>' . "\n"
 	. qq{<body style="margin:0;padding:0;background:$MAIL_CANVAS_BG;font-family:$ff;color:#222;">\n}
 	. qq{<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:$MAIL_CANVAS_BG;"><tr><td align="center" style="padding:24px 12px;">\n}
 	. qq{<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:820px;background:$MAIL_CARD_BG;border:1px solid $MAIL_CARD_BORDER;border-radius:10px;overflow:hidden;">\n}
@@ -816,11 +919,22 @@ sub build_report_html {
 	my $ff = $FONT_FAMILY;
 	if (defined($rep_url)) {
 	    my $u = escape_html($rep_url);
-	    # A call-to-action button (same style as the fetchconfig-web
-	    # mails), then a plain "copy this link" fallback for clients that
-	    # don't render the button.
+	    # A call-to-action button (same style as the fetchconfig-web mails),
+	    # then a plain "copy this link" fallback for clients that don't render
+	    # the button. "Bulletproof": Outlook's Word engine drops background/
+	    # padding/radius on <a>, so it gets a VML <v:roundrect> (fixed 200px,
+	    # fits "View the full report") inside an [if mso] block; every other
+	    # client gets the normal <a> via the [if !mso] block. Same look, both.
 	    $html .= qq{<p style="margin:20px 0 20px;">}
+		   . qq{<!--[if mso]>}
+		   . qq{<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="$u" style="height:40px;v-text-anchor:middle;width:200px;" arcsize="15%" strokecolor="$MAIL_HEADER_BG" fillcolor="$MAIL_HEADER_BG">}
+		   . qq{<w:anchorlock/>}
+		   . qq{<center style="color:#ffffff;font-family:$ff;font-size:14px;font-weight:600;">View the full report</center>}
+		   . qq{</v:roundrect>}
+		   . qq{<![endif]-->}
+		   . qq{<!--[if !mso]><!-->}
 		   . qq{<a href="$u" style="display:inline-block;background:$MAIL_HEADER_BG;color:#ffffff;text-decoration:none;padding:11px 22px;border-radius:6px;font-weight:600;font-family:$ff;">View the full report</a>}
+		   . qq{<!--<![endif]-->}
 		   . qq{</p>\n};
 	    $html .= qq{<p style="font-family:$ff;margin:0 0 16px;font-size:13px;color:#57606a;">If the button does not work, copy this link into your browser:<br>}
 		   . qq{<a href="$u" style="color:$MAIL_HEADER_BG;word-break:break-all;">$u</a></p>\n};
@@ -863,6 +977,13 @@ sub build_report_html {
     my $footer = $email_config{footer};
     $footer = '(c) 2006-2026 Everton da Silva Marques, Rainer Tammer and others'
 	unless defined($footer);
+
+    # Optional DB-history writer status box, inside the card as the last block
+    # (only the main summary mail passes $db_status; per-device override mails
+    # omit it). A grey "not configured" note appears when no db: is set.
+    if ($db_status && fetchconfig::History->can('mail_status')) {
+	$html .= $class->_db_status_box_html(fetchconfig::History->mail_status);
+    }
 
     # Close the card body cell and the card table, then put the copyright
     # OUTSIDE/below the card, centered on the grey canvas (muted, small) -
@@ -1076,9 +1197,12 @@ sub send_mail {
 	$smtp->datasend("Content-Transfer-Encoding: 8bit\r\n\r\n");
 	$smtp->datasend($text . "\r\n");
 	$smtp->datasend("--$ab\r\n");
+	# HTML as quoted-printable: the markup has long lines (table rows), and an
+	# MTA folding a raw 8bit line past the 998-octet SMTP limit corrupts the
+	# HTML mid-tag. QP soft-wraps at 76 chars, so no line is ever too long.
 	$smtp->datasend("Content-Type: text/html; charset=UTF-8\r\n");
-	$smtp->datasend("Content-Transfer-Encoding: 8bit\r\n\r\n");
-	$smtp->datasend($html_body . "\r\n");
+	$smtp->datasend("Content-Transfer-Encoding: quoted-printable\r\n\r\n");
+	$smtp->datasend(encode_qp($html_body, "\r\n") . "\r\n");
 	$smtp->datasend("--$ab--\r\n");
 	# 2) the inline logo (base64 PNG, Content-ID matches cid:fcwlogo)
 	$smtp->datasend("--$rb\r\n");
@@ -1092,9 +1216,9 @@ sub send_mail {
 	$smtp->datasend("--$rb--\r\n");
     } else {
 	$smtp->datasend("Content-Type: text/html; charset=UTF-8\r\n");
-	$smtp->datasend("Content-Transfer-Encoding: 8bit\r\n");
+	$smtp->datasend("Content-Transfer-Encoding: quoted-printable\r\n");
 	$smtp->datasend("\r\n");
-	$smtp->datasend($html_body);
+	$smtp->datasend(encode_qp($html_body, "\r\n"));
     }
 
     if (!$smtp->dataend) {
@@ -1121,7 +1245,7 @@ sub send_mail {
 # report link covers detail). Columns are auto-sized to the data. $rep_url,
 # when set, is appended as the full-report link.
 sub build_report_text {
-    my ($class, $rows_ref, $heading) = @_;
+    my ($class, $rows_ref, $heading, $db_status) = @_;
 
     my $out = "fetchconfig backup summary - " . iso_date(time) . "\r\n";
     $out .= "$heading\r\n" if defined($heading) && length($heading);
@@ -1166,6 +1290,13 @@ sub build_report_text {
 
     if (defined($rep_url)) {
 	$out .= "\r\nFull report:\r\n$rep_url\r\n";
+    }
+
+    # DB-history writer status (text twin of the HTML status box; main summary
+    # mail only). Shown even when db: is off (NOT CONFIGURED).
+    if ($db_status && fetchconfig::History->can('mail_status')) {
+	my ($state, $label, $detail) = fetchconfig::History->mail_status;
+	$out .= "\r\nBackup history database: $label - $detail\r\n";
     }
     return $out;
 }
@@ -1376,10 +1507,15 @@ sub send_summaries {
 
     my @global_rows = sort { $a->{dev_id} cmp $b->{dev_id} } @results;
 
+    # The main summary mail carries the DB-history writer status box (the "1"
+    # renders it inside the card; the per-device override mails below omit it).
+    my $summary_html = $class->build_report_html(\@global_rows, 'Status of all backups', 1);
+    my $summary_text = $class->build_report_text(\@global_rows, 'Status of all backups', 1);
+
     $class->send_mail($to,
 		       'fetchconfig backup summary - ' . iso_date(time),
-		       $class->build_report_html(\@global_rows, 'Status of all backups'),
-		       $class->build_report_text(\@global_rows, 'Status of all backups'));
+		       $summary_html,
+		       $summary_text);
 
     # If the report file was requested but could not be written, tell the
     # user with a separate error e-mail (best effort; also logged above).

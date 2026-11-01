@@ -1,0 +1,36 @@
+# parks.tmpl - Parks (Fiberlink) over telnet.
+#
+# syntax_style: cisco-ios
+#
+# Derived from fetchconfig::model::Parks. No enable, no pager; the show command
+# is fixed ("show running-config").
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+# drop the echoed "show running-config" command line
+skip_first     1
+
+prompt_head    ''
+prompt_tail    '# $'
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /login: $/    -> send user        -> goto pw
+    expect /Password: $/ -> send_secret pass   -> goto show
+
+state pw
+    expect /Password: $/ -> send_secret pass   -> goto show
+
+state show
+    expect prompt        -> send "show running-config" -> goto capture
+
+state capture
+    capture_start
+    expect prompt        -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done

@@ -52,7 +52,16 @@ test:
 test-verbose:
 \t\$(PROVE) -v -I. t/
 
-# Regenerate the documentation from the *.md sources. Two converters (for now):
+# Regenerate the documentation from source. Steps:
+#   tools/gen-template-docs.pl - the per-template state-machine docs
+#                          (templates/<name>.md) parsed straight from the .tmpl
+#                          files, so the diagrams stay 1:1, plus the index table
+#                          in README.template_engine.md. Runs first, before the
+#                          .md converters below.
+#   tools/integrity.pl   - templates/integrity.sha1, a SHA-1 manifest of the
+#                          shipped templates (core Digest::SHA, so it works on
+#                          AIX) so a viewer can tell a stock template from an
+#                          edited or user-added one. Inert for fetchconfig.
 #   tools/render-doc.py  - the styled HTML (sidebar/hero/tables/tabs/callouts,
 #                          Mermaid with an embedded-SVG fallback from
 #                          tools/mermaid-cache/). README.md -> README.html,
@@ -64,6 +73,8 @@ test-verbose:
 # companion is removed. Titles come from each .md's H1. (Diagrams: run
 # tools/gen-mermaid-svg.py only when a diagram changes; "make doc" embeds the cache.)
 doc:
+\t\$(PERL) tools/gen-template-docs.pl templates
+\t\$(PERL) tools/integrity.pl templates
 \t\$(PYRUN) tools/render-doc.py --all .
 \t\$(PYRUN) tools/md2html.py --all . --text-only
 \t\$(PYRUN) tools/md2html.py LICENSE.md LICENSE.html

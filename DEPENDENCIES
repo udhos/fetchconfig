@@ -90,6 +90,20 @@ HTTP::Message, HTTP::Date, HTTP::Cookies, URI, LWP::Protocol, Try::Tiny
 (HTTP::Tiny is core). HTTPS additionally needs LWP::Protocol::https,
 IO::Socket::SSL, Net::SSLeay (all CPAN).
 
+Backup-history DB writer (optional, "db:")
+------------------------------------------
+
+Loaded only when a "db:" line is set in the device table (default: level). With no
+"db:" the modules are never required and fetchconfig stays file-based.
+
+Module   5.26  5.28  5.40  Used for
+-------  ----  ----  ----  ---------------------
+DBI      CPAN  CPAN  CPAN  database access layer
+DBD::Pg  CPAN  CPAN  CPAN  PostgreSQL driver
+
+An old DBD::Pg talks to an old server fine; the writer targets PostgreSQL 8.2+.
+The schema and the writer role are created by fetchconfig-web, not the engine.
+
 SNMP+TFTP model (procurve-snmp)
 -------------------------------
 
@@ -322,4 +336,5 @@ Summary: minimum CPAN modules to install
     + procurve-snmp      Net::SNMP, Net::TFTP           (+ Crypt::DES, Digest::HMAC,
                                                          Crypt::Rijndael for SNMPv3)
     + SMTP over TLS      IO::Socket::SSL, Net::SSLeay
+    + DB history (db:)   DBI, DBD::Pg
 

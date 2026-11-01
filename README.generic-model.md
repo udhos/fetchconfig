@@ -52,18 +52,35 @@ Top-of-file directives (all optional; defaults in parentheses):
 | `prompt_head 'REGEX'` | matched before the learned hostname (empty) |
 | `prompt_tail 'REGEX'` | matched after it (`#`) |
 | `ssh_extra_opts 'STRING'` | extra ssh options (legacy crypto) |
+| `prompt_settle_ms N` | drain the channel to idle N ms before matching the prompt (0 = off; for SSH CLIs whose banner races the prompt) |
+| `type_delay_ms N` | type sends char-by-char, N ms apart (0 = off; for devices that drop fast/pasted input) |
+| `show_cmd 'CMD'` | the config command sent by `send show_cmd`; the device option `show_cmd` overrides it (`show_cmd=wrterm` -> `write term`) |
 | `capture_from /REGEX/` | start the saved config at the first matching line |
 | `skip_first N` | drop the first N captured lines |
+| `canon /PAT/REPL/` | rewrite part of each line (both backups) before the changes_only compare; see Global below |
 
-*Removed in 9.72:* the `prompt_settle` directive -- parsed but never used by
-the generic engine (timing is governed by the per-state timeouts and
-`fetch_delay`). The SSH-model device option `prompt_settle_ms` is unaffected.
+`prompt_settle_ms` and `type_delay_ms` are also honoured as device-table
+options (device line overrides the template), like every other option.
+
+*History:* the no-op `prompt_settle` directive was removed in 9.72. The
+`prompt_settle_ms` directive above (added in 9.74) is the real, implemented
+settle control and is distinct from it.
 
 Global (checked in every state):
 
 - `interrupt /REGEX/ -> <action>` - a screen that can appear anywhere (menu,
   "Press any key", "[y/n]?").
 - `ignore /REGEX/` - a volatile config line to ignore when comparing backups.
+- `canon /PATTERN/REPLACEMENT/` - before the `changes_only` comparison, rewrite
+  each line of BOTH backups (`s/PATTERN/REPLACEMENT/g`). Unlike `ignore` (which
+  drops the whole line, hiding real changes too), this rewrites only the matched
+  part - use it where a device re-serialises PART of a line on every read (a
+  re-salted hash, an engine-id) so that churn is not a false change while a real
+  change still is. REPLACEMENT is LITERAL (no `$1` backref - use look-behind/
+  -ahead in the pattern). Accumulates; runs before `ignore`. The SAVED backup is
+  never changed - only the in-memory comparison copy. Example (Hirschmann `:v1:`
+  password field: keep the password-derived 18-hex prefix, collapse the salt):
+  `canon /(?<=:v1:[0-9a-fA-F]{18})[0-9a-fA-F]+(?=:)/<v1-salt>/`
 
 States. Every state is declared with the `state` keyword:
 `state <name> [max_visits N]`. The engine starts at the reserved entry state
@@ -83,10 +100,13 @@ Inside a state:
   + `prompt_tail`). Multiple expects in one state are tried in order, FIRST
   MATCH WINS - order the most specific first. A self-loop (goto the same state)
   must be bounded by `max_visits`.
-- `send "text"` | `send user|pass|enable` - send WITH newline. As a standalone
-  step (no preceding expect) it sends immediately, without waiting for a prompt
-  - used after capture to send `exit`.
-- `send_secret pass|enable` - send, masked in the debug log.
+- `send "text"` | `send user|pass|enable|show_cmd` - send WITH newline
+  (`send show_cmd` sends the resolved `show_cmd` directive/option). As a
+  standalone step (no preceding expect) it sends immediately, without waiting
+  for a prompt - used after capture to send `exit`.
+- `send_secret pass|enable` - send, masked in the debug log. With
+  `type_delay_ms` set, the secret is typed char-by-char too, still kept out of
+  the debug log.
 - `send_nolf "text"` - send WITHOUT newline (pager space, menu key).
 - `send_match` - send the captured group `$1` from the expect regex, as a
   keystroke (pick a menu item by its shown number).

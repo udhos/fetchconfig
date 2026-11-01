@@ -1,0 +1,38 @@
+# acme.tmpl - Acme Packet / Oracle SBC over telnet.
+#
+# syntax_style: generic
+#
+# Derived from fetchconfig::model::Acme. No enable, no pager. The prompt sign
+# varies between user ">" and privileged "#"; one prompt_tail covers both.
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+show_cmd       'show conf'
+
+# drop the echoed "show conf" command line
+skip_first     1
+
+prompt_head    ''
+prompt_tail    '[#>] ?$'
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /Username: ?$/  -> send user        -> goto pw
+    expect /Password: ?$/  -> send_secret pass   -> goto show
+
+state pw
+    expect /Password: ?$/  -> send_secret pass   -> goto show
+
+state show
+    expect prompt          -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect prompt          -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done

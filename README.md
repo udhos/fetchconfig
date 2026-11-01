@@ -229,6 +229,66 @@ A device whose recipient was overridden this way is left out of no one's mail: i
 
 3. The "Changes" column only reflects a changed-vs-previous comparison for devices where the run already performs one (changes_only=1, or on_fetch_run/on_fetch_cat set); for other devices it is reported as "n/a" -- no extra repository scan is performed just for this report.
 
+## Backup-History Database (optional)
+
+fetchconfig can record each run's backup health and config-change history to a
+PostgreSQL database, for a dashboard that scales to thousands of devices without
+walking the repository on every page. The feature is OFF by default and entirely
+optional: with no "db:" line, fetchconfig stays file-based and DBI/DBD::Pg are
+never loaded. The per-device ".status" file is unchanged; the database is a
+separate, additional sink.
+
+The database schema and the writer role are created and owned by fetchconfig-web
+(run "fetchconfig-web-dbsetup.pl --upgrade", which also creates the login role and
+grants it the required SELECT/INSERT/UPDATE). The engine only writes rows; it
+never issues DDL and never creates roles.
+
+Enable it with a single "db:" line in the DEFAULT OPTIONS SECTION (fleet-wide; it
+is not a per-device option):
+
+```
+#db:    key=value,...
+db:     db_inst=fetchconfig,db_user=fetchconfig_dashboard,db_pass=secret,db_host=db.acme.com
+```
+
+Keys:
+
+- `db_inst`  -- database (instance) name. Required.
+- `db_user`  -- the writer login role (default name "fetchconfig_dashboard"). Required.
+- `db_pass`  -- its password. Follows the normal device_table quoting, so a value
+                containing a comma or equals sign must be double-quoted
+                (db_pass="a,b=c"). Never written to the log.
+- `db_host`  -- "host" or "host:port". IPv6 is supported: use brackets to add a
+                port, "[2001:db8::1]:5432"; a bare "2001:db8::1" is the host at the
+                default port. Required.
+- `db_connect_timeout` -- seconds to wait for the connection (default 5). Kept
+                short so a dead database can never stall a run.
+- `db_sslmode` -- libpq sslmode (disable | require | verify-full), default
+                "disable" (the DB is normally local on the same box). Use
+                "require" (or stronger) when the database is across a WAN.
+- `db_max_outbox_days` -- outbox retention, default 90 (see below).
+
+How it writes (store-and-forward, never blocking):
+
+- During the run, nothing touches the database. Each run appends its records to a
+  per-repository write-ahead spool file ("<repository>/.db-<pid>-<timestamp>").
+- At the end of the run (in the parent, regardless of whether e-mail is
+  configured) the spool files are drained into the database in one transaction
+  each, oldest first. A file is deleted only after its transaction commits.
+- If the database is unreachable, the run still completes normally; the spool
+  files accumulate and are drained on a later run. Spool files older than
+  "db_max_outbox_days" are dropped (after that long an outage, the on-disk backups
+  and the ".status" files remain the source of truth).
+
+Every run (with or without "email:") logs a "-----[DB writer]-----" section with
+the DB-history result: "all N record(s) written; outbox empty", or "INCOMPLETE -
+M run(s) still pending (oldest <ts>); will retry next run" when the database was
+unreachable and the records were spooled (any connect/drain warnings appear in
+the same section). Nothing is logged when no "db:" is configured. When "email:"
+is configured, the summary mail shows the result as a status box inside the card:
+green when everything was written, red when records are still buffered for a
+later run, and grey ("history export not configured") when no "db:" is set.
+
 ## Change Reports
 
 fetchconfig can produce a change report after a run: an HTML page summarising which devices changed, with a coloured diff per changed device, plus up to a configurable number of diffs embedded in the summary e-mail. The report is written to an allowlisted "report" directory (see DIRECTORY ALLOWLIST) that fetchconfig-web presents (view/download/delete); it is NOT meant to be served to users directly. On native Windows the per-device diffs are disabled (they need an external "diff"); changed devices still appear, marked "diff unavailable" (see WINDOWS LIMITATIONS). Options are set on "email:" lines:
@@ -605,6 +665,9 @@ The generic module (GenericTemplate) recognizes the following options. It is the
 | `prompt_head` | Optional. Regex matched before the learned hostname when building the prompt pattern. May be set in the template. |
 | `prompt_tail` | Optional, default "#". Regex matched after the learned hostname. May be set in the template. |
 | `ssh_extra_opts` | Optional. Extra options passed to the ssh client (e.g. legacy key-exchange/cipher settings for old switches). May be set in the template. |
+| `prompt_settle_ms` | Optional, default 0 (off). Milliseconds to wait for the channel to go idle before matching the prompt - for SSH CLIs whose login banner races the prompt. May be set in the template. |
+| `type_delay_ms` | Optional, default 0 (off). Milliseconds between typed characters; each send (and secret) is typed char-by-char - for devices that drop fast/pasted input. May be set in the template. |
+| `show_cmd` | Optional. The config command sent by a template's "send show_cmd" step (show_cmd=wrterm -> "write term"). May be set in the template. |
 | `template_dir` | Optional. Directory to load the template from. An absolute path, or relative to the current working directory. Defaults to the templates/ directory that ships beside fetchconfig.pl (located regardless of the working directory), so this is only needed to load templates from elsewhere. |
 | `on_fetch_run` | Optional (see the cisco-ios/cisco-cat section). |
 | `on_fetch_cat` | Optional (see the cisco-ios/cisco-cat section). |
@@ -613,7 +676,7 @@ The generic module (GenericTemplate) recognizes the following options. It is the
 | `comment` | Optional (see the cisco-ios/cisco-cat section). |
 | `site` | Optional (see the cisco-ios/cisco-cat section). |
 
-*Removed in 9.72:* the `prompt_settle` directive -- it was parsed but never used by the generic engine (timing is governed by the per-state timeouts and `fetch_delay`). The SSH-model device option `prompt_settle_ms` is a different option and is unaffected.
+*Note:* the no-op `prompt_settle` directive was removed in 9.72. The `prompt_settle_ms` option above (added to the generic engine in 9.74) is the real, implemented settle control and is distinct from it.
 
 The following options are available for all models, per-device and via "default:":
 
@@ -630,7 +693,7 @@ The following device-locking options are available for all models, per-device an
 | `lock_retry` | Optional. How many times to retry a locked device before skipping it. Integer >= 0; default 5. "lock_retry=0" means skip on the first contention. |
 | `lock_retry_time` | Optional. Seconds to wait between lock retries. Integer >= 1; default 10. (The maximum wait before skipping is lock_retry * lock_retry_time seconds.) |
 
-The following are set only in the template file, not on the device line: capture_from (regex marking where the saved config starts) and skip_first (drop the first N captured lines). See README.generic-model for the full template grammar.
+The following are set only in the template file, not on the device line: capture_from (regex marking where the saved config starts), skip_first (drop the first N captured lines) and canon (rewrite part of each line before the changes_only comparison, e.g. to collapse a re-salted hash so only a real change counts). See README.generic-model for the full template grammar.
 
 The cisco-ios, cisco-cat, cisco-asa and cisco-pix modules (CiscoIOS, CiscoCAT, CiscoASA and CiscoPIX) recognize the following options:
 
@@ -989,7 +1052,7 @@ The hirschmann module recognizes the following options: (See above cisco-ios/cis
 | `filename_append_suffix` | Optional. |
 | `show_cmd` | Optional. If specified, its value will replace the usual "show running-config all" command. |
 
-Note: "show running-config all" renders the "users passwd <user> :v1:<hash>:" lines differently on every read (same salt prefix, different body), so a Hirschmann backup always compares as changed and changes_only never discards one for this model. This is deliberate: ignoring those lines in the comparison would also hide a real password change. Expect one saved backup per run (bounded by keep=N).
+Note: "show running-config all" renders the "users passwd <user> :v1:<hash>:" field differently on every read. The leading 18 hex characters (9 bytes) are derived from the password and are stable; the trailing hex is a random salt regenerated on every read. fetchconfig canonicalises that salt before the changes_only comparison (keeping the password-derived prefix), so salt churn alone no longer forces a save, while a real password change - which alters the prefix - is still detected and saved. The SAVED backup is byte-exact (the real hash is kept); only the comparison uses the canonical form, and the change-report/e-mail masking is unchanged (the whole :v1: hash is shown as :v1:****:). The 18-hex boundary is empirical (firmware L2E-06.0.03) and scoped to ":v1:".
 
 The zyxel module recognizes the following options: (See above cisco-ios/cisco-cat section for descriptions.)
 

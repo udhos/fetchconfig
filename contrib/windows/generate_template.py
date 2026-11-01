@@ -39,7 +39,7 @@ import sys
 
 # Kept in step with fetchconfig's version by hand, so this tool is
 # self-contained and can be copied and run on its own.
-VERSION = '9.73'
+VERSION = '9.74'
 PROG = 'generate_template'
 
 HEX_LINE = re.compile(rb'^([<>])\s+0x([0-9a-f]+):\s+((?:[0-9a-f]{2}\s?)+)')
@@ -159,6 +159,8 @@ def main(argv=None):
     ansi_word = 'PRESENT' if saw_ansi else 'none'
     strip_ansi = 'yes' if saw_ansi else 'no'
     prompt_head = "'(?:\\\\x1b\\\\[[\\\\d;?]*[A-Za-z])*'" if saw_ansi else "''"
+    ssh_hint = ("# (SSH capture: uncomment these first if a fetch is flaky)\n"
+                if transport == 'ssh' else "")
 
     out = []
     out.append(f"""\
@@ -178,6 +180,16 @@ strip_ansi     {strip_ansi}
 
 prompt_head    {prompt_head}
 prompt_tail    '{tail_s}'
+
+# TODO: timing directives - leave them commented unless a fetch misbehaves.
+# They are no-ops while commented, and a capture cannot reveal whether they
+# are needed (the .hex has no timing). They matter mostly over SSH:
+#   prompt_settle_ms N   let the channel go quiet (N ms) before matching the
+#                        prompt - for SSH CLIs whose banner races it.
+#   type_delay_ms N      type char-by-char (N ms apart) - for devices that
+#                        drop fast/pasted input.
+{ssh_hint}# prompt_settle_ms 150
+# type_delay_ms   100
 
 # TODO: add volatile lines to ignore when comparing backups. A single
 # capture cannot reveal these - compare two captures taken minutes apart

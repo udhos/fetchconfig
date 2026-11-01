@@ -1,0 +1,61 @@
+# cisco-asa.tmpl - Cisco ASA, telnet and SSH (covers models cisco-asa and
+# cisco-asa-ssh).
+#
+# syntax_style: cisco-ios
+#
+# Derived from fetchconfig::model::CiscoASA / CiscoASASSH. SSH lands already
+# authenticated at the prompt; telnet logs in interactively. Both converge on
+# "enable".
+# Note: DRAFT - please verify on real hardware.
+
+transport      ssh telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+prompt_head    ''
+prompt_tail    '# ?$'
+
+# show "more system:running-config"; override per device with show_cmd=
+# (show_cmd=wrterm -> "write term").
+show_cmd       'more system:running-config'
+
+# the ": Written by <user> at <time>" header line is rewritten every read
+ignore  /^: Written by \S+ at /
+
+# ASA config starts at the ": Saved" / ": ..." header (keeps "ASA Version")
+capture_from  /^:/
+
+# ---- SSH entry: authenticated; at the prompt, send enable ----
+state state_login_ssh
+    expect /(\S+)[>#] ?$/  -> send "enable"   -> goto enable
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /Username: ?$/  -> send user        -> goto state_password_telnet
+    expect /Password: ?$/  -> send_secret pass  -> goto after_login
+
+state state_password_telnet
+    expect /Password: ?$/  -> send_secret pass  -> goto after_login
+
+state after_login
+    expect /(\S+)[>#] ?$/  -> send "enable"   -> goto enable
+
+# response to "enable": an enable-password prompt, or - if already enabled -
+# the prompt. Either way, disable the pager next.
+state enable
+    expect /Password: ?$/  -> send_secret enable -> goto pager
+    expect prompt          -> send "term pager 0" -> goto show
+
+state pager
+    expect prompt          -> send "term pager 0" -> goto show
+
+state show
+    expect prompt          -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect prompt          -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done

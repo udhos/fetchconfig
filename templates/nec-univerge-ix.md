@@ -1,0 +1,120 @@
+# nec-univerge-ix template -- state machine
+
+State machine of the `nec-univerge-ix` generic-model template (selected with
+`model=nec-univerge-ix`), parsed from `templates/nec-univerge-ix.tmpl`. NEC UNIVERGE IX over telnet. See
+[README.template_engine.html](../README.template_engine.html) for the engine
+and grammar and [README.generic-model.html](../README.generic-model.html) for
+selecting the model in the device table.
+
+## Template settings
+
+- status: DRAFT - please verify on real hardware.
+- transport: `telnet`
+- prompt: head (default), tail (default) (the bareword `prompt` = head + learned hostname + tail)
+- show command: `show run`
+- saved file starts at: `capture_from /^(!|version )/`
+- volatile lines ignored in the compare: `/^! Current time/`
+- timeouts: banner 30s, fetch 120s, max_visits 8
+
+## State machine
+
+```text
+  entry:
+    transport telnet -> state_login_telnet
+
+  state_login_telnet
+      login              -> send user              -> pw
+      password           -> send password          -> exec
+  pw
+      password           -> send password          -> exec
+  exec
+      /\S+[#$] $/        -> send enable-config     -> conf
+  conf
+      /\S+\(config\)[#$] $/ -> send term len 0        -> show
+  show
+      /\S+\(config\)[#$] $/ -> send show command      -> capture
+  capture
+      /\S+\(config\)[#$] $/ -> capture_stop           -> logout
+      (capture_start on entry)
+  logout
+      (send)             -> send exit              -> done
+```
+<!--MERMAID
+stateDiagram-v2
+    [*] --> state_login_telnet: transport telnet
+    state_login_telnet --> pw: login, send user
+    state_login_telnet --> exec: password, send password
+    pw --> exec: password, send password
+    exec --> conf: send enable-config
+    conf --> show: send term len 0
+    show --> capture: send show command
+    capture --> logout: capture_stop
+    logout --> [*]: send exit
+MERMAID-->
+
+## States
+
+| State | Waits for (expect) | Action | Next |
+|-------|--------------------|--------|------|
+| `state_login_telnet` | `/login: $/` | `send user` | `pw` |
+|  | `/Password: $/` | `send_secret pass` | `exec` |
+| `pw` | `/Password: $/` | `send_secret pass` | `exec` |
+| `exec` | `/\S+[#$] $/` | `send "enable-config"` | `conf` |
+| `conf` | `/\S+\(config\)[#$] $/` | `send "term len 0"` | `show` |
+| `show` | `/\S+\(config\)[#$] $/` | `send show_cmd` | `capture` |
+| `capture` | `/\S+\(config\)[#$] $/` | `capture_start` on entry, then `capture_stop` | `logout` |
+| `logout` | (standalone send) | `send "exit"` | `done` |
+
+States with more than one expect try them in order; the first match wins.
+
+## Template source
+
+Full source of `templates/nec-univerge-ix.tmpl`:
+
+```
+# nec-univerge-ix.tmpl - NEC UNIVERGE IX over telnet.
+#
+# syntax_style: cisco-ios
+#
+# Derived from fetchconfig::model::NECUnivergeIX. After login, enter config
+# with "enable-config" (prompt becomes "host(config)#" or "host(config)$").
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+show_cmd       'show run'
+
+capture_from   /^(!|version )/
+ignore  /^! Current time/
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /login: $/    -> send user        -> goto pw
+    expect /Password: $/ -> send_secret pass   -> goto exec
+
+state pw
+    expect /Password: $/ -> send_secret pass   -> goto exec
+
+# exec "host#"/"host$": enter config
+state exec
+    expect /\S+[#$] $/            -> send "enable-config" -> goto conf
+
+# config "host(config)#"/"host(config)$": disable paging
+state conf
+    expect /\S+\(config\)[#$] $/  -> send "term len 0"    -> goto show
+
+state show
+    expect /\S+\(config\)[#$] $/  -> send show_cmd        -> goto capture
+
+state capture
+    capture_start
+    expect /\S+\(config\)[#$] $/  -> capture_stop         -> goto logout
+
+state logout
+    send "exit" -> done
+```
+
+_Generated from `templates/nec-univerge-ix.tmpl` by `tools/gen-template-docs.pl`._

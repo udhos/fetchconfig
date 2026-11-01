@@ -144,7 +144,8 @@ sub do_fetch {
         $self->log_error("transport must be ssh or telnet (got " . (defined $transport ? $transport : "undef") . ")");
         return;
     }
-    $self->log_debug("trying (generic template), transport $transport");
+    my $model_name = $self->dev_option($dev_opt_tab, "model");
+    $self->log_debug("trying (generic template), transport $transport, model $model_name");
 
     # the template must have an entry state for the chosen transport
     if (!$tmpl->{state_by}{"state_login_$transport"}) {
@@ -169,6 +170,11 @@ sub do_fetch {
     } else {
         $self->{cur_ignore_re} = undef;
     }
+
+    # canon rules (canonicalise part of a line before the changes_only
+    # comparison): compile each into a [qr//, replacement] pair for config_equal.
+    $self->{cur_canon} = [ map { [ qr/$_->{pattern}/, $_->{replacement} ] }
+                           @{$tmpl->{canons}} ];
 
     my $dev_timeout = $self->eff($dev_opt_tab, $tmpl, "timeout", undef);
 
@@ -283,6 +289,21 @@ sub run_template {
     my $global_mv   = $self->eff($dev_opt_tab, $tmpl, "max_visits", $TIMING_DEFAULT{max_visits});
     my $banner_to   = $self->eff($dev_opt_tab, $tmpl, "banner_timeout", $TIMING_DEFAULT{banner_timeout});
     my $fetch_to    = $self->eff($dev_opt_tab, $tmpl, "fetch_timeout", undef);
+
+    # show_cmd: the config command for "send show_cmd" (device option overrides
+    # the template default), with the "wrterm" alias of the Perl models.
+    my $show_cmd = $self->eff($dev_opt_tab, $tmpl, "show_cmd", undef);
+    $show_cmd = 'write term' if defined($show_cmd) && lc($show_cmd) eq 'wrterm';
+    $self->{cur_show_cmd} = $show_cmd;
+
+    # prompt_settle_ms: drain the channel to idle before each expect (SSH CLIs
+    # whose banner races the prompt). type_delay_ms: type sends char-by-char
+    # (devices that drop fast input). Both default off, so templates without
+    # them behave exactly as before.
+    my $settle_ms = $self->eff($dev_opt_tab, $tmpl, "prompt_settle_ms", 0);
+    $self->{cur_settle_ms} = (defined($settle_ms) && $settle_ms =~ /^\d+$/) ? $settle_ms : 0;
+    my $type_delay = $self->eff($dev_opt_tab, $tmpl, "type_delay_ms", 0);
+    $self->{cur_type_delay} = (defined($type_delay) && $type_delay =~ /^\d+$/) ? $type_delay : 0;
 
     my $learned_prompt;      # set once we first match a prompt
     my %visits;              # per-state visit counter
@@ -406,6 +427,11 @@ sub _expect_one {
     my $save_to = $t->timeout;
     $t->timeout($timeout) if defined $timeout;
 
+    # prompt_settle_ms: let the channel go quiet before matching, so a partial
+    # banner line ending like the prompt cannot be matched prematurely. No-op
+    # when unset (drain_until_idle returns immediately for a 0/undef settle).
+    $self->drain_until_idle($t, $self->{cur_settle_ms}) if $self->{cur_settle_ms};
+
     my $combined = join('|', @alts);
     my ($prematch, $match) = $t->waitfor(Match => "/$combined/");
     $t->timeout($save_to) if defined $timeout;
@@ -469,24 +495,80 @@ sub _do_action {
     if ($act->{kind} && $act->{kind} eq 'literal') {
         $text = $act->{text};
     } elsif ($act->{kind} && $act->{kind} eq 'option') {
-        $text = $self->dev_option($dev_opt_tab, $act->{name});
-        if (!defined $text) {
-            $self->log_error("$op: option '$act->{name}' needed but not provided");
-            return 0;
+        if ($act->{name} eq 'show_cmd') {
+            # resolved once in run_template (template default or device option,
+            # with the wrterm alias); not a plain dev_option lookup.
+            $text = $self->{cur_show_cmd};
+            if (!defined $text) {
+                $self->log_error("$op show_cmd: no show_cmd set (template show_cmd directive or device option)");
+                return 0;
+            }
+        } else {
+            $text = $self->dev_option($dev_opt_tab, $act->{name});
+            if (!defined $text) {
+                $self->log_error("$op: option '$act->{name}' needed but not provided");
+                return 0;
+            }
         }
     } else {
         $self->log_error("internal: bad action");
         return 0;
     }
 
+    # type_delay_ms > 0: type char-by-char (devices that drop fast input).
+    # 0 (the default) uses the normal one-shot print/put, unchanged.
+    my $delay = $self->{cur_type_delay} || 0;
+
     my $ok;
-    if ($op eq 'send')        { $ok = $t->print($text); }        # with newline
-    elsif ($op eq 'send_secret') { $ok = $self->print_secret($t, $text); }  # masked in debug log
-    elsif ($op eq 'send_nolf')   { $ok = $t->put($text); }       # no newline
+    if ($op eq 'send') {                                          # with newline
+        $ok = $delay ? $self->_type_slow($t, $text, $delay, 1) : $t->print($text);
+    }
+    elsif ($op eq 'send_secret') {                               # masked in debug log
+        $ok = $delay ? $self->_print_secret_slow($t, $text, $delay) : $self->print_secret($t, $text);
+    }
+    elsif ($op eq 'send_nolf') {                                 # no newline
+        $ok = $delay ? $self->_type_slow($t, $text, $delay, 0) : $t->put($text);
+    }
     else { $self->log_error("internal: unknown send op $op"); return 0; }
 
     if (!$ok) { $self->log_error("$op: could not send"); return 0; }
     return 1;
+}
+
+# _type_slow - type $text one character at a time with type_delay_ms pacing,
+# for devices that drop fast/pasted input (e.g. some SSH CLIs). A longer
+# initial pause (3x) lets the line discipline settle, matching the behaviour
+# of the per-model slow-typers. $with_lf appends the output record separator
+# (a newline) as a final keystroke, so "send" still terminates the line.
+sub _type_slow {
+    my ($self, $t, $text, $delay_ms, $with_lf) = @_;
+    my $delay = $delay_ms / 1000.0;
+    select(undef, undef, undef, 3 * $delay) if $delay > 0;
+    for my $ch (split //, $text) {
+        return 0 unless $t->put($ch);
+        select(undef, undef, undef, $delay) if $delay > 0;
+    }
+    if ($with_lf) {
+        my $ors = $t->output_record_separator;
+        $ors = "\n" unless defined($ors) && length($ors);
+        return $t->put($ors);
+    }
+    return 1;
+}
+
+# _print_secret_slow - print_secret (keep the secret out of the debug log),
+# but type it char-by-char under type_delay_ms. Mirrors Abstract::print_secret
+# exactly for the log suspend/restore and breadcrumb; only the send is slowed.
+sub _print_secret_slow {
+    my ($self, $t, $secret, $delay_ms) = @_;
+    my $dl = $t->dump_log;   $dl = undef unless (ref($dl) || (defined($dl) && $dl ne '' && $dl ne '0'));
+    my $il = $t->input_log;  $il = undef unless (ref($il) || (defined($il) && $il ne '' && $il ne '0'));
+    $t->dump_log(undef)  if defined $dl;
+    $t->input_log(undef) if defined $il;
+    my $ok = $self->_type_slow($t, $secret, $delay_ms, 1);
+    if (defined $dl) { print { $dl } "\n# [secret sent - not logged]\n"; $t->dump_log($dl); }
+    $t->input_log($il) if defined $il;
+    return $ok;
 }
 
 # config_equal honouring the template's ignore lines. Abstract calls this
@@ -495,10 +577,17 @@ sub _do_action {
 # the template) into $self->{cur_ignore_re}.
 sub config_equal {
     my ($self, $prev_dir, $prev_file, $curr_dir, $curr_file) = @_;
-    my $re = $self->{cur_ignore_re};
-    if (!defined $re) {
+    my $re    = $self->{cur_ignore_re};
+    my $canon = $self->{cur_canon};
+    # no ignore and no canon: the inherited byte comparison
+    if (!defined($re) && !($canon && @$canon)) {
         return $self->SUPER::config_equal($prev_dir, $prev_file, $curr_dir, $curr_file);
     }
+    # canon present (optionally with ignore): canonicalise, then drop ignores
+    if ($canon && @$canon) {
+        return $self->config_equal_canon($prev_dir, $prev_file, $curr_dir, $curr_file, $canon, $re);
+    }
+    # ignore only
     return $self->config_equal_ignoring_lines($prev_dir, $prev_file, $curr_dir, $curr_file, $re);
 }
 

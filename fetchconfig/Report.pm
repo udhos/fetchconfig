@@ -37,10 +37,11 @@ sub init {
 # the change is still visible as "<keyword> ****".
 #
 # Covered (common forms): Cisco type-5/7/8/9 password & enable secret hashes,
-# SNMP community (Cisco bare and ProCurve quoted), key-string / pre-shared-key
-# / wpa-psk / wpa-passphrase, a bare "key <hex>", the Hirschmann
-# "passwd <user> :vN:<hash>:" form (username kept, hash masked), and the
-# generic "password <x>" / "passwd <x>". Deliberately conservative.
+# the "password encrypted <hash>" form (e.g. Zyxel), SNMP community (Cisco bare
+# and ProCurve quoted), key-string / pre-shared-key / wpa-psk / wpa-passphrase,
+# a bare "key <hex>", the Hirschmann "passwd <user> :vN:<hash>:" form (username
+# kept, hash masked), and the generic "password <x>" / "passwd <x>".
+# Deliberately conservative.
 # Custom report_hide patterns, set once per run by the Mailer. Each is a
 # raw regex string; only the substring it matches is replaced with ****.
 # Compiled lazily and eval-guarded so a bad pattern is skipped (warned once),
@@ -67,8 +68,12 @@ sub mask_line {
 
     # enable secret / password with an algorithm tag and a hash
     $line =~ s/((?:enable\s+)?(?:secret|password)\s+\d+\s+)\S+/$1****/ig;
+    # "password encrypted <hash>" (e.g. Zyxel) - keep the keywords, mask the
+    # hash (the bare-password rule below would otherwise mask only "encrypted").
+    $line =~ s/(\bpassword\s+encrypted\s+)\S+/$1****/ig;
     # Cisco "password 7 <hex>" already covered above; bare "password <x>"
-    $line =~ s/(\bpassw(?:or)?d\s+)(?!\d+\s)(?!\S+\s+:v\d+:)\S+/$1****/ig;
+    # (the "<n>" / Hirschmann / "encrypted" forms are handled separately)
+    $line =~ s/(\bpassw(?:or)?d\s+)(?!\d+\s)(?!\S+\s+:v\d+:)(?!encrypted\b)\S+/$1****/ig;
     # Hirschmann "users passwd <user> :vN:<hash>:" - the word after passwd is
     # the USERNAME (kept, by the lookahead above); the secret is the hash in
     # the :vN:...: token, masked here.

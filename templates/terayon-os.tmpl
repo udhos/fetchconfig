@@ -1,0 +1,48 @@
+# terayon-os.tmpl - Terayon OS over telnet.
+#
+# syntax_style: cisco-ios
+#
+# Derived from fetchconfig::model::Terayon. The prompt ends with "#" and has no
+# trailing space.
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+# show "show run"; override with show_cmd= (show_cmd=wrterm -> "write term").
+show_cmd       'show run'
+
+capture_from   /^(!|version )/
+
+prompt_head    ''
+prompt_tail    '#'
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /Login:$/    -> send user        -> goto pw
+    expect /Password:$/ -> send_secret pass   -> goto after_login
+
+state pw
+    expect /Password:$/ -> send_secret pass   -> goto after_login
+
+state after_login
+    expect /(\S+)[>#]$/ -> send "enable"    -> goto enable
+
+state enable
+    expect /Password:$/ -> send_secret enable -> goto pager
+    expect prompt       -> send "term len 0"  -> goto show
+
+state pager
+    expect prompt       -> send "term len 0"  -> goto show
+
+state show
+    expect prompt       -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect prompt       -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done

@@ -20,7 +20,13 @@
 import os, re, sys, hashlib, subprocess, tempfile, glob
 
 ROOT = sys.argv[1] if len(sys.argv) > 1 else '.'
-CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mermaid-cache')
+_TOOLS = os.path.dirname(os.path.abspath(__file__))
+CACHE = os.path.join(_TOOLS, 'mermaid-cache')
+# Optional mmdc config and CSS (embedded font) kept beside this script. The CSS
+# injects a subset IBM Plex Sans via @font-face so mmdc measures and the SVG
+# displays with the SAME font -- no device substitution, no clipped labels.
+CONFIG = os.path.join(_TOOLS, 'mermaid-config.json')
+CSSFILE = os.path.join(_TOOLS, 'mermaid-fonts.css')
 
 def preprocess(md):
     md = re.sub(r"```text\n.*?\n```\n(\s*)<!--MERMAID\n", r"\1<!--MERMAID\n", md, flags=re.S)
@@ -71,8 +77,11 @@ def main():
         tmp = tempfile.NamedTemporaryFile('w', suffix='.mmd', delete=False)
         tmp.write(src); tmp.close()
         try:
-            subprocess.check_call(['mmdc', '-i', tmp.name, '-o', out,
-                                   '-t', 'neutral', '-b', 'transparent'])
+            cmd = ['mmdc', '-i', tmp.name, '-o', out, '-b', 'transparent']
+            cmd += ['-c', CONFIG] if os.path.isfile(CONFIG) else ['-t', 'neutral']
+            if os.path.isfile(CSSFILE):
+                cmd += ['-C', CSSFILE]
+            subprocess.check_call(cmd)
             made += 1
             sys.stderr.write("  wrote %s\n" % out)
         finally:

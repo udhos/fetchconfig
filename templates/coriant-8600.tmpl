@@ -1,0 +1,52 @@
+# coriant-8600.tmpl - Coriant 8600 over telnet.
+#
+# syntax_style: cisco-ios
+#
+# Derived from fetchconfig::model::Coriant8600. The Perl model restores the
+# pager after the fetch ("terminal more on"); that is cosmetic for a read-only
+# backup and is omitted here. A --More-- interrupt is kept as a safety net.
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+show_cmd       'show run'
+
+# drop the echoed "show run" command line
+skip_first     1
+
+# safety net if paging is still on
+interrupt /--More--/ -> send_nolf " "
+
+prompt_head    ''
+prompt_tail    '#$'
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /user name: ?$/ -> send user        -> goto pw
+    expect /password: ?$/  -> send_secret pass   -> goto after_login
+
+state pw
+    expect /password: ?$/  -> send_secret pass   -> goto after_login
+
+state after_login
+    expect /(\S+)[>#] ?$/  -> send "enable"    -> goto enable
+
+state enable
+    expect /Password: ?$/  -> send_secret enable -> goto pager
+    expect prompt          -> send "terminal more off" -> goto show
+
+state pager
+    expect prompt          -> send "terminal more off" -> goto show
+
+state show
+    expect prompt          -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect prompt          -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done

@@ -1,0 +1,128 @@
+# dmswitch template -- state machine
+
+State machine of the `dmswitch` generic-model template (selected with
+`model=dmswitch`), parsed from `templates/dmswitch.tmpl`. Datacom DmSwitch over telnet. See
+[README.template_engine.html](../README.template_engine.html) for the engine
+and grammar and [README.generic-model.html](../README.generic-model.html) for
+selecting the model in the device table.
+
+## Template settings
+
+- status: DRAFT - please verify on real hardware.
+- transport: `telnet`
+- prompt: head `''`, tail `'#$'` (the bareword `prompt` = head + learned hostname + tail)
+- show command: `show run`
+- saved file starts at: `capture_from /^!/`
+- global interrupts (matched at any expect):
+  - `/--More--/` -> `send_nolf " "`
+- timeouts: banner 30s, fetch 120s, max_visits 8
+
+## State machine
+
+```text
+  entry:
+    transport telnet -> state_login_telnet
+
+  state_login_telnet
+      login              -> send user              -> pw
+      password           -> send password          -> after_login
+  pw
+      password           -> send password          -> after_login
+  after_login
+      /(\S+)[>#]$/       -> send enable            -> enable
+  enable
+      password           -> send enable secret     -> show
+      at prompt          -> send show command      -> capture
+  show
+      at prompt          -> send show command      -> capture
+  capture
+      at prompt          -> capture_stop           -> logout
+      (capture_start on entry)
+  logout
+      (send)             -> send exit              -> done
+
+  (any expect may also match a global interrupt, handled automatically)
+```
+<!--MERMAID
+stateDiagram-v2
+    [*] --> state_login_telnet: transport telnet
+    state_login_telnet --> pw: login, send user
+    state_login_telnet --> after_login: password, send password
+    pw --> after_login: password, send password
+    after_login --> enable: send enable
+    enable --> show: password, send enable secret
+    enable --> capture: at prompt, send show command
+    show --> capture: at prompt, send show command
+    capture --> logout: at prompt, capture_stop
+    logout --> [*]: send exit
+MERMAID-->
+
+## States
+
+| State | Waits for (expect) | Action | Next |
+|-------|--------------------|--------|------|
+| `state_login_telnet` | `/login: ?$/` | `send user` | `pw` |
+|  | `/Password: ?$/` | `send_secret pass` | `after_login` |
+| `pw` | `/Password: ?$/` | `send_secret pass` | `after_login` |
+| `after_login` | `/(\S+)[>#]$/` | `send "enable"` | `enable` |
+| `enable` | `/Password: ?$/` | `send_secret enable` | `show` |
+|  | `prompt` | `send show_cmd` | `capture` |
+| `show` | `prompt` | `send show_cmd` | `capture` |
+| `capture` | `prompt` | `capture_start` on entry, then `capture_stop` | `logout` |
+| `logout` | (standalone send) | `send "exit"` | `done` |
+
+States with more than one expect try them in order; the first match wins. Global interrupt patterns can match at any expect (they are not shown as edges); each sends a keystroke and re-enters the state.
+
+## Template source
+
+Full source of `templates/dmswitch.tmpl`:
+
+```
+# dmswitch.tmpl - Datacom DmSwitch over telnet.
+#
+# syntax_style: cisco-ios
+#
+# Derived from fetchconfig::model::DmSwitch. No pager-disable command; a
+# --More-- interrupt drains the pager if it appears.
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+show_cmd       'show run'
+
+capture_from   /^!/
+interrupt /--More--/ -> send_nolf " "
+
+prompt_head    ''
+prompt_tail    '#$'
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /login: ?$/    -> send user        -> goto pw
+    expect /Password: ?$/ -> send_secret pass   -> goto after_login
+
+state pw
+    expect /Password: ?$/ -> send_secret pass   -> goto after_login
+
+state after_login
+    expect /(\S+)[>#]$/   -> send "enable"    -> goto enable
+
+state enable
+    expect /Password: ?$/ -> send_secret enable -> goto show
+    expect prompt         -> send show_cmd      -> goto capture
+
+state show
+    expect prompt         -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect prompt         -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done
+```
+
+_Generated from `templates/dmswitch.tmpl` by `tools/gen-template-docs.pl`._

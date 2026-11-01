@@ -1,0 +1,108 @@
+cisco-iosxr template -- state machine
+=====================================
+
+State machine of the cisco-iosxr generic-model template (selected with
+model=cisco-iosxr), parsed from templates/cisco-iosxr.tmpl. Cisco IOS XR over telnet. See
+README.template_engine.html (../README.template_engine.html) for the engine
+and grammar and README.generic-model.html (../README.generic-model.html) for
+selecting the model in the device table.
+
+Template settings
+=================
+
+- status: DRAFT - please verify on real hardware.
+- transport: telnet
+- prompt: head '', tail '#$' (the bareword prompt = head + learned hostname + tail)
+- show command: show run
+- saved file starts at: capture_from /^!/
+- volatile lines ignored in the compare: /^!! Last configuration change/
+- timeouts: banner 30s, fetch 120s, max_visits 8
+
+State machine
+=============
+
+      entry:
+        transport telnet -> state_login_telnet
+    
+      state_login_telnet
+          username           -> send user              -> pw
+          password           -> send password          -> after_login
+      pw
+          password           -> send password          -> after_login
+      after_login
+          at prompt          -> send term len 0        -> show
+      show
+          at prompt          -> send show command      -> capture
+      capture
+          at prompt          -> capture_stop           -> logout
+          (capture_start on entry)
+      logout
+          (send)             -> send exit              -> done
+
+States
+======
+
+State               Waits for (expect)  Action                                     Next
+------------------  ------------------  -----------------------------------------  -----------
+state_login_telnet  /Username: ?$/      send user                                  pw
+                    /Password: ?$/      send_secret pass                           after_login
+pw                  /Password: ?$/      send_secret pass                           after_login
+after_login         prompt              send "term len 0"                          show
+show                prompt              send show_cmd                              capture
+capture             prompt              capture_start on entry, then capture_stop  logout
+logout              (standalone send)   send "exit"                                done
+
+States with more than one expect try them in order; the first match wins.
+
+Template source
+===============
+
+Full source of templates/cisco-iosxr.tmpl:
+
+    # cisco-iosxr.tmpl - Cisco IOS XR over telnet.
+    #
+    # syntax_style: cisco-ios
+    #
+    # Derived from fetchconfig::model::CiscoIOSXR. IOS XR has no enable mode: the
+    # login prompt is already the exec "#".
+    # Note: DRAFT - please verify on real hardware.
+    
+    transport      telnet
+    banner_timeout 30
+    fetch_timeout  120
+    max_visits     8
+    
+    prompt_head    ''
+    prompt_tail    '#$'
+    
+    # show "show run"; override with show_cmd= (show_cmd=wrterm -> "write term").
+    show_cmd       'show run'
+    
+    # IOS XR config begins at the "!! ..." comment header; the "!! Last
+    # configuration change" line is rewritten every read.
+    ignore  /^!! Last configuration change/
+    capture_from  /^!/
+    
+    # ---- telnet entry: interactive login (no enable mode) ----
+    state state_login_telnet
+        expect /Username: ?$/  -> send user        -> goto pw
+        expect /Password: ?$/  -> send_secret pass  -> goto after_login
+    
+    state pw
+        expect /Password: ?$/  -> send_secret pass  -> goto after_login
+    
+    state after_login
+        expect prompt          -> send "term len 0" -> goto show
+    
+    state show
+        expect prompt          -> send show_cmd      -> goto capture
+    
+    state capture
+        capture_start
+        expect prompt          -> capture_stop       -> goto logout
+    
+    state logout
+        send "exit" -> done
+
+_Generated from templates/cisco-iosxr.tmpl by tools/gen-template-docs.pl._
+

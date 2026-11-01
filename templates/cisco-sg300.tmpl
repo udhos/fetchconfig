@@ -1,0 +1,49 @@
+# cisco-sg300.tmpl - Cisco Small Business SG300 over telnet.
+#
+# syntax_style: cisco-ios
+#
+# Derived from fetchconfig::model::CiscoSG300. The login prompt is "User Name:".
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+prompt_head    ''
+prompt_tail    '#$'
+
+# show "show run"; override with show_cmd= (show_cmd=wrterm -> "write term").
+show_cmd       'show run'
+
+# drop the echoed "show run" command line
+skip_first     1
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /User ?Name: ?$/ -> send user        -> goto pw
+    expect /Username: ?$/   -> send user        -> goto pw
+    expect /Password: ?$/   -> send_secret pass  -> goto after_login
+
+state pw
+    expect /Password: ?$/   -> send_secret pass  -> goto after_login
+
+state after_login
+    expect /(\S+)[>#] ?$/   -> send "enable"   -> goto enable
+
+state enable
+    expect /Password: ?$/   -> send_secret enable -> goto pager
+    expect prompt           -> send "terminal datadump" -> goto show
+
+state pager
+    expect prompt           -> send "terminal datadump" -> goto show
+
+state show
+    expect prompt           -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect prompt           -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done

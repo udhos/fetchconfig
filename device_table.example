@@ -67,6 +67,38 @@
 # comma-split, no quoting, no trimming) - commas, =, spaces are all literal.
 #email:		report_hide=(?<=^key )[0-9a-f]{16,}
 
+# Optional: record each run's backup health and config-change history to a
+# PostgreSQL database (for a fetchconfig-web dashboard that scales to thousands
+# of devices without walking the repository). OFF by default: with no "db:"
+# line fetchconfig stays file-based and DBI/DBD::Pg are never loaded. The
+# ".status" files are unchanged; the database is a separate, additional sink.
+# Fleet-wide, NOT a per-device option. The schema and the writer login role are
+# created and owned by fetchconfig-web (run "fetchconfig-web-dbsetup.pl
+# --upgrade"); the engine only writes rows, never issues DDL and never creates
+# roles. Nothing blocks the run: each run's records are appended to a per-
+# repository write-ahead spool ("<repository>/.db-<pid>-<timestamp>") and, at
+# end of run (in the parent, whether or not e-mail is configured), drained into
+# the database one transaction per file, oldest first; a file is deleted only
+# after its transaction commits. An unreachable database only defers the drain
+# to a later run. See README, BACKUP-HISTORY DATABASE.
+#   db_inst             database (instance) name (required)
+#   db_user             writer login role, default "fetchconfig_dashboard" (required)
+#   db_pass             its password; normal device_table quoting, so a value
+#                       containing "," or "=" must be double-quoted
+#                       (db_pass="a,b=c"). Never written to the log.
+#   db_host             "host" or "host:port" (required). IPv6 uses brackets to
+#                       add a port, "[2001:db8::1]:5432"; a bare "2001:db8::1"
+#                       is the host at the default port (5432).
+#   db_connect_timeout  seconds to wait for the connection (default 5); kept
+#                       short so a dead database can never stall a run.
+#   db_sslmode          libpq sslmode: disable | require | verify-full (default
+#                       "disable"; the DB is normally local). Use "require" (or
+#                       stronger) across a WAN.
+#   db_max_outbox_days  spool (outbox) retention in days (default 90). Spool
+#                       files older than this are dropped on a later run.
+#db:		db_inst=fetchconfig,db_user=fetchconfig_dashboard,db_pass=secret,db_host=localhost
+#db:		db_inst=fetchconfig,db_user=fetchconfig_dashboard,db_pass="a,b=c",db_host=[2001:db8::1]:5432,db_sslmode=require,db_max_outbox_days=120
+
 default:	cisco-ios	user=backup,pass=fran,enable=jose
 default:	cisco-ios	timeout=10,keep=5,changes_only=0
 default:	cisco-ios	repository=/var/fetchconfig/save

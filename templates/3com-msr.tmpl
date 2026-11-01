@@ -1,0 +1,59 @@
+# 3com-msr.tmpl - 3Com/H3C MSR (Comware) over telnet.
+#
+# syntax_style: comware
+#
+# Derived from fetchconfig::model::3ComMSR. Log in to user-view "<host>",
+# elevate with "super", enter system-view "[host]" with "sys", disable paging
+# on the vty line, then "disp curr". The Perl model restores paging afterwards;
+# that is omitted here (cosmetic for a backup).
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+show_cmd       'disp curr'
+
+# Comware config starts at the first "#" section line (drops the echoed command)
+capture_from   /^#/
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /Username:$/  -> send user        -> goto pw
+    expect /Password:$/  -> send_secret pass   -> goto user_view
+
+state pw
+    expect /Password:$/  -> send_secret pass   -> goto user_view
+
+# user-view "<host>": elevate with "super"
+state user_view
+    expect /<[^>]+>$/    -> send "super"      -> goto super_pw
+
+# "super" may ask for a password, or return straight to user-view
+state super_pw
+    expect /Password:$/  -> send_secret enable -> goto sys_enter
+    expect /<[^>]+>$/    -> send "sys"         -> goto sys_view
+
+state sys_enter
+    expect /<[^>]+>$/    -> send "sys"         -> goto sys_view
+
+# system-view "[host]": disable paging on the vty line
+state sys_view
+    expect /\[[^\]]+\]$/ -> send "user-interface vty 0 4" -> goto vty_line
+
+state vty_line
+    expect /\[[^\]]+\]$/ -> send "screen-length 0"        -> goto vty_quit
+
+state vty_quit
+    expect /\[[^\]]+\]$/ -> send "quit"                   -> goto show
+
+state show
+    expect /\[[^\]]+\]$/ -> send show_cmd                 -> goto capture
+
+state capture
+    capture_start
+    expect /\[[^\]]+\]$/ -> capture_stop                  -> goto logout
+
+state logout
+    send "quit" -> done

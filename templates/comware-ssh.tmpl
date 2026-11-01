@@ -1,0 +1,37 @@
+# comware-ssh.tmpl - HPE/H3C Comware over SSH.
+#
+# syntax_style: comware
+#
+# Derived from fetchconfig::model::ComwareSSH. SSH lands in user-view "<host>".
+# The show command is fixed ("display current-configuration"). Old switches
+# need the legacy kex/cipher (as the Perl model forces).
+# Note: DRAFT - please verify on real hardware.
+
+transport      ssh
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+strip_ansi     yes
+
+ssh_extra_opts '-o KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1 -o HostKeyAlgorithms=+ssh-rsa -o Ciphers=+aes128-cbc,3des-cbc'
+
+# user-view prompt "<host>"
+prompt_head    '<'
+prompt_tail    '>'
+
+# Comware config starts at the first "#" section line
+capture_from   /^#/
+
+# ---- SSH entry: at user-view; disable paging ----
+state state_login_ssh
+    expect prompt  -> send "screen-length disable"       -> goto show
+
+state show
+    expect prompt  -> send "display current-configuration" -> goto capture
+
+state capture
+    capture_start
+    expect prompt  -> capture_stop                       -> goto logout
+
+state logout
+    send "quit" -> done

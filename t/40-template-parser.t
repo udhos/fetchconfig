@@ -105,4 +105,37 @@ ok( (grep /state_login_ssh or state_login_telnet/, errs("state a\n  expect promp
     is($t->{directives}{skip_first}, '3', 'skip_first value parsed');
 }
 
+# --- prompt_settle_ms / type_delay_ms / show_cmd directives -------------
+{
+    my $t = $P->parse(qq{prompt_settle_ms 150\ntype_delay_ms 100\nshow_cmd 'display current-configuration'\nstate state_login_ssh\n  expect prompt -> send show_cmd -> goto cap\nstate cap\n  capture_start\n  expect prompt -> capture_stop -> goto bye\nstate bye\n  send "exit" -> done\n});
+    is(scalar(@{$t->{errors}}), 0, 'settle/type_delay/show_cmd: valid') or diag(join "\n",@{$t->{errors}});
+    is($t->{directives}{prompt_settle_ms}, '150', 'prompt_settle_ms parsed');
+    is($t->{directives}{type_delay_ms}, '100', 'type_delay_ms parsed');
+    is($t->{directives}{show_cmd}, 'display current-configuration', 'show_cmd parsed (quotes stripped, spaces kept)');
+    my $step = $t->{state_by}{state_login_ssh}{steps}[0];
+    is($step->{action}{op}, 'send', 'send show_cmd op');
+    is($step->{action}{kind}, 'option', 'send show_cmd is an option send');
+    is($step->{action}{name}, 'show_cmd', 'send show_cmd option name');
+}
+
+# --- canon directive (canonicalise-before-compare) ----------------------
+{
+    my $t = $P->parse(qq{canon /(?<=:v1:[0-9a-fA-F]{18})[0-9a-fA-F]+(?=:)/<v1-salt>/\nstate state_login_telnet\n  expect prompt -> nop -> goto cap\nstate cap\n  capture_start\n  expect prompt -> capture_stop -> done\n});
+    is(scalar(@{$t->{errors}}), 0, 'canon: valid template') or diag(join "\n",@{$t->{errors}});
+    is(scalar(@{$t->{canons}}), 1, 'one canon rule parsed');
+    is($t->{canons}[0]{pattern}, '(?<=:v1:[0-9a-fA-F]{18})[0-9a-fA-F]+(?=:)', 'canon pattern parsed');
+    is($t->{canons}[0]{replacement}, '<v1-salt>', 'canon replacement parsed (literal)');
+}
+ok( (grep /canon pattern does not compile/,
+        errs("canon /(unbalanced/x/\nstate state_login_telnet\n  expect prompt -> nop -> goto c\nstate c\n  capture_start\n  expect prompt -> capture_stop -> done\n")),
+    'bad canon pattern caught');
+
+# --- the two ms directives must be non-negative integers ----------------
+ok( (grep /prompt_settle_ms must be a non-negative integer/,
+        errs("prompt_settle_ms fast\nstate state_login_ssh\n  expect prompt -> nop -> goto cap\nstate cap\n  capture_start\n  expect prompt -> capture_stop -> done\n")),
+    'non-integer prompt_settle_ms caught');
+ok( (grep /type_delay_ms must be a non-negative integer/,
+        errs("type_delay_ms -5\nstate state_login_ssh\n  expect prompt -> nop -> goto cap\nstate cap\n  capture_start\n  expect prompt -> capture_stop -> done\n")),
+    'negative type_delay_ms caught');
+
 done_testing();

@@ -49,6 +49,11 @@ SKIP: {
     like($hb, qr/View the full report<\/a>/,                 'report CTA button present');
     like($hb, qr/background:#1f4e79;color:#ffffff;text-decoration:none/, 'button uses header palette');
     like($hb, qr/If the button does not work/,               'copy-this-link fallback present');
+    # Outlook "bulletproof" button: a VML roundrect in an [if mso] block, the
+    # <a> hidden from Outlook via [if !mso]. Keeps Outlook from showing a plain link.
+    like($hb, qr/<v:roundrect\b[^>]*fillcolor="#1f4e79"/, 'VML roundrect button for Outlook');
+    like($hb, qr/<!--\[if mso\]>/,                         'mso-only block present');
+    like($hb, qr/<!--\[if !mso\]><!-->/,                   'non-mso fallback block present');
 }
 
 done_testing();

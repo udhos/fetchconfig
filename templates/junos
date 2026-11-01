@@ -1,0 +1,113 @@
+junos template -- state machine
+===============================
+
+State machine of the junos generic-model template (selected with
+model=junos), parsed from templates/junos.tmpl. Juniper JunOS over telnet. See
+README.template_engine.html (../README.template_engine.html) for the engine
+and grammar and README.generic-model.html (../README.generic-model.html) for
+selecting the model in the device table.
+
+Template settings
+=================
+
+- status: DRAFT - please verify on real hardware.
+- transport: telnet
+- prompt: head (default), tail (default) (the bareword prompt = head + learned hostname + tail)
+- show command: show
+- skip_first 1 (drop leading echoed line(s))
+- volatile lines ignored in the compare: /^## Last commit/
+- timeouts: banner 30s, fetch 120s, max_visits 8
+
+State machine
+=============
+
+      entry:
+        transport telnet -> state_login_telnet
+    
+      state_login_telnet
+          login              -> send user              -> pw
+          password           -> send password          -> op
+      pw
+          password           -> send password          -> op
+      op
+          /\S+>\s$/          -> send set cli screen-length 0 -> op_ready
+      op_ready
+          /\S+>\s$/          -> send configure         -> conf
+      conf
+          /\S+#\s$/          -> send show command      -> capture
+      capture
+          /\S+#\s$/          -> capture_stop           -> logout
+          (capture_start on entry)
+      logout
+          (send)             -> send exit              -> done
+
+States
+======
+
+State               Waits for (expect)  Action                                     Next
+------------------  ------------------  -----------------------------------------  --------
+state_login_telnet  /login: $/          send user                                  pw
+                    /Password:\s*$/     send_secret pass                           op
+pw                  /Password:\s*$/     send_secret pass                           op
+op                  /\S+>\s$/           send "set cli screen-length 0"             op_ready
+op_ready            /\S+>\s$/           send "configure"                           conf
+conf                /\S+#\s$/           send show_cmd                              capture
+capture             /\S+#\s$/           capture_start on entry, then capture_stop  logout
+logout              (standalone send)   send "exit"                                done
+
+States with more than one expect try them in order; the first match wins.
+
+Template source
+===============
+
+Full source of templates/junos.tmpl:
+
+    # junos.tmpl - Juniper JunOS over telnet.
+    #
+    # syntax_style: generic
+    #
+    # Derived from fetchconfig::model::JunOS. Log in to operational mode "host>",
+    # disable the pager, enter "configure" (prompt becomes "host#"), then "show".
+    # The prompt sign changes between operational ">" and configuration "#".
+    # Note: DRAFT - please verify on real hardware.
+    
+    transport      telnet
+    banner_timeout 30
+    fetch_timeout  120
+    max_visits     8
+    
+    # config command "show" (run in configuration mode); override with show_cmd=.
+    show_cmd       'show'
+    
+    # drop the echoed command; the "## Last commit:" line is rewritten every read
+    skip_first     1
+    ignore  /^## Last commit/
+    
+    # ---- telnet entry: interactive login ----
+    state state_login_telnet
+        expect /login: $/      -> send user        -> goto pw
+        expect /Password:\s*$/ -> send_secret pass   -> goto op
+    
+    state pw
+        expect /Password:\s*$/ -> send_secret pass   -> goto op
+    
+    # operational mode "host> ": disable paging, then enter configuration
+    state op
+        expect /\S+>\s$/       -> send "set cli screen-length 0" -> goto op_ready
+    
+    state op_ready
+        expect /\S+>\s$/       -> send "configure"  -> goto conf
+    
+    # configuration mode "host# ": run the show command
+    state conf
+        expect /\S+#\s$/       -> send show_cmd      -> goto capture
+    
+    state capture
+        capture_start
+        expect /\S+#\s$/       -> capture_stop       -> goto logout
+    
+    state logout
+        send "exit" -> done
+
+_Generated from templates/junos.tmpl by tools/gen-template-docs.pl._
+

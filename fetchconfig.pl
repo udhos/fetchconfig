@@ -32,6 +32,7 @@ use fetchconfig::Logger;
 use fetchconfig::Constants;
 use fetchconfig::Mailer;
 use fetchconfig::Report;
+use fetchconfig::History;
 use fetchconfig::model::Detector;
 use fetchconfig::Tools;
 use Getopt::Long qw(GetOptionsFromArray);
@@ -388,6 +389,13 @@ if (defined($clean_lock_dir)) {
 # device-table order, live output exactly as before), or with -P N
 # concurrent worker processes.
 &run_fetch_phase($parallel);
+
+# Optional DB history (inert unless a "db:" line is set): write the per-run
+# write-ahead spool and drain it. Parent-only, after every worker result has
+# been replayed into the Mailer and BEFORE the summary mail (so the mail can
+# report the outcome). Independent of "email:" - a run with no mail still
+# writes history and logs the result.
+fetchconfig::History->finish($log);
 
 fetchconfig::Mailer->send_summaries($log);
 

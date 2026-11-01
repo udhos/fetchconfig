@@ -1,0 +1,44 @@
+# cisco-iosxr.tmpl - Cisco IOS XR over telnet.
+#
+# syntax_style: cisco-ios
+#
+# Derived from fetchconfig::model::CiscoIOSXR. IOS XR has no enable mode: the
+# login prompt is already the exec "#".
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+prompt_head    ''
+prompt_tail    '#$'
+
+# show "show run"; override with show_cmd= (show_cmd=wrterm -> "write term").
+show_cmd       'show run'
+
+# IOS XR config begins at the "!! ..." comment header; the "!! Last
+# configuration change" line is rewritten every read.
+ignore  /^!! Last configuration change/
+capture_from  /^!/
+
+# ---- telnet entry: interactive login (no enable mode) ----
+state state_login_telnet
+    expect /Username: ?$/  -> send user        -> goto pw
+    expect /Password: ?$/  -> send_secret pass  -> goto after_login
+
+state pw
+    expect /Password: ?$/  -> send_secret pass  -> goto after_login
+
+state after_login
+    expect prompt          -> send "term len 0" -> goto show
+
+state show
+    expect prompt          -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect prompt          -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done

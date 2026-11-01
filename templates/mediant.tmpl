@@ -1,0 +1,40 @@
+# mediant.tmpl - AudioCodes Mediant gateway (telnet, menu CLI).
+#
+# syntax_style: generic
+#
+# Derived from fetchconfig::model::Mediant. Log in, enter the config context
+# with "conf", then dump the ini with "cf get". The prompts are fixed strings
+# ("/>" shell, "/CONFiguration>" config), not hostname-based, so they are
+# matched explicitly.
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+# dump command "cf get"; override per device with show_cmd=.
+show_cmd       'cf get'
+
+# drop the echoed "cf get" command line
+skip_first     1
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /login: $/          -> send user        -> goto pw
+    expect /password: $/       -> send_secret pass   -> goto at_shell
+
+state pw
+    expect /password: $/       -> send_secret pass   -> goto at_shell
+
+# shell prompt "/>": enter the config context
+state at_shell
+    expect /\/>$/              -> send "conf"       -> goto at_conf
+
+# config prompt "/CONFiguration>": dump the ini
+state at_conf
+    expect /\/CONFiguration>$/ -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect /\/CONFiguration>$/ -> capture_stop       -> done

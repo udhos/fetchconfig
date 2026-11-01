@@ -1,6 +1,6 @@
 Summary: fetchconfig device configuration retrieval software
 Name: fetchconfig
-Version: 9.73
+Version: 9.74
 Release: 1
 Group: Applications/System
 Url: http://savannah.nongnu.org/projects/fetchconfig
@@ -93,6 +93,11 @@ rm -rf $RPM_BUILD_ROOT
 %doc CHANGES COPYING CREDITS README DEPENDENCIES
 
 %changelog
+* Thu Oct 29 2026 Rainer Tammer <tammer@tammer.net> 9.74-1
+- Generic template engine: new prompt_settle_ms, type_delay_ms, show_cmd
+  directives (and "send show_cmd"); templates.new/ derived from the CLI models;
+  generate_template scaffolds the two timing directives as commented TODOs.
+
 * Wed Oct 21 2026 Rainer Tammer <tammer@tammer.net> 9.73-1
 - -devices= relative path is now searched in the current directory, then the
   directory of fetchconfig.pl (FindBin); absolute paths are unchanged.

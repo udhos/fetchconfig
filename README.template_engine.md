@@ -103,10 +103,19 @@ All optional; defaults in parentheses.
 | `prompt_head 'REGEX'` | matched before the learned hostname (empty) |
 | `prompt_tail 'REGEX'` | matched after it (`#`) |
 | `ssh_extra_opts 'STRING'` | extra ssh client options (legacy crypto) |
+| `prompt_settle_ms N` | drain the channel to idle N ms before matching the prompt (0 = off) |
+| `type_delay_ms N` | type each send char-by-char, N ms apart (0 = off) |
+| `show_cmd 'CMD'` | config command for `send show_cmd`; device option `show_cmd` overrides it (`wrterm` -> `write term`) |
 
-*Removed in 9.72:* the `prompt_settle` directive -- parsed but never used by
-the generic engine (timing is governed by the per-state timeouts and
-`fetch_delay`). The SSH-model device option `prompt_settle_ms` is unaffected.
+`prompt_settle_ms` and `type_delay_ms` (added in 9.74) are also accepted as
+device-table options - the device line overrides the template. Both default to
+0 (off), so a template that does not set them behaves exactly as before. They
+reproduce, in the generic engine, the SSH per-step settle and char-by-char
+typing that the hand-written SSH models (Aruba-CX, Nexus, PLANET) provide.
+
+*History:* the no-op `prompt_settle` directive was removed in 9.72; the
+`prompt_settle_ms` directive above is the real, implemented control and is
+distinct from it.
 
 ### 4.2 Trimming the saved config
 
@@ -137,10 +146,20 @@ Checked/applied regardless of state:
   (a menu, "Press any key", a "[y/n]?" confirmation). Handled by
   `wait_for_command_prompt`.
 - `ignore /REGEX/` - a line the device rewrites on its own every read
-  (a timestamp, a re-salted hash). It is removed from **both** files before a
+  (a timestamp). It is removed from **both** files before a
   `changes_only` comparison, so it does not cause a spurious backup. Do **not**
   ignore a line that reflects a real change (e.g. a firmware-version header
   that changes only on upgrade).
+- `canon /PATTERN/REPLACEMENT/` - like `ignore`, but rewrites only PART of a
+  line (`s/PATTERN/REPLACEMENT/g` on both files before the `changes_only`
+  comparison) instead of dropping the whole line. Use it where a device
+  re-serialises part of a line on every read but the rest still carries real
+  signal - e.g. a re-salted hash whose stable prefix must still be compared, so
+  a plain `ignore` would also hide a genuine change. REPLACEMENT is **literal**
+  (no `$1` - use a look-behind/-ahead in PATTERN); rules accumulate and run
+  before `ignore`; the saved file is never modified. Example (Hirschmann `:v1:`
+  password, keeping the password-derived 18-hex prefix, collapsing the salt):
+  `canon /(?<=:v1:[0-9a-fA-F]{18})[0-9a-fA-F]+(?=:)/<v1-salt>/`
 
 ### 4.4 States
 
@@ -161,7 +180,7 @@ Inside a state:
 
 ```
 expect PATTERN -> ACTION [-> goto STATE | -> done]
-send "text" | send user|pass|enable [-> goto STATE | -> done]
+send "text" | send user|pass|enable|show_cmd [-> goto STATE | -> done]
 send_secret pass|enable
 send_nolf "text"
 send_match
@@ -180,7 +199,11 @@ capture_stop
 - A **standalone `send`** (no preceding `expect`) sends immediately without
   waiting for a prompt - used after capture to send `exit` (the device is
   already at the prompt).
-- `send_secret` sends a password, masked in the debug log (`print_secret`).
+- `send_secret` sends a password, masked in the debug log (`print_secret`);
+  under `type_delay_ms` it is typed char-by-char and still kept out of the log.
+- `send show_cmd` sends the config command resolved from the `show_cmd`
+  directive or the `show_cmd` device option (with the `wrterm` -> `write term`
+  alias), so one template serves devices that need a different show command.
 - `send_nolf` sends without a trailing newline (a pager space, a menu key).
 - `send_match` sends the captured group `$1` from the state's matching
   `expect` regex, as a keystroke - e.g. pick a menu item by its shown number:
@@ -219,6 +242,49 @@ The parser rejects a template that could hang or misbehave, at load time:
 
 ## 5. Execution semantics
 
+A template is a state machine: each `state` waits for the device (`expect`), runs
+an action, and names the next state. Most templates follow the same arc -- a
+per-transport entry state, login, `enable`, pager-off, the show command, capture,
+and logout -- and omit the phases their device does not need (no enable, no
+pager, a menu to escape, ...). The canonical arc:
+
+```text
+  transport ssh    -> state_login_ssh ----\
+  transport telnet -> state_login_telnet -> [password] -> after_login
+                                                               |
+  at prompt: send "enable"  (state_login_ssh / after_login)    |
+                            v                                   v
+                          enable --[password]--> pager --\   enable
+                          enable / pager --[at prompt] pager-off--> show
+                          show    --[at prompt] show-command----> capture
+                          capture (capture_start .. capture_stop)-> logout
+                          logout  --(send exit, no wait)--------> done
+
+  Any expect may instead match a global interrupt (send a keystroke and
+  re-enter the state); self-loops are bounded by max_visits.
+```
+<!--MERMAID
+stateDiagram-v2
+    [*] --> state_login_ssh: transport ssh
+    [*] --> state_login_telnet: transport telnet
+    state_login_telnet --> password: Username, send user
+    state_login_telnet --> after_login: Password, send pass
+    password --> after_login: Password, send pass
+    state_login_ssh --> enable: at prompt, send enable
+    after_login --> enable: at prompt, send enable
+    enable --> pager: enable password, send secret
+    enable --> show: at prompt, disable pager
+    pager --> show: at prompt, disable pager
+    show --> capture: at prompt, send show command
+    capture --> logout: at prompt, capture_stop
+    logout --> [*]: send exit
+MERMAID-->
+
+State and transition names above are conventional, not reserved: only the entry
+states `state_login_ssh` / `state_login_telnet` are special. Each shipped
+template has its own state-machine diagram, listed under Model state machines
+below.
+
 For each state the engine:
 
 1. Applies any `capture_start` in the state (turns capturing on).
@@ -254,7 +320,48 @@ routing/VPN keys (BGP, OSPF, RADIUS/TACACS, IPsec pre-shared keys) are often
 cleartext, and Cisco "type 7" passwords are reversible. A backup is sensitive
 whether or not debug was on; restrict the repository directory.
 
-## 6. Writing a template
+## 6. Model state machines
+
+Every shipped template has its own state-machine reference, generated from the
+`.tmpl` by `tools/gen-template-docs.pl`: the template settings, a Mermaid state
+diagram (with a plain-text twin) and a states table. The index below links to
+each; it is regenerated by `make doc`, so it always matches the `templates/`
+directory. Status comes from each template's `# Note:` line -- "verified" means
+confirmed on real hardware, "draft" means it still needs confirmation.
+
+<!-- TEMPLATE-INDEX -->
+| Model | Transport | Status |
+|-------|-----------|--------|
+| [3com-msr](templates/3com-msr.html) | telnet | draft |
+| [acme](templates/acme.html) | telnet | draft |
+| [aruba-cx-ssh](templates/aruba-cx-ssh.html) | ssh | draft |
+| [cisco-asa](templates/cisco-asa.html) | ssh, telnet | draft |
+| [cisco-cat](templates/cisco-cat.html) | telnet | draft |
+| [cisco-ios](templates/cisco-ios.html) | ssh, telnet | verified |
+| [cisco-iosxr](templates/cisco-iosxr.html) | telnet | draft |
+| [cisco-pix](templates/cisco-pix.html) | telnet | draft |
+| [cisco-sg300](templates/cisco-sg300.html) | telnet | draft |
+| [comware-ssh](templates/comware-ssh.html) | ssh | draft |
+| [coriant-8600](templates/coriant-8600.html) | telnet | draft |
+| [dell](templates/dell.html) | telnet | draft |
+| [dmswitch](templates/dmswitch.html) | telnet | draft |
+| [fortigate](templates/fortigate.html) | telnet | draft |
+| [hirschmann](templates/hirschmann.html) | telnet | verified |
+| [junos](templates/junos.html) | telnet | draft |
+| [mediant](templates/mediant.html) | telnet | draft |
+| [mikrotik](templates/mikrotik.html) | telnet | draft |
+| [nec-univerge-ix](templates/nec-univerge-ix.html) | telnet | draft |
+| [nexus-ssh](templates/nexus-ssh.html) | ssh | draft |
+| [parks](templates/parks.html) | telnet | draft |
+| [planet-ssh](templates/planet-ssh.html) | ssh | verified |
+| [procurve](templates/procurve.html) | ssh, telnet | verified |
+| [riverstone](templates/riverstone.html) | telnet | draft |
+| [tellabs-msr](templates/tellabs-msr.html) | telnet | draft |
+| [terayon-os](templates/terayon-os.html) | telnet | draft |
+| [zyxel](templates/zyxel.html) | telnet | verified |
+<!-- /TEMPLATE-INDEX -->
+
+## 7. Writing a template
 
 1. Capture a real session with `tools/record-session.pl` - it produces a
    byte-accurate `.hex` and a readable `.txt` (see `README.record-session`).
@@ -274,7 +381,7 @@ See `templates/cisco-ios.tmpl` (telnet + SSH, clean CLI) and
 `templates/procurve.tmpl` (menu/VT100, with `strip_ansi`, interrupts, a
 menu-or-shell branch and `send_match`) for worked examples.
 
-## 7. Generating a template
+## 8. Generating a template
 
 ```
 tools/generate_template.pl -f SESSION.hex [-t ssh|telnet] [-o OUT.tmpl]
@@ -288,7 +395,12 @@ judgment calls a single capture cannot reveal: which lines are volatile, the
 pager command, menu handling. **The output is a draft to review and test, not
 a finished template.**
 
-## 8. Limitations
+It also emits `prompt_settle_ms` and `type_delay_ms` as commented `# TODO`
+defaults (more prominently for an SSH capture). These cannot be inferred from a
+`.hex` - it records bytes and read framing, not timing - so they are left
+commented for the operator to enable and tune only if a fetch proves flaky.
+
+## 9. Limitations
 
 - `transport=auto` is not implemented.
 - There is no escape-hatch to a named Perl helper: a device whose behaviour

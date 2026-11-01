@@ -11,6 +11,8 @@
 # Flow: each state waits (expect) for the response to the previous command,
 # then sends the next. SSH is already authenticated and lands at the prompt;
 # telnet logs in interactively. Both converge on "enable".
+#
+# Note: Verified on real hardware.
 
 transport      ssh telnet
 banner_timeout 30

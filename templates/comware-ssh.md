@@ -1,0 +1,98 @@
+# comware-ssh template -- state machine
+
+State machine of the `comware-ssh` generic-model template (selected with
+`model=comware-ssh`), parsed from `templates/comware-ssh.tmpl`. HPE/H3C Comware over SSH. See
+[README.template_engine.html](../README.template_engine.html) for the engine
+and grammar and [README.generic-model.html](../README.generic-model.html) for
+selecting the model in the device table.
+
+## Template settings
+
+- status: DRAFT - please verify on real hardware.
+- transport: `ssh`
+- prompt: head `'<'`, tail `'>'` (the bareword `prompt` = head + learned hostname + tail)
+- show command: sent as a literal in the show state (see the table)
+- saved file starts at: `capture_from /^#/`
+- `strip_ansi yes`
+- legacy SSH options: `ssh_extra_opts` set (old kex/cipher)
+- timeouts: banner 30s, fetch 120s, max_visits 8
+
+## State machine
+
+```text
+  entry:
+    transport ssh    -> state_login_ssh
+
+  state_login_ssh
+      at prompt          -> send screen-length disable -> show
+  show
+      at prompt          -> send display current-configuration -> capture
+  capture
+      at prompt          -> capture_stop           -> logout
+      (capture_start on entry)
+  logout
+      (send)             -> send quit              -> done
+```
+<!--MERMAID
+stateDiagram-v2
+    [*] --> state_login_ssh: transport ssh
+    state_login_ssh --> show: at prompt, send screen-length disable
+    show --> capture: at prompt, send display current-configuration
+    capture --> logout: at prompt, capture_stop
+    logout --> [*]: send quit
+MERMAID-->
+
+## States
+
+| State | Waits for (expect) | Action | Next |
+|-------|--------------------|--------|------|
+| `state_login_ssh` | `prompt` | `send "screen-length disable"` | `show` |
+| `show` | `prompt` | `send "display current-configuration"` | `capture` |
+| `capture` | `prompt` | `capture_start` on entry, then `capture_stop` | `logout` |
+| `logout` | (standalone send) | `send "quit"` | `done` |
+
+## Template source
+
+Full source of `templates/comware-ssh.tmpl`:
+
+```
+# comware-ssh.tmpl - HPE/H3C Comware over SSH.
+#
+# syntax_style: comware
+#
+# Derived from fetchconfig::model::ComwareSSH. SSH lands in user-view "<host>".
+# The show command is fixed ("display current-configuration"). Old switches
+# need the legacy kex/cipher (as the Perl model forces).
+# Note: DRAFT - please verify on real hardware.
+
+transport      ssh
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+strip_ansi     yes
+
+ssh_extra_opts '-o KexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1 -o HostKeyAlgorithms=+ssh-rsa -o Ciphers=+aes128-cbc,3des-cbc'
+
+# user-view prompt "<host>"
+prompt_head    '<'
+prompt_tail    '>'
+
+# Comware config starts at the first "#" section line
+capture_from   /^#/
+
+# ---- SSH entry: at user-view; disable paging ----
+state state_login_ssh
+    expect prompt  -> send "screen-length disable"       -> goto show
+
+state show
+    expect prompt  -> send "display current-configuration" -> goto capture
+
+state capture
+    capture_start
+    expect prompt  -> capture_stop                       -> goto logout
+
+state logout
+    send "quit" -> done
+```
+
+_Generated from `templates/comware-ssh.tmpl` by `tools/gen-template-docs.pl`._

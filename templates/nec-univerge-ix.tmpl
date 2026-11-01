@@ -1,0 +1,43 @@
+# nec-univerge-ix.tmpl - NEC UNIVERGE IX over telnet.
+#
+# syntax_style: cisco-ios
+#
+# Derived from fetchconfig::model::NECUnivergeIX. After login, enter config
+# with "enable-config" (prompt becomes "host(config)#" or "host(config)$").
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+show_cmd       'show run'
+
+capture_from   /^(!|version )/
+ignore  /^! Current time/
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /login: $/    -> send user        -> goto pw
+    expect /Password: $/ -> send_secret pass   -> goto exec
+
+state pw
+    expect /Password: $/ -> send_secret pass   -> goto exec
+
+# exec "host#"/"host$": enter config
+state exec
+    expect /\S+[#$] $/            -> send "enable-config" -> goto conf
+
+# config "host(config)#"/"host(config)$": disable paging
+state conf
+    expect /\S+\(config\)[#$] $/  -> send "term len 0"    -> goto show
+
+state show
+    expect /\S+\(config\)[#$] $/  -> send show_cmd        -> goto capture
+
+state capture
+    capture_start
+    expect /\S+\(config\)[#$] $/  -> capture_stop         -> goto logout
+
+state logout
+    send "exit" -> done

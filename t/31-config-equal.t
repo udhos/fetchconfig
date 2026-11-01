@@ -70,4 +70,20 @@ write_file('f.cfg', "!Time: 9\nhostname sw01\n!Time: 8\nend\n");
 ok( $m->config_equal_ignoring_lines($dir, 'e.cfg', $dir, 'f.cfg', $IGNORE),
     'all matching lines stripped, wherever they appear');
 
+# config_equal_canon(): canonicalise PART of a line (vs. dropping it). The
+# Hirschmann ":v1:<18-hex prefix><random salt>:" password field re-salts on
+# every read; collapsing the salt must make a salt-only change compare equal,
+# while a change to the password-derived 18-hex prefix must still differ.
+my $CANON = [ [ qr/(?<=:v1:[0-9a-fA-F]{18})[0-9a-fA-F]+(?=:)/, '<v1-salt>' ] ];
+my $PRE = 'users passwd admin :v1:a257914def53abaccf';
+write_file('g.cfg', "hostname sw01\n$PRE" . "18fc15b4a8531590e65d962db4a575ca315934bbf8dc96:\nend\n");
+write_file('h.cfg', "hostname sw01\n$PRE" . "a46babd7c0ec827a7d1593a77a2df86d2cfef8fc784001:\nend\n");
+write_file('i.cfg', "hostname sw01\nusers passwd admin :v1:b357914def53abaccf" . "a46babd7c0ec827a7d1593a77a2df86d2cfef8fc784001:\nend\n");
+ok( $m->config_equal_canon($dir, 'g.cfg', $dir, 'h.cfg', $CANON, undef),
+    'canon: equal when only the :v1: salt tail differs');
+ok(!$m->config_equal_canon($dir, 'g.cfg', $dir, 'i.cfg', $CANON, undef),
+    'canon: not equal when the password-derived 18-hex prefix differs');
+ok(!$m->config_equal_canon($dir, 'g.cfg', $dir, 'gone.cfg', $CANON, undef),
+    'canon: missing file -> not equal (keep the newer version)');
+
 done_testing();

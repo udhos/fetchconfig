@@ -1,5 +1,64 @@
 # fetchconfig -- Changes
 
+## 9.75
+
++ Optional backup-history DB writer (engine side), inert without a "db:" line
+  (default: level; DBI/DBD::Pg load only then). Each run records health (one row
+  per run) and change history (one row per saved backup, with sha1) to PostgreSQL
+  8.2+ via a per-repository write-ahead spool (<repository>/.db-*) drained one
+  transaction per file at end of run: the fetch path never waits on the DB, and an
+  outage is non-fatal (records buffer and replay). ".status" is unchanged; the DB
+  is a separate sink.
++ Each run logs a "-----[DB writer]-----" section with the result ("all N
+  record(s) written; outbox empty", or INCOMPLETE with the pending count); the
+  summary mail shows it as a status box in the card (green written / red
+  incomplete / grey when no "db:" is set). db: keys: db_inst, db_user, db_pass,
+  db_host (IPv6-capable), db_connect_timeout (5), db_sslmode (disable),
+  db_max_outbox_days (90).
++ Summary mail renders correctly in Outlook (Word engine): the report button is a
+  VML button and the status pill a table-cell badge, both behind [if mso] blocks
+  (normal styled HTML for every other client). The summary tables use soft zebra
+  shading, no cell borders, and border-collapse so Word leaves no inter-row gap to
+  paint (the faint 1px seam it drew under darker rows); all clients render it the
+  same. The HTML part
+  is now sent quoted-printable (was 8bit) so an MTA can never fold a long
+  table-row line past the 998-octet SMTP limit and corrupt the markup.
++ Schema, writer role and grants are owned by fetchconfig-web
+  (fetchconfig-web-dbsetup.pl --upgrade); the engine only writes, never DDL. See
+  README ("db:") and DEVELOPER-GUIDE.
+
+## 9.74
+
+Note: Several generic-model templates in ./templates are new - please test them
+against real hardware and let us know whether they work cleanly. The ones marked
+"# Note: DRAFT - please verify on real hardware." especially need confirmation;
+those marked "# Note: Verified on real hardware." have already been checked.
+
++ Generic template engine: new prompt_settle_ms, type_delay_ms and show_cmd
+  directives (plus "send show_cmd"), so templates reproduce the SSH-settle,
+  slow-typing and show-command options of the Perl models.
++ templates/: new generic-model templates derived from the existing CLI models
+  (all except mediant-sbc; web/SNMP models excluded). Each carries a "# Note:"
+  line marking it verified or draft; drafts need real-hardware confirmation.
++ generate_template.pl and contrib/windows/generate_template.py scaffold the two
+  timing directives as commented TODOs (they cannot be inferred from a capture).
++ Change-report / e-mail diff masking now covers the "password encrypted <hash>"
+  form (e.g. Zyxel): the hash is masked, the username and keywords kept.
++ Hirschmann: the re-salted "users passwd ... :v1:<hash>:" field no longer forces
+  a save every run - the salt is canonicalised before the changes_only compare
+  (keeping the password-derived prefix), so only a real password change is saved.
+  New generic-model template directive "canon /PATTERN/REPLACEMENT/" does the same.
++ Generic model: the "trying (generic template)" debug line now also names the
+  template (", model <name>"), so the log says which template a backup used.
++ Docs: each shipped template now has a state-machine diagram beside it
+  (templates/<name>.md/.html, Mermaid with an ASCII twin and a states table),
+  generated from the .tmpl by tools/gen-template-docs.pl (run by "make doc"),
+  indexed under "Model state machines" in README.template_engine.
++ templates/integrity.sha1: a SHA-1 manifest of the shipped templates, generated
+  by tools/integrity.pl during "make doc" (core Digest::SHA, so it works on AIX),
+  so a viewer can tell a stock template from an edited or user-added one.
+  Informational only; it does not affect template use.
+
 ## 9.73
 
 + -devices= now finds a relative device-table name in the current directory

@@ -124,6 +124,17 @@ sub parse {
     }
 
     #
+    ## optional PostgreSQL backup-history writer (default:-level, fleet-wide).
+    ## Inert unless set; DBI/DBD::Pg load only then. See fetchconfig::History.
+    # db: db_inst=fetchconfig,db_user=fetchconfig_dashboard,db_pass=xxx,db_host=localhost
+    #
+    if ($line =~ /^\s*db:\s*(.*)$/) {
+	require fetchconfig::History;
+	fetchconfig::History->parse_db_line($file, $num, $line, $1, $logger);
+	return;
+    }
+
+    #
     ## directory allowlist (optional). When present, repository= and
     ## template_dir= values are restricted to these directories.
     # directory: repository $REPO1     /usr/local/fetchconfig/config
@@ -460,6 +471,10 @@ sub fetch_device {
 	$dev_lock = $got;   # hold the lock for the duration of the fetch
     }
 
+    # The model instance is reused across devices of the same model; clear any
+    # prior device's save metadata so a failed fetch here cannot inherit it.
+    delete $mod->{saved};
+
     my ($config_dir, $config_file) = $mod->fetch($file, $num, $line, $dev_id, $dev_host, $dev_opt_tab);
 
     my $fetch_elap = time - $fetch_ts_start;
@@ -521,6 +536,13 @@ sub fetch_device {
 	$cfg_equal = $mod->config_equal($latest_dir, $latest_file, $config_dir, $config_file);
     }
 
+    # For the optional DB history writer: a backup file is RETAINED unless it is
+    # the changes_only "unchanged" case discarded below. Only a retained backup
+    # gets a backup_versions row, so the save metadata (path/epoch/sha1, stashed
+    # by dump_config) is passed to record_result only when kept.
+    my $saved_meta = $mod->{saved};
+    my $backup_kept = !($dev_changes_only && $cfg_equal);
+
     #
     # Record this device's outcome for the end-of-run backup summary
     # e-mail (see Mailer.pm). "changed"/"unchanged" is only reported
@@ -546,6 +568,12 @@ sub fetch_device {
 	            : (($dev_changes_only || $dev_run || $dev_cat)
 	               ? ($cfg_equal ? 'unchanged' : 'changed')
 	               : 'n/a'),
+	# DB history: backup_versions fields, only for a retained backup.
+	(($backup_kept && $saved_meta) ? (
+	    path           => $saved_meta->{path},
+	    file_timestamp => $saved_meta->{file_epoch},
+	    sha1           => $saved_meta->{sha1},
+	) : ()),
 	to           => $dev_email_to,
 	);
 
@@ -610,6 +638,21 @@ sub fetch_device {
     }
 
     $mod->purge_ancient($dev_id, $dev_opt_tab);
+
+    # DB history: emit an expire event for each backup purge_ancient rotated out
+    # (keyed by the same epoch the save-time version row used), so the writer can
+    # mark the backup_versions row expired. No-op without a DB (History ignores
+    # them when "db:" is unset).
+    if (my $expired = $mod->{expired}) {
+	my $repo = $mod->dev_option($dev_opt_tab, "repository");
+	for my $epoch (@$expired) {
+	    fetchconfig::Mailer->record_expire(
+		dev_id         => $dev_id,
+		repository     => $repo,
+		file_timestamp => $epoch,
+	    );
+	}
+    }
 }
 
 #

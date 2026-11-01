@@ -1,0 +1,39 @@
+# nexus-ssh.tmpl - Cisco Nexus (NX-OS) over SSH.
+#
+# syntax_style: nexus
+#
+# Derived from fetchconfig::model::NexusSSH. SSH lands authenticated at "#"
+# (no enable). prompt_settle_ms lets the MOTD/copyright banner finish before
+# the prompt is matched.
+# Note: DRAFT - please verify on real hardware.
+
+transport        ssh
+banner_timeout   30
+fetch_timeout    120
+max_visits       8
+prompt_settle_ms 150
+
+prompt_head      ''
+prompt_tail      '# ?$'
+
+# show "show running-config"; override per device with show_cmd=.
+show_cmd         'show running-config'
+
+# NX-OS keeps the "!Command:" / "!Running configuration last done at:" headers;
+# only "!Time:" is rewritten every read.
+ignore  /^!Time:/
+capture_from     /^!Command:/
+
+# ---- SSH entry: authenticated; disable paging ----
+state state_login_ssh
+    expect prompt  -> send "terminal length 0" -> goto show
+
+state show
+    expect prompt  -> send show_cmd            -> goto capture
+
+state capture
+    capture_start
+    expect prompt  -> capture_stop             -> goto logout
+
+state logout
+    send "exit" -> done

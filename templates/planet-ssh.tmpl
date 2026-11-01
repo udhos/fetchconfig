@@ -1,0 +1,54 @@
+# planet-ssh.tmpl - PLANET switches over SSH.
+#
+# syntax_style: planet-ssh
+#
+# Derived from fetchconfig::model::PLANET. These devices drop fast input, so
+# every keystroke is paced with type_delay_ms (the model types char-by-char).
+# After the SSH channel opens the switch presents its own banner/login again.
+# The enable password uses the "enable=" option; set it equal to the login
+# password if the device uses the same.
+# Note: Verified on real hardware.
+
+transport      ssh
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+type_delay_ms  100
+
+prompt_head    ''
+prompt_tail    '# ?$'
+
+# show "show running-config"; override per device with show_cmd=.
+show_cmd       'show running-config'
+
+# the "! System Up Time:" line is rewritten every read
+ignore  /^! System Up Time:/
+# Drop the echoed command, then start at the first real line - some firmware
+# leads with "SYSTEM CONFIG FILE ::= BEGIN" (no "!"), so do NOT anchor on "!".
+skip_first     1
+capture_from   /(?i)^(?!building configuration)(?!\s*$)\S/
+
+# ---- SSH entry: dismiss banner, log in, reach the prompt ----
+state state_login_ssh
+    expect /Press <Enter>/  -> send ""          -> goto state_login_ssh
+    expect /Username: ?$/   -> send user         -> goto state_login_ssh
+    expect /Password: ?$/   -> send_secret pass   -> goto state_login_ssh
+    expect /(\S+)> ?$/      -> send "enable"    -> goto enable
+    expect prompt           -> send "terminal length 0" -> goto show
+
+state enable
+    expect /Password: ?$/   -> send_secret enable -> goto pager
+    expect prompt           -> send "terminal length 0" -> goto show
+
+state pager
+    expect prompt           -> send "terminal length 0" -> goto show
+
+state show
+    expect prompt           -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect prompt           -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done

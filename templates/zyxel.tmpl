@@ -1,0 +1,56 @@
+# zyxel.tmpl - Zyxel switch over telnet.
+#
+# syntax_style: zyxel
+#
+# Derived from fetchconfig::model::Zyxel. These switches emit reversed "\n\r"
+# line endings; strip_ansi cleans the stray CR/NUL. The Perl model also removes
+# all blank lines from the saved file - the template keeps them (cosmetic).
+# Note: Verified on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+strip_ansi     yes
+
+# show "show running-config"; override per device with show_cmd=.
+show_cmd       'show running-config'
+
+# Zyxel echoes the command and prints "Building configuration..." before the
+# config, which itself has NO leading "!" (it starts at e.g. "hostname ...").
+# Drop the echoed command (skip_first), then start the saved config at the
+# first real line - anything that is not blank and not the "Building
+# configuration..." banner - whatever the first keyword is.
+skip_first     1
+capture_from   /(?i)^(?!building configuration)(?!\s*$)\S/
+
+prompt_head    ''
+prompt_tail    '# ?$'
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /Username: ?$/  -> send user        -> goto pw
+    expect /Password: ?$/  -> send_secret pass   -> goto after_login
+
+state pw
+    expect /Password: ?$/  -> send_secret pass   -> goto after_login
+
+state after_login
+    expect /(\S+)[>#] ?$/  -> send "enable"    -> goto enable
+
+state enable
+    expect /Password: ?$/  -> send_secret enable -> goto pager
+    expect prompt          -> send "terminal length 0" -> goto show
+
+state pager
+    expect prompt          -> send "terminal length 0" -> goto show
+
+state show
+    expect prompt          -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect prompt          -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done

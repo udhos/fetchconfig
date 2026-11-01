@@ -883,6 +883,17 @@ def md_to_text(md, width=80):
                 pad = '  ' * depth
                 out += wrap(cur, pad + '- ', pad + '  ')
             continue
+        # "+ " additions list (project changelog convention): emit verbatim so
+        # the literal "+" marker, the hand-wrapped item text and its 2-space
+        # hanging continuation are preserved (a tight run of items stays one-per-
+        # line instead of collapsing into a reflowed paragraph; inline markers
+        # such as a literal "****" mask are left untouched).
+        if re.match(r'^\s*\+\s', ln):
+            while i < n and (re.match(r'^\s*\+\s', src[i])
+                             or (re.match(r'^\s+\S', src[i])
+                                 and not _is_block_start(src[i]))):
+                out.append(src[i].rstrip()); i += 1
+            continue
         # ordered list (absorb continuation lines)
         if re.match(r'^\s*\d+\.\s+', ln):
             num = 1
@@ -1208,6 +1219,13 @@ def render_body(body):
                 i += 1  # skip <!--/exit-list-->
             out.append('<ul class="exit-list">%s</ul>' % ''.join(lis))
             continue
+        # standalone HTML comment (e.g. the TEMPLATE-INDEX markers): emit it
+        # verbatim so it stays an invisible comment instead of an empty <p>. The
+        # specific comment directives above (tabs/flag/exit-list) and the MERMAID
+        # blocks (pre-converted before this) are already handled.
+        if re.match(r'^\s*<!--.*-->\s*$', ln):
+            out.append(ln.strip()); i += 1
+            continue
         # heading ### / #### -- give it an id (slug of its text) so the sidebar
         # nav links resolve to it.
         m = re.match(r'^(#{3,4}) (.+)$', ln)
@@ -1253,6 +1271,17 @@ def render_body(body):
                     cur += ' ' + body[i].strip(); i += 1
                 items.append(cur)
             out.append('<ul>%s</ul>' % ''.join('<li>%s</li>' % inline(x) for x in items))
+            continue
+        # "+ " additions list (project changelog convention): each item is its
+        # own block that keeps the literal "+" marker, so a tight run of items
+        # (no blank lines between them) renders one-per-line like a blank-line-
+        # separated run instead of collapsing into a single paragraph.
+        if re.match(r'^\s*\+ ', ln):
+            while i < n and re.match(r'^\s*\+ ', body[i]):
+                cur = body[i].strip(); i += 1
+                while i < n and re.match(r'^\s+\S', body[i]) and not re.match(r'^\s*[-*+] |^\s*\d+\. ', body[i]):
+                    cur += ' ' + body[i].strip(); i += 1
+                out.append('<p>%s</p>' % inline(cur))
             continue
         # ordered list (absorb indented continuation lines into the item)
         if re.match(r'^\s*\d+\. ', ln):
@@ -1481,7 +1510,8 @@ if _uses_mermaid[0]:
     mermaid_script = (
         u'<script type="module">\n'
         u'  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";\n'
-        u'  mermaid.initialize({ startOnLoad: true, theme: "neutral" });\n'
+        u'  mermaid.initialize({ startOnLoad: true, theme: "neutral",'
+        u' themeVariables: { fontFamily: "\'IBM Plex Sans\', ui-sans-serif, sans-serif", fontSize: "14px" } });\n'
         u'</script>'
     )
 else:

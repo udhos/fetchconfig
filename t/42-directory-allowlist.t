@@ -182,6 +182,11 @@ fetchconfig::model::Detector->init(fetchconfig::Logger->new({ prefix => 't' }));
     # Cisco bare password still masked (not broken by the Hirschmann rule)
     is( fetchconfig::Report::mask_line('password mysecret'),
         'password ****', 'Cisco bare password still masked' );
+    # Zyxel "password encrypted <hash>": keep username + keywords, mask the hash
+    # (the bare-password rule must not mask only the word "encrypted")
+    is( fetchconfig::Report::mask_line('username admin privilege 15 password encrypted ABCD1234EFGH5678'),
+        'username admin privilege 15 password encrypted ****',
+        'Zyxel "password encrypted" hash masked, username kept' );
 
     # custom report_hide: keyword kept via fixed-width lookbehind
     fetchconfig::Report::set_custom_hide('(?<=wpa-passphrase )\\S+');

@@ -216,6 +216,29 @@ sub chat_login {
 sub prompt_head { '\(' }
 sub prompt_tail { '\)\s?#$' }
 
+# Change: 2026-10-29a - config_equal canonicalises the re-salted :v1: password
+# field so salt churn is no longer a false change (see note below).
+#
+# Hirschmann Classic firmware re-serialises the
+#   users passwd <user> :v1:<hash>:
+# field on every "show running-config all": the leading 18 hex characters
+# (9 bytes) are derived from the password and are stable, the trailing hex is
+# a random salt regenerated on each read. Without this, every backup compares
+# as changed and changes_only never discards one. Collapse just the salt before
+# the comparison (keeping the password-derived prefix), so a real password
+# change - which alters the prefix - is still detected, while salt rotation is
+# not. The SAVED backup is byte-exact (the real hash is kept); only this
+# in-memory comparison copy is canonicalised. The 18-hex boundary is empirical
+# (firmware L2E-06.0.03) and scoped to ":v1:", so :v2:/HiOS schemes are
+# untouched; re-derive the length if another scheme differs.
+my $V1_SALT_CANON = [ qr/(?<=:v1:[0-9a-fA-F]{18})[0-9a-fA-F]+(?=:)/, '<v1-salt>' ];
+
+sub config_equal {
+    my ($self, $prev_dir, $prev_file, $curr_dir, $curr_file) = @_;
+    return $self->config_equal_canon($prev_dir, $prev_file, $curr_dir, $curr_file,
+                                     [ $V1_SALT_CANON ], undef);
+}
+
 sub chat_fetch {
     my ($self, $t, $dev_id, $dev_host, $prompt, $fetch_timeout, $show_cmd, $conf_ref) = @_;
 

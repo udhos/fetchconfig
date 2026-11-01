@@ -383,6 +383,49 @@ Each device's diff is wrapped in an **armored** `<div class="device-diff" data-d
 
 **Report directory setup.** So that fetchconfig-web (running as the web server's user/group) can read and manage the reports, set the report directory's group to the web server's group and set the setgid bit, e.g. `chgrp <webgroup> /var/www/fetchconfig/reports` and `chmod g+s /var/www/fetchconfig/reports`. With `g+s`, each report file inherits the directory's group automatically — fetchconfig needs no special privileges and does not change ownership itself.
 
+## Backup-history database (optional) {#backup-history} {nav: Backup-history DB}
+
+Record each run's backup health and config-change history to a PostgreSQL database, for a fetchconfig-web dashboard that scales to thousands of devices without walking the repository on every page. OFF by default and entirely optional: with no `db:` line fetchconfig stays file-based and `DBI`/`DBD::Pg` are never loaded. The per-device [`.status`](#status-file) file is unchanged; the database is a separate, additional sink.
+
+The schema and the writer login role are created and owned by fetchconfig-web (run `fetchconfig-web-dbsetup.pl --upgrade`, which creates the login role and grants it the required `SELECT`/`INSERT`/`UPDATE`). The engine only writes rows: it never issues DDL and never creates roles. PostgreSQL 8.2 or newer is supported (no `ON CONFLICT`/`MERGE`/`jsonb` is used).
+
+### 1. Enable it
+
+Add a single `db:` line to the default options section. It is fleet-wide, not a per-device option:
+
+```
+#db:	key=value,...
+db:	db_inst=fetchconfig,db_user=fetchconfig_dashboard,db_pass=secret,db_host=db.acme.com
+```
+
+| Key | Requirement | Description |
+|---|---|---|
+| `db_inst` | Mandatory | Database (instance) name. |
+| `db_user` | Mandatory | Writer login role. Conventionally `fetchconfig_dashboard`. |
+| `db_pass` | Optional | Its password. Normal device_table quoting, so a value containing a comma or equals sign must be double-quoted (`db_pass="a,b=c"`). Never written to the log. |
+| `db_host` | Mandatory | `host` or `host:port`. IPv6 uses brackets to carry a port, `[2001:db8::1]:5432`; a bare `2001:db8::1` is the host at the default port (5432). |
+| `db_connect_timeout` | Optional | Seconds to wait for the connection (default 5). Kept short so a dead database can never stall a run. |
+| `db_sslmode` | Optional | libpq sslmode: `disable`, `require` or `verify-full`. Default `disable` (the DB is normally local on the same box). Use `require` or stronger when the database is across a WAN. |
+| `db_max_outbox_days` | Optional | Spool (outbox) retention in days (default 90). See below. |
+
+`db:` may be repeated; later values overwrite earlier ones for the same key (same rule as `default:` and `email:`). The device_table holds `db_pass`, so it must stay mode 0600 (see [Security notes](#security)).
+
+### 2. How it writes (store-and-forward)
+
+Nothing blocks the run, and an unreachable database never costs a backup:
+
+- During the run nothing touches the database. Each run appends its records to a per-repository write-ahead spool file, `<repository>/.db-<pid>-<timestamp>`.
+- At the end of the run, in the parent and whether or not `email:` is configured, the spool files are drained into the database one transaction per file, oldest first. A file is deleted only after its transaction commits.
+- If the database is unreachable the run still completes normally; the spool files accumulate and are drained on a later run. Spool files older than `db_max_outbox_days` are dropped (after that long an outage, the on-disk backups and the `.status` files remain the source of truth).
+
+All writes use DBI placeholders; the append-only tables use `INSERT ... WHERE NOT EXISTS` and the per-device current row is UPDATE-else-INSERT, so replaying a spool file is idempotent.
+
+### 3. What it records
+
+Three tables, all owned by fetchconfig-web: a dense `backup_runs` (one row per device per run), a sparse `backup_versions` (one row per retained backup, carrying its sha1), and `backup_current` (one row per device: its latest state and last-good backup). All timestamps are stored as the box's local wall-clock time, so every column is consistent on a single-host install; fetchconfig-web renders them as-is, with no timezone conversion.
+
+Every run (with or without `email:`) logs a `-----[DB writer]-----` section with the DB-history result: `all N record(s) written; outbox empty`, or `INCOMPLETE - M run(s) still pending (oldest <ts>); will retry next run` when the database was unreachable and the records were spooled (connect/drain warnings appear in the same section). Nothing is logged when no `db:` is set. When `email:` is configured, the summary mail shows the result as a status box inside the card: green when everything was written, red when records are still buffered for a later run, and grey (`history export not configured`) when no `db:` is set.
+
 ## Retrieving a previously backed-up config {#retrieving} {nav: Retrieving backups}
 
 In addition to fetching configuration from devices, fetchconfig.pl can retrieve a configuration file already saved in the repository, without contacting the device again — useful for scripting: dumping the latest config to stdout, comparing today's config against yesterday's, or pulling an older backup by its position in the history.
@@ -610,7 +653,7 @@ Removes device lock files older than `N` days (by mtime) from the lock directory
 #### Generic options {.flag-group}
 
 <!--flag: -v, --version | version-->
-Prints just the program version to stdout (one line, e.g. `9.73`) and exits with status 0. Nothing else is written — no banner, nothing on stderr — so a script can parse it safely.
+Prints just the program version to stdout (one line, e.g. `9.74`) and exits with status 0. Nothing else is written — no banner, nothing on stderr — so a script can parse it safely.
 <!--/flag-->
 
 <!--flag: -?, -h, --help | help-->
@@ -697,9 +740,9 @@ Beyond the options above, each model recognizes its own subset of `user` / `pass
 
 `timeout` is shown as optional for every model because it has a built-in default: if it is set neither on the device line nor on the model’s `default:` line, fetchconfig uses **30 seconds** and logs `Using 30s fetch timeout because the timeout was not set for this model` at debug level. Before v9.55 an unset timeout fell through to the underlying library’s own default (10 s for telnet/SSH, 180 s for the web-UI models), so set it explicitly for anything but a lab test.
 
-[^0]: `generic` is the template-driven model: `model=` names the template and is mandatory (it may be set on a `default: generic` line so devices sharing one template need not repeat it, and a device line can still override it), `transport` is `ssh`/`telnet`, and it also recognizes `banner_timeout`, `fetch_delay`, `max_visits`, `strip_ansi`, `prompt_head`, `prompt_tail`, `ssh_extra_opts` and `template_dir` (most also settable in the template; the `prompt_settle` directive was removed in v9.72 — it was parsed but never used by the generic engine, and the SSH-model option `prompt_settle_ms` is a different option that is unaffected). `user`/`pass` are mandatory for SSH. See [Template-driven model](#template-model) and the README DEVICE OPTIONS section. **`debug` (optional, boolean) is available for every model** (since v9.71); the per-model notes below only describe what its `<dev_id>.debug` file contains for that transport (raw telnet/SSH session, HTTP request/response, or SNMP+TFTP), not which models support it.
+[^0]: `generic` is the template-driven model: `model=` names the template and is mandatory (it may be set on a `default: generic` line so devices sharing one template need not repeat it, and a device line can still override it), `transport` is `ssh`/`telnet`, and it also recognizes `banner_timeout`, `fetch_delay`, `max_visits`, `strip_ansi`, `prompt_head`, `prompt_tail`, `ssh_extra_opts` `prompt_settle_ms`, `type_delay_ms`, `show_cmd` and `template_dir` (most also settable in the template; the no-op `prompt_settle` directive was removed in v9.72, while the real `prompt_settle_ms` and `type_delay_ms` settle/typing controls were added to the generic engine in v9.74, and `send show_cmd` resolves `show_cmd`). `user`/`pass` are mandatory for SSH. See [Template-driven model](#template-model) and the README DEVICE OPTIONS section. **`debug` (optional, boolean) is available for every model** (since v9.71); the per-model notes below only describe what its `<dev_id>.debug` file contains for that transport (raw telnet/SSH session, HTTP request/response, or SNMP+TFTP), not which models support it.
 [^1]: `parks` also recognizes `banner_timeout` (optional) — overrides the timeout used to wait for the initial `login:` prompt, since the Parks 209R can take many seconds to issue it.
-[^2]: `hirschmann`'s `enable` is optional because that firmware's `enable` command doesn't ask for a password; it's read defensively in case another firmware version does. `hirschmann` also recognizes `show_cmd` (optional), same as `cisco-ios` below.
+[^2]: `hirschmann`'s `enable` is optional because that firmware's `enable` command doesn't ask for a password; it's read defensively in case another firmware version does. `hirschmann` also recognizes `show_cmd` (optional), same as `cisco-ios` below. The re-salted `users passwd <user> :v1:<hash>:` field — leading 18 hex (9 bytes) password-derived and stable, trailing hex a random salt regenerated on every read — is canonicalised before the `changes_only` comparison: the salt is collapsed and the prefix kept, so salt churn alone no longer forces a save while a real password change (which alters the prefix) still does. The saved backup keeps the exact hash; the report/e-mail masking is unchanged. The generic model offers the same via the template directive `canon /PATTERN/REPLACEMENT/`.
 [^3]: `zyxel`'s `enable` is optional: one real login sample went straight to the privileged prompt with no separate "enable" step (account already had full privilege), while another needed "enable" plus its own password — both are handled, so this is read defensively rather than assumed either way. `zyxel` also recognizes `show_cmd` (optional, same as `cisco-ios`) and `debug` (optional, boolean — records the raw telnet session to `<repository>/<dev_id>.debug` when set to `on`, same convention as `procurve`/`procurve-ssh`).
 [^4]: `planet-ssh`: `user`/`pass` serve the SSH authentication and, on firmware that shows one, the switch’s own `Username:`/`Password:` dialog that follows it. `enable` is optional and only used if the account lands on the `>` prompt; it defaults to the login password. The `! System Up Time:` header line of the running-config is kept in the backup but ignored by `changes_only`. Also recognizes `banner_timeout`, `show_cmd`, `debug` (to `<repository>/<dev_id>.debug`: first the ssh client’s verbose account of the SSH authentication, then the raw switch session — the SSH login itself is not switch output, so it can only appear as those ssh log lines) and `type_delay` (milliseconds between typed characters, default 100 — the switch does not reliably accept a burst of input right after a prompt, so every line is typed character by character; 0 disables the pauses).
 [^5]: `aruba-cx-ssh`: `user` must be an administrator (AOS-CX has no `enable`; an operator’s `>` prompt is an error). Also works for HPE Aruba Networking AOS-8 wireless access points (confirmed on an AP model 515, AOS-8 8.13.2.2). Pager disabled with `no page`; the `Current configuration:` header is dropped. Also recognizes `banner_timeout`, `show_cmd`, `prompt_settle_ms` (idle-wait before matching the prompt, default 150 ms — the prompt token allows spaces and non-ASCII, and the wait keeps a banner line ending in “#” from being taken for the prompt) and `debug` (same debug file layout as `planet-ssh`).

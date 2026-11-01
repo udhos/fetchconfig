@@ -1,0 +1,45 @@
+# dmswitch.tmpl - Datacom DmSwitch over telnet.
+#
+# syntax_style: cisco-ios
+#
+# Derived from fetchconfig::model::DmSwitch. No pager-disable command; a
+# --More-- interrupt drains the pager if it appears.
+# Note: DRAFT - please verify on real hardware.
+
+transport      telnet
+banner_timeout 30
+fetch_timeout  120
+max_visits     8
+
+show_cmd       'show run'
+
+capture_from   /^!/
+interrupt /--More--/ -> send_nolf " "
+
+prompt_head    ''
+prompt_tail    '#$'
+
+# ---- telnet entry: interactive login ----
+state state_login_telnet
+    expect /login: ?$/    -> send user        -> goto pw
+    expect /Password: ?$/ -> send_secret pass   -> goto after_login
+
+state pw
+    expect /Password: ?$/ -> send_secret pass   -> goto after_login
+
+state after_login
+    expect /(\S+)[>#]$/   -> send "enable"    -> goto enable
+
+state enable
+    expect /Password: ?$/ -> send_secret enable -> goto show
+    expect prompt         -> send show_cmd      -> goto capture
+
+state show
+    expect prompt         -> send show_cmd      -> goto capture
+
+state capture
+    capture_start
+    expect prompt         -> capture_stop       -> goto logout
+
+state logout
+    send "exit" -> done

@@ -229,6 +229,66 @@ A device whose recipient was overridden this way is left out of no one's mail: i
 
 3. The "Changes" column only reflects a changed-vs-previous comparison for devices where the run already performs one (changes_only=1, or on_fetch_run/on_fetch_cat set); for other devices it is reported as "n/a" -- no extra repository scan is performed just for this report.
 
+## Backup-History Database (optional)
+
+fetchconfig can record each run's backup health and config-change history to a
+PostgreSQL database, for a dashboard that scales to thousands of devices without
+walking the repository on every page. The feature is OFF by default and entirely
+optional: with no "db:" line, fetchconfig stays file-based and DBI/DBD::Pg are
+never loaded. The per-device ".status" file is unchanged; the database is a
+separate, additional sink.
+
+The database schema and the writer role are created and owned by fetchconfig-web
+(run "fetchconfig-web-dbsetup.pl --upgrade", which also creates the login role and
+grants it the required SELECT/INSERT/UPDATE). The engine only writes rows; it
+never issues DDL and never creates roles.
+
+Enable it with a single "db:" line in the DEFAULT OPTIONS SECTION (fleet-wide; it
+is not a per-device option):
+
+```
+#db:    key=value,...
+db:     db_inst=fetchconfig,db_user=fetchconfig_dashboard,db_pass=secret,db_host=db.acme.com
+```
+
+Keys:
+
+- `db_inst`  -- database (instance) name. Required.
+- `db_user`  -- the writer login role (default name "fetchconfig_dashboard"). Required.
+- `db_pass`  -- its password. Follows the normal device_table quoting, so a value
+                containing a comma or equals sign must be double-quoted
+                (db_pass="a,b=c"). Never written to the log.
+- `db_host`  -- "host" or "host:port". IPv6 is supported: use brackets to add a
+                port, "[2001:db8::1]:5432"; a bare "2001:db8::1" is the host at the
+                default port. Required.
+- `db_connect_timeout` -- seconds to wait for the connection (default 5). Kept
+                short so a dead database can never stall a run.
+- `db_sslmode` -- libpq sslmode (disable | require | verify-full), default
+                "disable" (the DB is normally local on the same box). Use
+                "require" (or stronger) when the database is across a WAN.
+- `db_max_outbox_days` -- outbox retention, default 90 (see below).
+
+How it writes (store-and-forward, never blocking):
+
+- During the run, nothing touches the database. Each run appends its records to a
+  per-repository write-ahead spool file ("<repository>/.db-<pid>-<timestamp>").
+- At the end of the run (in the parent, regardless of whether e-mail is
+  configured) the spool files are drained into the database in one transaction
+  each, oldest first. A file is deleted only after its transaction commits.
+- If the database is unreachable, the run still completes normally; the spool
+  files accumulate and are drained on a later run. Spool files older than
+  "db_max_outbox_days" are dropped (after that long an outage, the on-disk backups
+  and the ".status" files remain the source of truth).
+
+Every run (with or without "email:") logs a "-----[DB writer]-----" section with
+the DB-history result: "all N record(s) written; outbox empty", or "INCOMPLETE -
+M run(s) still pending (oldest <ts>); will retry next run" when the database was
+unreachable and the records were spooled (any connect/drain warnings appear in
+the same section). Nothing is logged when no "db:" is configured. When "email:"
+is configured, the summary mail shows the result as a status box inside the card:
+green when everything was written, red when records are still buffered for a
+later run, and grey ("history export not configured") when no "db:" is set.
+
 ## Change Reports
 
 fetchconfig can produce a change report after a run: an HTML page summarising which devices changed, with a coloured diff per changed device, plus up to a configurable number of diffs embedded in the summary e-mail. The report is written to an allowlisted "report" directory (see DIRECTORY ALLOWLIST) that fetchconfig-web presents (view/download/delete); it is NOT meant to be served to users directly. On native Windows the per-device diffs are disabled (they need an external "diff"); changed devices still appear, marked "diff unavailable" (see WINDOWS LIMITATIONS). Options are set on "email:" lines:

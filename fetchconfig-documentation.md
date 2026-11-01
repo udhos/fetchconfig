@@ -383,6 +383,49 @@ Each device's diff is wrapped in an **armored** `<div class="device-diff" data-d
 
 **Report directory setup.** So that fetchconfig-web (running as the web server's user/group) can read and manage the reports, set the report directory's group to the web server's group and set the setgid bit, e.g. `chgrp <webgroup> /var/www/fetchconfig/reports` and `chmod g+s /var/www/fetchconfig/reports`. With `g+s`, each report file inherits the directory's group automatically — fetchconfig needs no special privileges and does not change ownership itself.
 
+## Backup-history database (optional) {#backup-history} {nav: Backup-history DB}
+
+Record each run's backup health and config-change history to a PostgreSQL database, for a fetchconfig-web dashboard that scales to thousands of devices without walking the repository on every page. OFF by default and entirely optional: with no `db:` line fetchconfig stays file-based and `DBI`/`DBD::Pg` are never loaded. The per-device [`.status`](#status-file) file is unchanged; the database is a separate, additional sink.
+
+The schema and the writer login role are created and owned by fetchconfig-web (run `fetchconfig-web-dbsetup.pl --upgrade`, which creates the login role and grants it the required `SELECT`/`INSERT`/`UPDATE`). The engine only writes rows: it never issues DDL and never creates roles. PostgreSQL 8.2 or newer is supported (no `ON CONFLICT`/`MERGE`/`jsonb` is used).
+
+### 1. Enable it
+
+Add a single `db:` line to the default options section. It is fleet-wide, not a per-device option:
+
+```
+#db:	key=value,...
+db:	db_inst=fetchconfig,db_user=fetchconfig_dashboard,db_pass=secret,db_host=db.acme.com
+```
+
+| Key | Requirement | Description |
+|---|---|---|
+| `db_inst` | Mandatory | Database (instance) name. |
+| `db_user` | Mandatory | Writer login role. Conventionally `fetchconfig_dashboard`. |
+| `db_pass` | Optional | Its password. Normal device_table quoting, so a value containing a comma or equals sign must be double-quoted (`db_pass="a,b=c"`). Never written to the log. |
+| `db_host` | Mandatory | `host` or `host:port`. IPv6 uses brackets to carry a port, `[2001:db8::1]:5432`; a bare `2001:db8::1` is the host at the default port (5432). |
+| `db_connect_timeout` | Optional | Seconds to wait for the connection (default 5). Kept short so a dead database can never stall a run. |
+| `db_sslmode` | Optional | libpq sslmode: `disable`, `require` or `verify-full`. Default `disable` (the DB is normally local on the same box). Use `require` or stronger when the database is across a WAN. |
+| `db_max_outbox_days` | Optional | Spool (outbox) retention in days (default 90). See below. |
+
+`db:` may be repeated; later values overwrite earlier ones for the same key (same rule as `default:` and `email:`). The device_table holds `db_pass`, so it must stay mode 0600 (see [Security notes](#security)).
+
+### 2. How it writes (store-and-forward)
+
+Nothing blocks the run, and an unreachable database never costs a backup:
+
+- During the run nothing touches the database. Each run appends its records to a per-repository write-ahead spool file, `<repository>/.db-<pid>-<timestamp>`.
+- At the end of the run, in the parent and whether or not `email:` is configured, the spool files are drained into the database one transaction per file, oldest first. A file is deleted only after its transaction commits.
+- If the database is unreachable the run still completes normally; the spool files accumulate and are drained on a later run. Spool files older than `db_max_outbox_days` are dropped (after that long an outage, the on-disk backups and the `.status` files remain the source of truth).
+
+All writes use DBI placeholders; the append-only tables use `INSERT ... WHERE NOT EXISTS` and the per-device current row is UPDATE-else-INSERT, so replaying a spool file is idempotent.
+
+### 3. What it records
+
+Three tables, all owned by fetchconfig-web: a dense `backup_runs` (one row per device per run), a sparse `backup_versions` (one row per retained backup, carrying its sha1), and `backup_current` (one row per device: its latest state and last-good backup). All timestamps are stored as the box's local wall-clock time, so every column is consistent on a single-host install; fetchconfig-web renders them as-is, with no timezone conversion.
+
+Every run (with or without `email:`) logs a `-----[DB writer]-----` section with the DB-history result: `all N record(s) written; outbox empty`, or `INCOMPLETE - M run(s) still pending (oldest <ts>); will retry next run` when the database was unreachable and the records were spooled (connect/drain warnings appear in the same section). Nothing is logged when no `db:` is set. When `email:` is configured, the summary mail shows the result as a status box inside the card: green when everything was written, red when records are still buffered for a later run, and grey (`history export not configured`) when no `db:` is set.
+
 ## Retrieving a previously backed-up config {#retrieving} {nav: Retrieving backups}
 
 In addition to fetching configuration from devices, fetchconfig.pl can retrieve a configuration file already saved in the repository, without contacting the device again — useful for scripting: dumping the latest config to stdout, comparing today's config against yesterday's, or pulling an older backup by its position in the history.

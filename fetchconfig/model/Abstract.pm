@@ -33,10 +33,40 @@ use Fcntl qw(:DEFAULT :flock);
 # once (0 where unavailable, e.g. MSWin32); on Unix this is the real flag, so
 # behaviour is unchanged.
 my $O_NOFOLLOW = ($^O eq 'MSWin32') ? 0 : (eval { Fcntl::O_NOFOLLOW() } // 0);
-use Digest::SHA qw(sha256_hex);
+use Digest::SHA qw(sha256_hex sha1_hex);
+use Time::Local qw(timegm);
 
 ####################################
 # Implement model::Abstract - Begin
+
+# Backup timestamp as a "local wall-clock epoch", the single source for
+# backup_versions.file_timestamp. The local date/time parts are encoded as
+# seconds with timegm (i.e. treated as if they were UTC), NOT a true UTC instant.
+# fetchconfig and its fetchconfig-web run on ONE box in ONE timezone and store
+# and display the box's local time throughout, so the DB values are directly the
+# wall-clock seen in the filenames, with no timezone conversion on either side.
+# Save and expiry derive it from the SAME parts (get_timestr at save;
+# parse_backup_filename at expiry), so the keyed DB row matches. The filename tz
+# token is ignored (on AIX it is a bare zone NAME, not an offset); and because
+# timegm does not consult the host zone, the value is stable even if the host's
+# tz setting ever changes. Returns undef on malformed parts.
+sub backup_epoch_from_parts {
+    my ($year, $mon, $mday, $hour, $min, $sec) = @_;
+    return undef unless defined($year) && defined($mon) && defined($mday)
+                     && defined($hour) && defined($min) && defined($sec);
+    my $epoch = eval { timegm($sec, $min, $hour, $mday, $mon - 1, $year) };
+    return defined($epoch) ? $epoch : undef;
+}
+
+# Epoch of a backup from its filename (dev_id.run.YYYYMMDD.HHMMSS[tz][suffix]).
+# Used at expiry, where only the filename is known. Returns undef if the name
+# does not parse.
+sub backup_epoch_from_filename {
+    my ($class, $dev_id, $file) = @_;
+    my ($ts) = parse_backup_filename($dev_id, $file);
+    return undef unless defined($ts) && $ts =~ /^(\d{4})(\d{2})(\d{2})\.(\d{2})(\d{2})(\d{2})$/;
+    return backup_epoch_from_parts($1, $2, $3, $4, $5, $6);
+}
 #
 
 sub label {
@@ -1054,6 +1084,23 @@ sub dump_config {
 	return undef;
     }
 
+    # Metadata for the optional DB history writer (ignored by everything else:
+    # .status and the report never use it). sha1 over the exact bytes written;
+    # file_epoch from the same date/time parts that formed the filename. Stashed
+    # on the model instance (which is reused across devices of the same model),
+    # so fetch_device clears it before each fetch and reads it only on success.
+    {
+	my $sha = Digest::SHA->new(1);
+	$sha->add("$_\n") for @$conf_ref;
+	$self->{saved} = {
+	    dir        => $dir_path,
+	    file       => $file,
+	    path       => $file_path,
+	    sha1       => $sha->hexdigest,
+	    file_epoch => backup_epoch_from_parts($year, $mon, $day, $hour, $min, $sec),
+	};
+    }
+
     ($dir_path, $file);
 }
 
@@ -1429,6 +1476,11 @@ sub acquire_device_lock {
 sub purge_ancient {
     my ($self, $dev_id, $dev_opt_tab) = @_;
 
+    # Expired-backup epochs for the optional DB history writer; fetch_device
+    # reads this after purge_ancient and emits the expire events. Cleared each
+    # call (the model instance is reused across devices of the same model).
+    delete $self->{expired};
+
     my $dev_keep = $self->dev_option($dev_opt_tab, "keep");
     if (!defined($dev_keep)) {
 	$self->log_error("dev=$dev_id: unspecified maximum of config files to keep");
@@ -1463,6 +1515,12 @@ sub purge_ancient {
 	$self->log_debug("dev=$dev_id: expiring: $dir/$file");
 
 	$self->config_discard($dir, $file);
+
+	# Record the epoch (same key the save-time version row used) so the DB
+	# writer can mark that backup_versions row expired. Keyed by filename,
+	# so it matches regardless of which run created it.
+	my $epoch = $self->backup_epoch_from_filename($dev_id, $file);
+	push @{ $self->{expired} }, $epoch if defined($epoch);
     }
 }
 

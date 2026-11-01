@@ -532,12 +532,12 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.74</span>
+      <span class="pill">v9.75</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
     <nav>
-<div class="nav-group"><div class="nav-group-label">Runtime dependencies by feature (Perl core vs CPAN)</div><a href="#base-always----core-except-nettelnet">Base (always) -- core except Net::Telnet</a><a href="#e-mail-summary-mailer----all-core">E-mail summary (Mailer) -- all core</a><a href="#ssh-models-cisco-ios-ssh-cisco-asa-ssh-comware-ssh-procurve-ssh-planet-ssh-aruba-cx-ssh-nexus-ssh-mediant-sbc">SSH models (cisco-ios-ssh, cisco-asa-ssh, comware-ssh, procurve-ssh, planet-ssh, aruba-cx-ssh, nexus-ssh, mediant-sbc)</a><a href="#web-ui-models-tplink-web-sg105e-procurve-web-1700">Web-UI models (tplink-web-sg105e, procurve-web-1700)</a><a href="#snmptftp-model-procurve-snmp">SNMP+TFTP model (procurve-snmp)</a></div>
+<div class="nav-group"><div class="nav-group-label">Runtime dependencies by feature (Perl core vs CPAN)</div><a href="#base-always----core-except-nettelnet">Base (always) -- core except Net::Telnet</a><a href="#e-mail-summary-mailer----all-core">E-mail summary (Mailer) -- all core</a><a href="#ssh-models-cisco-ios-ssh-cisco-asa-ssh-comware-ssh-procurve-ssh-planet-ssh-aruba-cx-ssh-nexus-ssh-mediant-sbc">SSH models (cisco-ios-ssh, cisco-asa-ssh, comware-ssh, procurve-ssh, planet-ssh, aruba-cx-ssh, nexus-ssh, mediant-sbc)</a><a href="#web-ui-models-tplink-web-sg105e-procurve-web-1700">Web-UI models (tplink-web-sg105e, procurve-web-1700)</a><a href="#backup-history-db-writer-optional-db">Backup-history DB writer (optional, &quot;db:&quot;)</a><a href="#snmptftp-model-procurve-snmp">SNMP+TFTP model (procurve-snmp)</a></div>
 <div class="nav-group"><div class="nav-group-label">OS packages by feature (RHEL 9 / SLES 15 / Ubuntu 24.04 LTS)</div><a href="#base-perl-package-per-distro">Base perl package per distro</a></div>
 <div class="nav-group"><div class="nav-group-label">AIX 7.2</div><a href="#option-a----system-perl-usrbinperl-perlrte-528">Option A -- system Perl (/usr/bin/perl, perl.rte 5.28)</a><a href="#option-b----aix-toolbox-perl-dnf-perl-530">Option B -- AIX Toolbox Perl (dnf perl, 5.30+)</a></div>
 <div class="nav-group"><a href="#install-commands-layered">Install commands (layered)</a></div>
@@ -579,6 +579,10 @@
 <h3 id="web-ui-models-tplink-web-sg105e-procurve-web-1700">Web-UI models (tplink-web-sg105e, procurve-web-1700)</h3>
 <div class="table-wrap"><table><thead><tr><th>Module</th><th>5.26</th><th>5.28</th><th>5.40</th><th>Used for</th></tr></thead><tbody><tr><td><code>LWP::UserAgent</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>HTTP client</td></tr><tr><td><code>HTTP::Request::Common</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>request construction</td></tr></tbody></table></div>
 <p>Pulls in (all CPAN): HTTP::Request, HTTP::Response, HTTP::Headers, HTTP::Message, HTTP::Date, HTTP::Cookies, URI, LWP::Protocol, Try::Tiny (HTTP::Tiny is core). HTTPS additionally needs <code>LWP::Protocol::https</code>, <code>IO::Socket::SSL</code>, <code>Net::SSLeay</code> (all CPAN).</p>
+<h3 id="backup-history-db-writer-optional-db">Backup-history DB writer (optional, &quot;db:&quot;)</h3>
+<p>Loaded only when a &quot;db:&quot; line is set in the device table (default: level). With no &quot;db:&quot; the modules are never required and fetchconfig stays file-based.</p>
+<div class="table-wrap"><table><thead><tr><th>Module</th><th>5.26</th><th>5.28</th><th>5.40</th><th>Used for</th></tr></thead><tbody><tr><td><code>DBI</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>database access layer</td></tr><tr><td><code>DBD::Pg</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>PostgreSQL driver</td></tr></tbody></table></div>
+<p>An old <code>DBD::Pg</code> talks to an old server fine; the writer targets PostgreSQL 8.2+. The schema and the writer role are created by fetchconfig-web, not the engine.</p>
 <h3 id="snmptftp-model-procurve-snmp">SNMP+TFTP model (procurve-snmp)</h3>
 <div class="table-wrap"><table><thead><tr><th>Module</th><th>5.26</th><th>5.28</th><th>5.40</th><th>Used for</th></tr></thead><tbody><tr><td><code>Net::SNMP</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>SNMP (arm the TFTP export)</td></tr><tr><td><code>Net::TFTP</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>fetch the exported file</td></tr></tbody></table></div>
 <p>Net::SNMP&#x27;s own prerequisites: Carp, Errno, Exporter, IO::Socket, Math::BigInt, Digest::MD5 are core. SNMPv3 is loaded at runtime only: <code>Crypt::DES</code> (DES privacy) and <code>Digest::HMAC</code> (HMAC auth) are CPAN; AES privacy additionally needs <code>Crypt::Rijndael</code> (CPAN). SNMP v1/v2c load none of them. Net::SNMP 6.x uses core <code>Digest::SHA</code> for SNMPv3 SHA auth, so the old <code>Digest::SHA1</code> module is not required (and is no longer packaged on Debian/Ubuntu). <code>Crypt::DES</code>/<code>Crypt::Rijndael</code> are loaded by name -- CryptX does not provide those namespaces and cannot substitute for them.</p>
@@ -702,7 +706,8 @@ apt install libio-socket-ssl-perl libnet-ssleay-perl</code></pre>
 + web models HTTPS   LWP::Protocol::https, IO::Socket::SSL, Net::SSLeay
 + procurve-snmp      Net::SNMP, Net::TFTP           (+ Crypt::DES, Digest::HMAC,
                                                      Crypt::Rijndael for SNMPv3)
-+ SMTP over TLS      IO::Socket::SSL, Net::SSLeay</code></pre>
++ SMTP over TLS      IO::Socket::SSL, Net::SSLeay
++ DB history (db:)   DBI, DBD::Pg</code></pre>
 </section>
 
     </div>

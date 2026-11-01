@@ -1,6 +1,33 @@
 fetchconfig -- Changes
 ======================
 
+9.75
+====
+
++ Optional backup-history DB writer (engine side), inert without a "db:" line
+  (default: level; DBI/DBD::Pg load only then). Each run records health (one row
+  per run) and change history (one row per saved backup, with sha1) to PostgreSQL
+  8.2+ via a per-repository write-ahead spool (<repository>/.db-*) drained one
+  transaction per file at end of run: the fetch path never waits on the DB, and an
+  outage is non-fatal (records buffer and replay). ".status" is unchanged; the DB
+  is a separate sink.
++ Each run logs a "-----[DB writer]-----" section with the result ("all N
+  record(s) written; outbox empty", or INCOMPLETE with the pending count); the
+  summary mail shows it as a status box in the card (green written / red
+  incomplete / grey when no "db:" is set). db: keys: db_inst, db_user, db_pass,
+  db_host (IPv6-capable), db_connect_timeout (5), db_sslmode (disable),
+  db_max_outbox_days (90).
++ Summary mail renders correctly in Outlook (Word engine): the report button is a
+  VML button and the status pill a table-cell badge, both behind [if mso] blocks
+  (normal styled HTML for every other client). The summary tables use soft zebra
+  shading with no visible cell borders (cleaner, and it removes the 1px row seam
+  Word drew between bordered rows); all clients render it the same. The HTML part
+  is now sent quoted-printable (was 8bit) so an MTA can never fold a long
+  table-row line past the 998-octet SMTP limit and corrupt the markup.
++ Schema, writer role and grants are owned by fetchconfig-web
+  (fetchconfig-web-dbsetup.pl --upgrade); the engine only writes, never DDL. See
+  README ("db:") and DEVELOPER-GUIDE.
+
 9.74
 ====
 
@@ -29,6 +56,10 @@ those marked "# Note: Verified on real hardware." have already been checked.
   (templates/<name>.md/.html, Mermaid with an ASCII twin and a states table),
   generated from the .tmpl by tools/gen-template-docs.pl (run by "make doc"),
   indexed under "Model state machines" in README.template_engine.
++ templates/integrity.sha1: a SHA-1 manifest of the shipped templates, generated
+  by tools/integrity.pl during "make doc" (core Digest::SHA, so it works on AIX),
+  so a viewer can tell a stock template from an edited or user-added one.
+  Informational only; it does not affect template use.
 
 9.73
 ====

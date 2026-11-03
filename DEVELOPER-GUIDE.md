@@ -19,7 +19,7 @@ remain authoritative for their topics and are referenced from here:
 Where this guide found those documents lacking a detail an extender needs,
 that detail is added here and noted as such.
 
-Target version: 9.74. Perl floor: 5.26.
+Target version: 9.77. Perl floor: 5.26.
 
 ---
 
@@ -116,12 +116,17 @@ For each device, `fetch_device()` performs, in order:
    show-config command, and returns the written backup path (or undef on
    failure). On `debug=on`, the session is captured to `<dev_id>.debug`.
 8. **Compare**: compare the just-written config against the previous latest
-   backup located in step 2 (`config_equal`, ignoring volatile lines). If
-   unchanged, **discard** the just-written file (`config_discard`) so only
-   changes are kept.
-9. **Expire**: `purge_ancient` deletes the oldest backups beyond `keep=N`.
-10. **Record**: `Mailer::record_result(...)` logs the per-device outcome.
-11. **on_fetch_run**: if set, run the external program (shell-free; section 9).
+   backup located in step 2 (`config_equal`, ignoring volatile lines) to decide
+   changed / unchanged / initial. No file is removed at this point.
+9. **Record**: `Mailer::record_result(...)` logs the per-device outcome and
+   writes the `.status` file.
+10. **on_fetch_run / on_fetch_cat**: if set, run the external program (shell-free;
+    section 9) and/or copy the config to stdout. Both run regardless of whether
+    the config changed.
+11. **Discard**: only if `changes_only` is set *and* the config was unchanged,
+    delete the just-written file (`config_discard`) so only real changes are kept.
+12. **Expire**: `purge_ancient` deletes the oldest backups beyond `keep=N`; each
+    backup it rotates out emits a DB expire event (section 14).
 
 The lock filehandle is held in a lexical for the whole of `fetch_device`, so
 it releases automatically when the sub returns, by any path.
@@ -146,11 +151,12 @@ outcome.
        login (print_secret), open_*_debug_file, show-config,
        dump_config() -> write backup (O_EXCL)
      -- fetch failed -> record_result(failed), return
-   config_equal(latest, new):
-       unchanged -> config_discard(new); record_result(success,unchanged);
-                    purge_ancient(); on_fetch_run?; return
-       changed   -> record_result(success,changed); purge_ancient();
-                    on_fetch_run (shell-free); return  ($fh closes -> lock frees)
+   config_equal(latest, new) -> changed | unchanged | initial
+   record_result(success, <changed|unchanged|initial>)   -- always; writes .status
+   on_fetch_run (shell-free) / on_fetch_cat              -- if set; both run regardless
+   if (changes_only and unchanged): config_discard(new)  -- keep only real changes
+   purge_ancient(); emit DB expire events                -- rotate beyond keep=N
+     ($fh closes -> lock frees on return)
 ```
 <!--MERMAID
 sequenceDiagram
@@ -174,15 +180,14 @@ sequenceDiagram
     M-->>F: config path or undef
     F-->>S: if undef, record failed
     F->>F: config_equal(latest, new)
-    alt unchanged
-        F->>S: config_discard, delete backup
-        F->>S: record success, unchanged
-        F->>S: purge_ancient, expire old
-    else changed or initial
-        F->>S: record success, changed
-        F->>S: purge_ancient
-        F->>S: run on_fetch_run, shell-free
+    F->>S: record success (changed, unchanged, or initial); write .status
+    opt on_fetch_run / on_fetch_cat set
+        F->>S: run on_fetch_run (shell-free) and/or cat to stdout
     end
+    opt changes_only and unchanged
+        F->>S: config_discard, delete the just-written backup
+    end
+    F->>S: purge_ancient, emit DB expire events
     F-->>D: return, lock releases
 MERMAID-->
 
@@ -225,9 +230,10 @@ the `.pm` that declares them.
 
 ### 3.1 Detector.pm -- the device registry
 
-- **`%model_table`** : `label` -> model object. Populated by
-  `Detector::register($mod)` at startup (each model's `.pm` registers itself
-  when loaded). `label` is the device-table name (`cisco-ios`, `generic`, ...).
+- **`%model_table`** : `label` -> model object. Populated by `Detector::init`,
+  which constructs one instance of every model class and calls
+  `Detector->register($mod)` for each (the models do not self-register). `label`
+  is the device-table name (`cisco-ios`, `generic`, ...).
 
 - **`@dev_order`** : ordered list of `dev_id`s in device-table order. The
   sequential fetch phase iterates this; the maintenance modes use it to list
@@ -250,7 +256,7 @@ the `.pm` that declares them.
   ```
 
 - **The directory-allowlist structures** (populated from `directory:` lines):
-  - **`%dir_allow_tag`** : `$TAG` -> `{ type => repository|template|fetch_run|lock, path => <abs path> }`. The `$TAG` indirection a device value uses.
+  - **`%dir_allow_tag`** : `$TAG` -> `{ type => repository|template|fetch_run|report|lock, path => <abs path> }`. The `$TAG` indirection a device value uses.
   - **`%dir_allow_path`** : normalised allowed path -> type, for membership tests.
   - **`$dir_allow_present`** : true once any `directory:` line has been seen (switches the allowlist from "off/opt-in" to "enforced").
   - **`@dir_allow_rows`** : ordered `[type, tag, path]` for `--list-allowed-dirs`.
@@ -301,8 +307,10 @@ option "exists" as soon as something reads it.
 ### 3.3 Mailer.pm -- the result record
 
 - **`@results`** : one hashref per device outcome, pushed by
-  `record_result(%args)`. The fields (every one is also written to the
-  `.status` file and, under `-P`, serialised through the result sink):
+  `record_result(%args)`. Under `-P` every field is serialised through the result
+  sink; the `.status` file gets only a derived subset (`backup_start/end_date`,
+  `backup_start/end_time`, `backup_duration_sec`, `backup_state`,
+  `backup_changed`), not these fields verbatim. The fields:
 
   ```perl
   {
@@ -337,7 +345,7 @@ option "exists" as soon as something reads it.
 
 ### 3.4 On-disk structures
 
-- **Backup file** : `<repository>/<dev_id>/<dev_id>.run.YYYYMMDD.HHMMSS[tz]`
+- **Backup file** : `<repository>/YYYYMM/YYYYMMDD/<dev_id>/<dev_id>.run.YYYYMMDD.HHMMSS[tz]`
   (optionally plus `filename_append_suffix`). `parse_backup_filename()` and
   `sort_backups_desc()` parse and order these by the **parsed timestamp**
   `YYYYMMDD.HHMMSS`, never by a plain string sort of the whole name (so the
@@ -345,9 +353,10 @@ option "exists" as soon as something reads it.
   `O_EXCL` so two runs completing in the same second cannot silently
   overwrite one another (section 9).
 
-- **`.status` file** : `<repository>/.<dev_id>.status` -- the last-run result
-  for that device (written atomically via a dotfile temp + rename), consumed
-  by fetchconfig-web and the maintenance modes.
+- **`.status` file** : `<repository>/<dev_id>.status` -- the last-run result
+  for that device (written atomically via a dotfile temp + rename -- the temp,
+  not the final file, carries the leading dot), consumed by fetchconfig-web and
+  the maintenance modes.
 
 - **`.debug` file** : `<repository>/<dev_id>.debug` -- the full session trace
   when `debug=on` (0600; section 6). Overwritten each run.
@@ -418,10 +427,12 @@ directory:  <type>  <$TAG|none>  [<abs-path>]
 
 `<type>` is `repository`, `template`, `fetch_run`, `report`, or `lock`.
 Presence of **any** `directory:` line turns the allowlist on; thereafter a
-device's `repository=`, `template_dir=`, `lock_dir=`, and the `on_fetch_run`
-program directory must resolve to an allowed path (directly or via a `$TAG`).
-`directory: fetch_run none` / `directory: report none` disable that
-capability. A `directory:` line that names a system directory, or is
+device's `repository=`, `template_dir=`, and the `on_fetch_run` program directory
+must resolve to an allowed path (directly or via a `$TAG`). (`lock` is an accepted
+`directory:` type that `lock_dir=` can resolve a `$TAG` through, but `lock_dir=`
+itself is **not** allowlist-enforced -- it is only `$TAG`-expanded and
+system-directory-checked.) `directory: fetch_run none` / `directory: report none`
+disable that capability. A `directory:` line that names a system directory, or is
 otherwise malformed, is recorded in `@dir_allow_errors` and **aborts the run**
 before any fetch. See `README` -> DIRECTORY ALLOWLIST for the full semantics
 and `--list-allowed-dirs` for the linter.
@@ -441,10 +452,11 @@ options tables and the model sections in `README` (the DEVICE OPTIONS section).
 
 ### 5.1 Lifecycle
 
-Each model is a subclass of `fetchconfig::model::Abstract`. At `use`-time it
-constructs one instance and calls `Detector->register($self)`, which puts it
-in `%model_table` under `$self->label`. The driver loads all models via
-`Detector` at startup.
+Each model is a subclass of `fetchconfig::model::Abstract`. `Detector::init`
+constructs one instance of every model class and calls `Detector->register($mod)`
+for each, which puts it in `%model_table` under `$mod->label`. (Models do not
+self-register; adding a model means adding its `register(...->new($log))` line to
+`Detector::init`.)
 
 Per device, `Detector::fetch_device` calls `$mod->fetch(...)`, whose default
 implementation in Abstract delegates to the model's `do_fetch(...)`. A model
@@ -457,7 +469,7 @@ The methods a model (or an extender) relies on. Signatures are indicative;
 read `Abstract.pm` for exact argument lists.
 
 **Session / transport**
-- `ssh_open($dev_host, $dev_user, $dev_pass, $dev_timeout, $debug_fh, $dev_opt_tab)` -- open a Net::OpenSSH session (SSH models). Host-key policy is set here (section 9, deliberate non-mitigation).
+- `ssh_open($dev_host, $dev_user, $dev_pass, $dev_timeout, $debug_fh)` -- open a Net::OpenSSH session (SSH models). Host-key policy is set here (section 9, deliberate non-mitigation).
 - `open_ssh_debug_file(...)` / `open_telnet_debug_file($t, $dev_opt_tab, $repo, $dev_id, $dev_host)` -- when `debug=on`, open `<dev_id>.debug` (0600) and attach it as the SSH/telnet session log. The telnet helper (9.71) is what gives every telnet model `debug=`; call it right after the connection opens and `close()` the returned handle at session end.
 - `wait_for_command_prompt(...)`, `expect_enable_prompt(...)`, `expect_enable_prompt_paging_auto(...)`, `drain_until_idle(...)`, `chat_banner(...)`, `chat_show_conf(...)` -- prompt and login helpers. Models override `prompt_head()` / `prompt_tail()` / `interrupt_screens()` / `ssh_extra_opts()` to tune behaviour.
 
@@ -503,7 +515,7 @@ from caller to callee.
    [open_ssh_debug_file]/[open_telnet_debug_file]   attach .debug (debug=on)
    (prompt_head)(prompt_tail)(interrupt_screens)    model-tuned prompts/pager
    [wait_for_command_prompt][expect_enable_prompt]
-   [chat_banner][chat_login][chat_show_conf]        login/show
+   [chat_banner][chat_show_conf]                     login/show (chat_login is per-model)
    [print_secret]                        send EVERY credential here
    [stripansi][regexp_quote_keep_bytes][escape_brackets]
    [dev_option][dev_option_flag][dev_option_raw][dev_option_posint]
@@ -526,7 +538,7 @@ flowchart TD
         T["ssh_open or Net::Telnet new"]
         DBG["open_ssh_debug_file or open_telnet_debug_file"]
         PR["wait_for_command_prompt, expect_enable_prompt"]
-        LOG["chat_banner, chat_login, chat_show_conf"]
+        LOG["chat_banner, chat_show_conf (chat_login is per-model)"]
         PS["print_secret for every credential"]
         TX["stripansi, regexp_quote_keep_bytes, escape_brackets"]
         OPT["dev_option, _flag, _raw, _posint"]
@@ -614,8 +626,10 @@ reference for exact behaviour):
 | `--list-allowed-dirs` | print and lint the `directory:` allowlist. |
 | `--clean-lock-dir [N]` | remove lock files older than N days (default 30, min 1); `-T` previews; flock-first so a held lock is never removed. |
 
-Exit codes of note: `0` success; `2` usage/allowlist-abort/bad-argument;
-`10` lock directory unusable; `255` fatal die; lookup modes also use `1`
+Exit codes of note: `0` success; `2` allowlist-abort (and a couple of operational
+aborts in `Tools.pm`: `-m` on Windows, a missing template dir); `10` lock
+directory unusable; `255` usage / bad-argument / fatal die (CLI option errors go
+through `$opt_fail` -> `die`, which exits 255); lookup modes also use `1`
 (e.g. zero-byte/orphan found).
 
 ---
@@ -664,11 +678,12 @@ operator responsibility.
 - **`print_secret`** sends passwords to the device without logging them
   (suspends the session log around the send, leaves a masked marker). Every
   model uses it.
-- **`mask_secrets`** (Abstract, for device-table lines echoed to the log;
-  Detector has a matching one) redacts `pass=`/`enable=`/`community=`/
-  `password=`/`passphrase=`/`secret=`/`key=`/`token=`-prefixed values, quoted
-  values included, so a malformed table line in an error message does not leak
-  a credential.
+- **`mask_secrets`** (Abstract, for device-table lines echoed to the log) redacts
+  `pass=`/`enable=`/`community=`/`password=`/`passphrase=`/`secret=`/`key=`/`token=`-prefixed
+  values, quoted values included, so a malformed table line in an error message
+  does not leak a credential. (Detector has its own, narrower masker for the lines
+  *it* logs: it covers only `pass=`/`enable=`/`community=` and not quoted values --
+  not a copy of Abstract's.)
 - **`mask_line`** (Report, for config *content* in the HTML report and the
   mailed diffs) redacts `secret N <hash>` / `password N <hash>` forms. It is
   best-effort and biases toward masking (a false positive hides a non-secret
@@ -688,13 +703,14 @@ system directory. A start failure, signal, or non-zero exit is logged.
 - **`dev_id` whitelist** `^[\w.-]+$` (dots-only rejected) -- prevents a device
   id from escaping the repository via `../`.
 - **Directory allowlist** -- when a `directory:` section exists, `repository=`,
-  `template_dir=`, `lock_dir=`, and the `on_fetch_run` program directory must
-  resolve under an allowed path; paths are checked for `/../`, `/./`, absolute
-  form, and legal characters; a `$TAG` is expanded. Off-list -> device skipped.
-- **System-directory rejection** (`_system_dir_path`) -- those four directory
-  uses may never be `/bin`, `/etc`, `/usr/lib`, ... or the root, with or without
-  an allowlist. A `directory:` line that declares one is rejected at parse
-  time.
+  `template_dir=`, and the `on_fetch_run` program directory must resolve under an
+  allowed path; paths are checked for `/../`, `/./`, absolute form, and legal
+  characters; a `$TAG` is expanded. Off-list -> device skipped. (`lock_dir=` is
+  **not** allowlist-enforced -- it is only `$TAG`-expanded and system-directory-checked.)
+- **System-directory rejection** (`_system_dir_path`) -- `repository=`,
+  `template_dir=`, the `on_fetch_run` program directory and `lock_dir=` may never
+  be `/bin`, `/etc`, `/usr/lib`, ... or the root, with or without an allowlist. A
+  `directory:` line that declares one is rejected at parse time.
 - **Abort on a broken allowlist** -- if any `directory:` line failed to parse,
   the run aborts (exit 2) before any fetch, rather than continuing with a
   silently reduced allowlist (fail-closed).
@@ -916,6 +932,46 @@ Data path (parent only; never in -P workers):
 Write-ahead means the records hit disk before the DB is touched, so a DB outage
 only defers the drain (the run always completes) and nothing is lost. Idempotent
 keys cover the commit-then-crash window.
+
+`--db-backfill` (`History::backfill`) reconstructs the history from the backups
+already on disk, for first enabling `db:` on an existing install. It writes
+directly (not via the spool - this is a manual maintenance pass, not the fetch
+path): it connects once (aborts if unreachable), and per device enumerates the
+on-disk backups the same way `-l` does (`device_info` -> `dev_option("repository")`
+-> `scan_dir` -> `sort_backups_desc`). For each backup it inserts a
+`backup_versions` row - sha1 recomputed by `_sha1_file`, which hashes the file's
+raw bytes and so is identical to the live save's `add("$_\n")` because the file IS
+those bytes - and a `backup_runs` row (`run_end` = the file's `file_timestamp` from
+`backup_epoch_from_filename`, state `success`, `changed`, duration NULL), both via
+`_apply_op`; then one `backup_current` row (`_current_row`, from `<dev_id>.status`
+plus the newest backup) for a device that has none. Every write is guarded by a
+prior existence `SELECT` (`_row_exists`), so a re-run skips present rows and does
+not re-hash, and a `backup_current` a live run wrote is never overwritten; work is
+committed per device (rolled back on a DB error, which is counted and the run
+continues). `-T` runs the same existence checks and counts but does no hashing and
+no writes. The dense run history cannot be rebuilt (unchanged/failed runs leave no
+file), so only the saved change-events are added. It logs its own
+`-----[DB backfill]-----` section (same width as `-----[DB writer]-----`): a
+`process: <path>` debug line per backup, then the counts summary and a final
+`Success` (or, on a failure, the error count).
+
+Per-version line deltas (`lines_added`/`lines_removed`, web 2.12). These are the
++added/-removed of `Abstract::line_delta` (a dependency-free diff: trim the common
+prefix/suffix, then an LCS-length DP; `added = curr - LCS`, `removed = prev - LCS`)
+over `$mod->config_norm_lines`, which returns the file as the ignore/canon-normalized
+line list - the SAME view `config_equal` compares, via the new `config_ignore_re` /
+`config_canon` model hooks (CiscoASA's constant regex, GenericTemplate's
+`cur_ignore_re`/`cur_canon`, base = raw). The live writer computes the delta in
+`Detector::fetch_device` (previous stored config vs the just-saved one) and carries
+it on the result into the version op; the oldest/first version is the baseline
+(NULL). `backfill` walks a device oldest->newest keeping the previous normalized
+lines, and either inserts a new row with the delta or UPDATEs an existing row whose
+`lines_added` is still NULL. The columns are owned by fetchconfig-web; `_connect`
+probes `information_schema` once (`$delta_cols`) and the writes include the two
+columns only when present, so the engine stays compatible with a web side not yet
+upgraded. Parity note: a GenericTemplate device has no template loaded under
+`backfill`, so its `cur_ignore_re` is undef and its backfilled delta is over raw
+lines - accepted; live runs (template loaded) count the normalized view.
 
 Pre-9.5 PostgreSQL (production is 8.2.23): no ON CONFLICT/MERGE/jsonb. Append-only
 inserts use `INSERT ... SELECT ... WHERE NOT EXISTS (<key>)`; `backup_current` is

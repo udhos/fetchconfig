@@ -571,6 +571,13 @@ sub _print_secret_slow {
     return $ok;
 }
 
+# The template's ignore/canon rules, stashed by do_fetch, exposed so the
+# line-delta counter (config_norm_lines) normalizes as config_equal does. Only
+# set during a fetch: under --db-backfill no template is loaded, so both are
+# undef and the delta falls back to raw lines (accepted - see DEVELOPER-GUIDE).
+sub config_ignore_re { $_[0]->{cur_ignore_re} }
+sub config_canon     { $_[0]->{cur_canon} }
+
 # config_equal honouring the template's ignore lines. Abstract calls this
 # as config_equal($prev_dir,$prev_file,$curr_dir,$curr_file) - it does NOT
 # pass $dev_opt_tab, so the ignore regex is stashed by do_fetch (which has

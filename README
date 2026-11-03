@@ -463,8 +463,9 @@ is not a per-device option):
 Keys:
 
 - db_inst  -- database (instance) name. Required.
-- db_user  -- the writer login role (default name "fetchconfig_dashboard").
-  Required.
+- db_user  -- the writer login role. Required (no default is applied;
+  "fetchconfig_dashboard" is only the name fetchconfig-web-dbsetup.pl creates by
+  convention).
 - db_pass  -- its password. Follows the normal device_table quoting, so a value
                 containing a comma or equals sign must be double-quoted
                 (db_pass="a,b=c"). Never written to the log.
@@ -502,6 +503,40 @@ is configured, the summary mail shows the result as a status box inside the
 card:
 green when everything was written, red when records are still buffered for a
 later run, and grey ("history export not configured") when no "db:" is set.
+
+Backfilling existing backups: when you first enable "db:", only new runs
+populate
+the database -- the backups already on disk are not in it. Run "--db-backfill"
+once (it needs a "db:" line) to reconstruct the history from those files: one
+backup_versions row (its sha1 recomputed from the file, identical to what a live
+save stores) and one backup_runs row per stored backup, plus a backup_current
+row
+for each device not yet recorded. It is idempotent and repeatable (an existing
+row
+is left alone, so a re-run only fills what is still missing and does not re-hash
+a
+backup already recorded), it never overwrites a row a live run wrote, and "-T"
+previews the counts without hashing or writing. Only saved backups can be
+reconstructed: the dense run history (unchanged or failed runs leave no file) is
+not on disk, so backfilled backup_runs rows are the saved change-events only
+(state success, no durations) -- the full run history accrues from live runs
+afterwards.
+
+Per-version line deltas: each backup_versions row can also carry "lines_added"
+and
+"lines_removed" -- the +added/-removed of the ignore-normalized diff against the
+device's previous version (so a same-length edit is not reported as "0 bytes").
+These two columns belong to the fetchconfig-web 2.12 schema; the engine writes
+them
+only when they exist (it checks once per run), so an older web side keeps
+working
+with the columns simply unpopulated. The live writer computes the delta over the
+same normalized view it uses for change detection; "--db-backfill" fills them
+for
+existing backups too, and UPDATEs rows written earlier whose deltas are still
+empty. A backfilled generic-template device counts raw lines (its template is
+not
+loaded during a backfill), while live runs count the normalized view.
 
 Change Reports
 ==============
@@ -793,15 +828,15 @@ Option     Description
 -g dev_id  Switches fetchconfig.pl to retrieval mode for dev_id, instead of
            fetching configuration from every device in the device table(s).
            dev_id must match the dev-unique-id column of a device line (see
-           "DEVICE TABLE" above). Mutually exclusive with "-l", "-z", "-Z" and
-           "-o". Plain retrieval works on all platforms; the compare form ("-g
-           ... -m") is not available on native Windows (see WINDOWS
-           LIMITATIONS).
+           "DEVICE TABLE" above). Mutually exclusive with "-l", "-z", "-Z",
+           "-o", "-e", "-s", "-S" and "--db-backfill". Plain retrieval works on
+           all platforms; the compare form ("-g ... -m") is not available on
+           native Windows (see WINDOWS LIMITATIONS).
 -l dev_id  Switches fetchconfig.pl to listing mode for dev_id: instead of
            retrieving a config, prints one line per backup on file, newest
            first, tab-separated as: <number>\t<size in bytes>\t<path> <number>
            is exactly what "-n"/"-m" expect. Mutually exclusive with "-g", "-z",
-           "-Z" and "-o".
+           "-Z", "-o", "-e", "-s", "-S" and "--db-backfill".
 -n N       Optional. Selects which backup to retrieve, counting from the most
            recent: N=1 the latest (most recent) backup [default] N=2 the backup
            before that N=3 the backup before that, and so on. If omitted, N=1 is
@@ -831,7 +866,8 @@ Option     Description
            found, or 0 if all backups are non-empty -- handy for
            scripting/monitoring, e.g.: fetchconfig.pl -devices=device_table -z
            dev_id \ || echo "ALERT: empty backup(s) for dev_id" Mutually
-           exclusive with "-g", "-l", "-Z" and "-o".
+           exclusive with "-g", "-l", "-Z", "-o", "-e", "-s", "-S" and
+           "--db-backfill".
 -Z         Same as "-z", but takes no dev_id and checks every device known from
            the currently loaded "-devices="/"-line=" sources in one go, instead
            of a single device. Each output line is prefixed with the device id:
@@ -842,7 +878,7 @@ Option     Description
            "-z" (1 if at least one 0-byte backup was found anywhere, 0
            otherwise); a device that could merely not be scanned does not by
            itself cause a non-zero exit. Mutually exclusive with "-g", "-l",
-           "-z" and "-o".
+           "-z", "-o", "-e", "-s", "-S" and "--db-backfill".
 -o         Switches fetchconfig.pl to orphaned-backup check mode: lists backed
            up configs on disk that have no matching dev-unique-id in the
            currently loaded "-devices="/"-line=" sources. Every "repository="
@@ -859,7 +895,7 @@ Option     Description
            renamed. A repository path used only by a device no longer in the
            device table can't be discovered this way, since there's no currently
            loaded device left to read that path from. Mutually exclusive with
-           "-g", "-l", "-z" and "-Z".
+           "-g", "-l", "-z", "-Z", "-e", "-s", "-S" and "--db-backfill".
 -e         Switches fetchconfig.pl to empty-directory check mode: scans every
            "repository=" path configured by a loaded device for empty
            directories in the three-level layout
@@ -876,16 +912,16 @@ Option     Description
            hand (before 9.56 also from "-o -D", which now cleans up after
            itself). Exit status is 1 if any empty directory was found, 0
            otherwise. Honours "-f". Mutually exclusive with "-g", "-l", "-z",
-           "-Z", "-o", "-s" and "-S". With "-D", the empty directories are
-           DELETED, bottom-up: device directories first, then the day
-           directories that are empty by then, then the month directories that
-           are empty by then. Each removal is ONE plain rmdir on the exact,
-           fully-qualified path - no wildcards, no recursive delete; rmdir
-           cannot remove a non-empty directory, so files can never be taken
-           along. Every command is reported as "deleting: rmdir <path>"; the
-           rows gain a third column, deleted or failed. Exit status is 1 if any
-           rmdir failed, 0 otherwise. "-e -D -T" reports "would delete: rmdir
-           <path>" for each directory and deletes nothing.
+           "-Z", "-o", "-s", "-S" and "--db-backfill". With "-D", the empty
+           directories are DELETED, bottom-up: device directories first, then
+           the day directories that are empty by then, then the month
+           directories that are empty by then. Each removal is ONE plain rmdir
+           on the exact, fully-qualified path - no wildcards, no recursive
+           delete; rmdir cannot remove a non-empty directory, so files can never
+           be taken along. Every command is reported as "deleting: rmdir
+           <path>"; the rows gain a third column, deleted or failed. Exit status
+           is 1 if any rmdir failed, 0 otherwise. "-e -D -T" reports "would
+           delete: rmdir <path>" for each directory and deletes nothing.
 -D         Requires "-o", "-e", "-z" or "-Z". With "-z"/"-Z": also DELETES the
            zero-byte backup FILES found (one plain unlink per exact path;
            emptied directories are left for "-e -D" to prune). With "-o": also
@@ -902,18 +938,21 @@ Option     Description
            scan didn't account for) makes that directory's removal fail loudly
            instead of being swept away regardless. A repository root itself (as
            opposed to an orphaned device directory under it) is never deleted,
-           even if something unexpected made it look like a match.
-           fetchconfig.pl exits with status 1 if any deletion failed, 0 if
-           nothing needed deleting or everything found was deleted successfully.
+           even if something unexpected made it look like a match. The exit
+           status follows each mode's own check, not the deletions: with
+           "-z"/"-Z" it stays that of the check (1 if any 0-byte backup was
+           found, 0 otherwise -- deleting them does not change it); with "-o"
+           and "-e -D" it is 1 if any removal failed, 0 otherwise.
 -T         Dry run. With "-o -D", "-e -D", "-z -D" or "-Z -D": logs the delete
            commands "-D" would run (see above) without actually deleting
            anything. Also valid with "--clean-lock-dir" (shows which lock files
-           would be removed). Requires "-D" except with "--clean-lock-dir". Exit
-           status with "-T" is the same as the plain check - "-o": 1 if anything
-           orphaned was found; "-e": 1 if any empty directory was found; 0
-           otherwise - since "-T" doesn't attempt any deletion to succeed or
-           fail. Use it before a bare "-o -D" or "-e -D" to see what would be
-           removed first.
+           would be removed) and with "--db-backfill" (previews the backfill
+           counts without hashing or writing). Requires "-D" except with
+           "--clean-lock-dir" or "--db-backfill". Exit status with "-T" is the
+           same as the plain check - "-o": 1 if anything orphaned was found;
+           "-e": 1 if any empty directory was found; 0 otherwise - since "-T"
+           doesn't attempt any deletion to succeed or fail. Use it before a bare
+           "-o -D" or "-e -D" to see what would be removed first.
 -s dev_id  Switches fetchconfig.pl to suffix-consistency check mode for dev_id:
            checks that all of the device's backup files carry the same filename
            suffix. Reports the device if its backups mix suffixes - including
@@ -933,31 +972,32 @@ Option     Description
            checked against the configured suffix 2 backup suffixes are
            consistent, configured suffix does not match the backup file suffixes
            so it can be scripted. Honours "-f". Mutually exclusive with "-g",
-           "-l", "-z", "-Z", "-o" and "-S".
+           "-l", "-z", "-Z", "-o", "-e", "-S" and "--db-backfill".
 -S         Like "-s", but takes no dev_id and checks every device loaded via
            "-devices="/"-line=". "-S" is a pure consistency check: it does NOT
            compare against the configured filename_append_suffix (that second
            step is "-s dev_id" only). Exit status is 1 if any device's backups
            mix suffixes, 0 otherwise. Mutually exclusive with "-g", "-l", "-z",
-           "-Z", "-o" and "-s". Note that "-s" takes a dev_id; "-s -f file" is
-           rejected with "requires a device id" (the "-f" would be taken for the
-           device). Write "-s dev_id -f file" or "-S -f file". How "-s"/"-S"
-           tell the timezone token from the suffix: a backup is named
-           <dev_id>.run.YYYYMMDD.HHMMSS<tz><suffix>, and <tz> is whatever
-           strftime produced on the backup host - it differs by platform and
-           CHANGES WITH DAYLIGHT SAVING TIME (AIX: CET in winter, CEST in
-           summer; older AIX: NFT/DFT). The check therefore parses the tz token
-           out first (numeric "+0200"/"-0500" on Linux and modern Windows; a
-           bare name "CEST" on AIX; "-CEST" on Solaris; a multi-word name such
-           as "W. Europe Standard Time" on Windows) and only then looks at what
-           follows. The check ONLY WORKS if the suffix is separated from the tz
-           by a ".", "-" or "_": "." is the rule since 9.55; "-" and "_" are
-           accepted as separators so that backups written before that rule are
-           still recognized. A DST change is therefore NOT reported as a suffix
-           change. One inherent ambiguity: "-" followed by uppercase letters is
-           the Solaris tz form, so an old suffix like "-BAK" on a timezone=hide
-           backup (no tz token) is read as a tz; "_BAK", "-bak", or any suffix
-           following a real tz token are unambiguous.
+           "-Z", "-o", "-e", "-s" and "--db-backfill". Note that "-s" takes a
+           dev_id; "-s -f file" is rejected with "requires a device id" (the
+           "-f" would be taken for the device). Write "-s dev_id -f file" or "-S
+           -f file". How "-s"/"-S" tell the timezone token from the suffix: a
+           backup is named <dev_id>.run.YYYYMMDD.HHMMSS<tz><suffix>, and <tz> is
+           whatever strftime produced on the backup host - it differs by
+           platform and CHANGES WITH DAYLIGHT SAVING TIME (AIX: CET in winter,
+           CEST in summer; older AIX: NFT/DFT). The check therefore parses the
+           tz token out first (numeric "+0200"/"-0500" on Linux and modern
+           Windows; a bare name "CEST" on AIX; "-CEST" on Solaris; a multi-word
+           name such as "W. Europe Standard Time" on Windows) and only then
+           looks at what follows. The check ONLY WORKS if the suffix is
+           separated from the tz by a ".", "-" or "_": "." is the rule since
+           9.55; "-" and "_" are accepted as separators so that backups written
+           before that rule are still recognized. A DST change is therefore NOT
+           reported as a suffix change. One inherent ambiguity: "-" followed by
+           uppercase letters is the Solaris tz form, so an old suffix like
+           "-BAK" on a timezone=hide backup (no tz token) is read as a tz;
+           "_BAK", "-bak", or any suffix following a real tz token are
+           unambiguous.
 
 Template options (generic model)
 --------------------------------
@@ -1034,6 +1074,32 @@ Option                  Description
                         is read. Exits 0 and prints the token if declared, 1 and
                         prints nothing if not, 2 on a file problem (error to
                         stderr). The value is a free-text token [A-Za-z0-9_-]+.
+--db-backfill           Reconstructs the history database from the backups
+                        already on disk, then exits. Requires a "db:" line (see
+                        BACKUP HISTORY DATABASE above). For every loaded device
+                        it scans its "repository=" and, for each stored backup
+                        not yet in the DB, inserts a backup_versions row (its
+                        sha1 recomputed from the file, identical to what a live
+                        save stores) and a backup_runs row (state success,
+                        changed, run_end = the backup's timestamp, no duration);
+                        it also inserts a backup_current row for each device
+                        that has none yet, from "<dev_id>.status" plus the
+                        newest backup. When the fetchconfig-web 2.12 line-delta
+                        columns exist it also records lines_added/lines_removed
+                        on each version, and UPDATEs existing version rows whose
+                        deltas are still empty (see "lines_added/lines_removed"
+                        above). Idempotent and repeatable: an existing row is
+                        left alone (a re-run only fills what is still missing,
+                        and does not re-hash a backup already recorded), and a
+                        backup_current row a live run wrote is never
+                        overwritten. Connects up front and aborts if the DB is
+                        unreachable. With "-T" it previews the counts (what
+                        WOULD be inserted) without hashing or writing. The dense
+                        run history (unchanged or failed runs leave no file)
+                        cannot be rebuilt, so only saved change-events are
+                        added; the full history accrues from live runs
+                        afterwards. Exits 0 on success, 1 if the DB is
+                        unreachable or a write failed.
 
 Fetching options
 ----------------
@@ -1055,26 +1121,26 @@ Option   Description
 -------  -----------------------------------------------------------------------
 -f file  Optional. Writes the RESULT DATA to "file" instead of printing it to
          stdout: the retrieved config (with "-g"), the diff (with "-m"), or the
-         listing rows (with "-l", "-z", "-Z", "-o", "-s", "-S", "-t"). The file
-         is created/overwritten as needed. It does NOT apply to
-         "--check-template", whose ok/error result is written to the log only.
-         The file receives ONLY that data - never the screen output. All
-         "info:"/"debug:"/"error:" lines, including the "checked N backup(s),
-         ..." summary and the "wrote ... to file" confirmation, are log messages
-         and always go to stderr, whether or not "-f" is given. For the
-         listing/check modes ("-l", "-z", "-Z", "-o", "-s", "-S") the result
-         data ENDS WITH ONE SUMMARY LINE prefixed by "#", carrying the same text
-         the run logs, e.g. # dev=sw01: checked 2 backup(s), no zero-byte
-         backups found so the output is never empty and is self-describing: a
-         reader can tell "checked, nothing found" from "nothing was written"
-         without the exit status or stderr. The rows before it contain only the
-         items FOUND (zero-byte backups, orphaned directories, inconsistent
-         suffixes; for "-l", every backup). This trailer is part of the result
-         stream, so stdout and "-f" carry identical content. It is NOT added to
-         "-g" (a retrieved config) or "-m" (a diff), which stay byte-exact.
-         IMPORTANT for anything that parses these listings (e.g.
-         fetchconfig-web): skip lines that start with "#". Before 9.55 a check
-         that found nothing produced a 0-byte file.
+         listing rows (with "-l", "-z", "-Z", "-o", "-e", "-s", "-S", "-t",
+         "--list-allowed-dirs"). The file is created/overwritten as needed. It
+         does NOT apply to "--check-template", whose ok/error result is written
+         to the log only. The file receives ONLY that data - never the screen
+         output. All "info:"/"debug:"/"error:" lines, including the "checked N
+         backup(s), ..." summary and the "wrote ... to file" confirmation, are
+         log messages and always go to stderr, whether or not "-f" is given. For
+         the listing/check modes ("-l", "-z", "-Z", "-o", "-e", "-s", "-S",
+         "-t", "--list-allowed-dirs") the result data ENDS WITH ONE SUMMARY LINE
+         prefixed by "#", carrying the same text the run logs, e.g. # dev=sw01:
+         checked 2 backup(s), no zero-byte backups found so the output is never
+         empty and is self-describing: a reader can tell "checked, nothing
+         found" from "nothing was written" without the exit status or stderr.
+         The rows before it contain only the items FOUND (zero-byte backups,
+         orphaned directories, inconsistent suffixes; for "-l", every backup).
+         This trailer is part of the result stream, so stdout and "-f" carry
+         identical content. It is NOT added to "-g" (a retrieved config) or "-m"
+         (a diff), which stay byte-exact. IMPORTANT for anything that parses
+         these listings (e.g. fetchconfig-web): skip lines that start with "#".
+         Before 9.55 a check that found nothing produced a 0-byte file.
 
 Generic options
 ---------------

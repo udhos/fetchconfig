@@ -163,11 +163,11 @@ Valid lines for the device table file can also be passed directly through the `-
 
 ## Directory allowlist {#directory-allowlist}
 
-Restrict which directories a repository=, template_dir= or on_fetch_run= may name.
+Restrict which directories a repository=, template_dir=, on_fetch_run=, report or lock directory may name.
 
 Optionally, the device table may restrict which directories a `repository=` or `template_dir=` option is allowed to name. This is useful when the device table is edited through a less-trusted front end (e.g. a web UI): the allowlist lives only in the real config file and cannot be widened from the UI, so an edit can never point a device at an arbitrary path.
 
-With all three directory types allowed:
+With all four directory types allowed:
 
 ```
 directory: repository $REPO1     /usr/local/fetchconfig/config
@@ -176,12 +176,14 @@ directory: fetch_run  $CMD1      /var/fetchconfig/fetch_run
 directory: report    $REP1       /var/www/fetchconfig/reports
 ```
 
-With `on_fetch_run` disabled (`fetch_run none`):
+With `on_fetch_run` disabled (`fetch_run none`); a section must still cover all
+four types, so `report` is present:
 
 ```
 directory: repository $REPO1     /usr/local/fetchconfig/config
 directory: template   $TEMPLATE1 /usr/local/fetchconfig/templates
 directory: fetch_run  none
+directory: report     $REP1      /var/www/fetchconfig/reports
 ```
 
 Each line is `directory: <type> <$TAG> <path>`, where `type` is `repository`, `template`, `fetch_run`, `report` or `lock`, `$TAG` is a unique `$NAME` symbol, and `path` is the allowed directory. A section must cover **all four** types; `fetch_run` constrains `on_fetch_run=` (the directory of the command's program must be an allowed `fetch_run` directory), and `directory: fetch_run none` forbids `on_fetch_run` entirely.
@@ -426,6 +428,10 @@ Three tables, all owned by fetchconfig-web: a dense `backup_runs` (one row per d
 
 Every run (with or without `email:`) logs a `-----[DB writer]-----` section with the DB-history result: `all N record(s) written; outbox empty`, or `INCOMPLETE - M run(s) still pending (oldest <ts>); will retry next run` when the database was unreachable and the records were spooled (connect/drain warnings appear in the same section). Nothing is logged when no `db:` is set. When `email:` is configured, the summary mail shows the result as a status box inside the card: green when everything was written, red when records are still buffered for a later run, and grey (`history export not configured`) when no `db:` is set.
 
+**Backfilling existing backups.** When you first enable `db:`, only new runs populate the database — the backups already on disk are not in it. Run [`--db-backfill`](#options) once to reconstruct the history from those files: one `backup_versions` row (its sha1 recomputed from the file, identical to a live save) and one `backup_runs` row per stored backup, plus a `backup_current` row for each device not yet recorded. It is idempotent and repeatable, never overwrites a row a live run wrote, and `-T` previews the counts. Only saved backups can be rebuilt — the dense run history (unchanged or failed runs leave no file) accrues from live runs afterwards.
+
+**Per-version line deltas.** Each `backup_versions` row can carry `lines_added` and `lines_removed` — the +added/-removed of the ignore-normalized diff against the device's previous version, so a same-length edit is not reported as a zero-byte change. The two columns belong to the fetchconfig-web 2.12 schema; the engine checks once per run whether they exist and writes them only then, so an older web side keeps working with the columns unpopulated. The live writer computes the delta over the same normalized view it uses for change detection. `--db-backfill` also records them for existing backups and UPDATEs rows written earlier whose deltas are still empty; a backfilled generic-template device counts raw lines (its template is not loaded during a backfill), whereas live runs count the normalized view.
+
 ## Retrieving a previously backed-up config {#retrieving} {nav: Retrieving backups}
 
 In addition to fetching configuration from devices, fetchconfig.pl can retrieve a configuration file already saved in the repository, without contacting the device again — useful for scripting: dumping the latest config to stdout, comparing today's config against yesterday's, or pulling an older backup by its position in the history.
@@ -520,11 +526,11 @@ Output matches the standard `diff older newer` convention: lines starting with `
 
 #### Retrieval options {.flag-group}
 
-<!--flag: -g dev_id | mutually exclusive with -l / -z / -Z / -o / -e / -s / -S-->
+<!--flag: -g dev_id | mutually exclusive with -l / -z / -Z / -o / -e / -s / -S / --db-backfill-->
 Retrieval mode for `dev_id` instead of fetching from every device in the table(s). `dev_id` must match a device line's dev-unique-id. Plain retrieval works on all platforms; the compare form (`-g … -m`) is not available on native Windows (see [Platform support](#platform-support)).
 <!--/flag-->
 
-<!--flag: -l dev_id | mutually exclusive with -g / -z / -Z / -o / -e / -s / -S-->
+<!--flag: -l dev_id | mutually exclusive with -g / -z / -Z / -o / -e / -s / -S / --db-backfill-->
 Listing mode: prints one line per backup on file, newest first — `<number>\t<size>\t<path>`.
 <!--/flag-->
 
@@ -537,14 +543,14 @@ Compare mode: prints a diff between backup `M` (older) and backup `N` (newer) in
 
 <!--exit-list-->
 - 0 | the two backups are identical
-- 1 | the two backups differ
-- >1 | an error occurred
+- 1 | the two backups differ -- OR an in-mode error prevented the compare (a missing backup `N`/`M`, or `diff` could not run); on Linux/AIX these are not distinguished from "differ"
+- 2 | native Windows only: compare is unsupported (it needs an external `diff`)
 <!--/exit-list-->
 <!--/flag-->
 
 #### Housekeeping options {.flag-group}
 
-<!--flag: -z dev_id | mutually exclusive with -g / -l / -Z / -o / -e / -s / -S-->
+<!--flag: -z dev_id | mutually exclusive with -g / -l / -Z / -o / -e / -s / -S / --db-backfill-->
 Zero-byte check for one device, same tab-separated format as `-l`. Nothing prints if no backups are 0 bytes.
 
 <!--exit-list-->
@@ -553,11 +559,11 @@ Zero-byte check for one device, same tab-separated format as `-l`. Nothing print
 <!--/exit-list-->
 <!--/flag-->
 
-<!--flag: -Z | mutually exclusive with -g / -l / -z / -o / -e / -s / -S-->
+<!--flag: -Z | mutually exclusive with -g / -l / -z / -o / -e / -s / -S / --db-backfill-->
 Same as `-z`, no dev_id — checks every loaded device: `<dev_id>\t<number>\t<size>\t<path>`. A device that can't be scanned is skipped and logged, and does not by itself cause a non-zero exit.
 <!--/flag-->
 
-<!--flag: -o | mutually exclusive with -g / -l / -z / -Z / -e / -s / -S-->
+<!--flag: -o | mutually exclusive with -g / -l / -z / -Z / -e / -s / -S / --db-backfill-->
 Orphaned-backup check: lists device directories on disk with no matching dev_id in the currently loaded table(s) — `<name>\t<file count>\t<total bytes>\t<path>`. Scans every `repository=` path configured by a currently loaded device (deduplicated); a path used only by a device no longer in the table can't be discovered this way.
 
 <!--exit-list-->
@@ -566,7 +572,7 @@ Orphaned-backup check: lists device directories on disk with no matching dev_id 
 <!--/exit-list-->
 <!--/flag-->
 
-<!--flag: -e | mutually exclusive with -g/-l/-z/-Z/-o/-s/-S-->
+<!--flag: -e | mutually exclusive with -g/-l/-z/-Z/-o/-s/-S/--db-backfill-->
 Empty-directory check: scans every configured `repository=` path for empty directories in the three-level layout `<repository>/YYYYMM/YYYYMMDD/<dev_id>/` and lists them, one tab-separated row per directory: `level` (`device`, `day` or `month`) and `path`. The scan is bottom-up, so a day whose only content is an empty device directory, and a month whose only content is such a day, are listed too. Only names of the expected shape are candidates (`YYYYMM`; `YYYYMMDD` whose first six digits match the month; a dev_id-shaped name starting with a letter or digit) — anything else, and the repository root, is never touched. Such leftovers typically come from deleting old backups by hand. Honours `-f`.
 
 With `-D` the directories are **deleted, bottom-up**: device dirs, then the day dirs empty by then, then the month dirs empty by then. Each removal is **one plain `rmdir` on the exact path** — no wildcards, no recursion; `rmdir` refuses a non-empty directory, so files can never be taken along. Every command is reported as `deleting: rmdir <path>`; rows gain a `deleted`/`failed` column. `-e -D -T` reports `would delete: rmdir <path>` and removes nothing.
@@ -581,8 +587,8 @@ With `-D` the directories are **deleted, bottom-up**: device dirs, then the day 
 With `-e`: deletes the empty directories found (see `-e`). With `-o`: also deletes every orphaned device directory `-o` finds (and the orphaned `<dev_id>.status` / `<dev_id>.debug` files at the repository root), and since v9.56 then prunes the day (`YYYYMMDD`) and month (`YYYYMM`) directories this leaves empty — one plain `rmdir` each, only if empty, each reported. Each backup file is deleted individually by its exact name — never a wildcard, never `rm -rf` — logged as `rm <file>`, followed by `rmdir <path>` for the now-empty directory. Deletion uses Perl's own `unlink()`/`rmdir()`; no shell command is actually spawned. `rmdir()` only succeeds on a genuinely empty directory, so anything left behind unexpectedly makes that removal fail loudly rather than being swept away. A repository root itself is never deleted. With `-z` or `-Z`: deletes the 0-byte backup **files** found — one plain `unlink` on each exact path (never a directory), logged as `deleting: unlink <path>`; an emptied directory is left for a later `-e -D` to prune. `-D` requires one of `-o`, `-e`, `-z` or `-Z`.
 
 <!--exit-list-->
-- 1 | any deletion failed
-- 0 | nothing needed deleting, or everything found was deleted
+- 0 | `-o`/`-e`: nothing needed deleting, or every removal succeeded
+- 1 | `-o`/`-e`: a removal failed &middot; `-z`/`-Z`: a 0-byte backup was found (the check's own result; deleting it does not change the exit)
 <!--/exit-list-->
 <!--/flag-->
 
@@ -590,7 +596,7 @@ With `-e`: deletes the empty directories found (see `-e`). With `-o`: also delet
 Preview mode for `-o -D`, `-e -D`, `-z -D` and `-Z -D`: logs the delete commands `-D` would run (`would delete: rmdir/unlink <path>`), without deleting anything. Exit status is that of the plain check — `-o`: 1 if anything orphaned was found; `-e`: 1 if any empty directory was found; `-z`/`-Z`: 1 if any 0-byte backup was found; 0 otherwise. Use it before a bare `-D` run.
 <!--/flag-->
 
-<!--flag: -s dev_id | mutually exclusive with -g/-l/-z/-Z/-o/-e/-S-->
+<!--flag: -s dev_id | mutually exclusive with -g/-l/-z/-Z/-o/-e/-S/--db-backfill-->
 Suffix-consistency check for one device: verifies that all of its backup files carry the same filename suffix. Reports the device if its backups mix suffixes — including “some with a suffix and some without”, which is what happens when `filename_append_suffix` was added or changed after backups already existed. Prints one tab-separated line per distinct suffix: `dev_id`, suffix (or `(none)`), count, example file. Prints nothing if consistent. An unknown `dev_id` exits 1. Honours `-f`.
 
 A second step then compares the (single) suffix the backups use against the `filename_append_suffix` configured for the device and logs a warning if they differ — e.g. backups written before a suffix was configured. This step is skipped for a device whose backups are already inconsistent.
@@ -602,7 +608,7 @@ A second step then compares the (single) suffix the backups use against the `fil
 <!--/exit-list-->
 <!--/flag-->
 
-<!--flag: -S | mutually exclusive with -g/-l/-z/-Z/-o/-e/-s-->
+<!--flag: -S | mutually exclusive with -g/-l/-z/-Z/-o/-e/-s/--db-backfill-->
 Like `-s`, but takes no `dev_id` and checks every device loaded via `-devices=`/`-line=`. `-S` is a pure consistency check — it does *not* compare against the configured `filename_append_suffix` (that second step is `-s dev_id` only). Exit 1 if any device’s backups mix suffixes, 0 otherwise. Note `-s` takes a `dev_id`: write `-s dev_id -f file` or `-S -f file`; `-s -f file` is rejected.
 <!--/flag-->
 
@@ -630,24 +636,28 @@ Prints the syntax style a generic-model template declares — the value of a `# 
 #### Fetching options {.flag-group}
 
 <!--flag: -P N | fetching only-->
-Fetch with `N` concurrent worker processes (default 1 = sequential, device-table order, live output). With `N>1` each device’s output is buffered while it runs and shown as **one uninterrupted block** when it finishes, in completion order — never interleaved with another device. Not combinable with `-g`/`-l`/`-z`/`-Z`/`-o`/`-e`/`-s`/`-S`. See [Parallel fetching](#parallel). On Windows there is no fork, so `-P` always runs sequentially (`N>1` is reduced to 1).
+Fetch with `N` concurrent worker processes (default 1 = sequential, device-table order, live output). With `N>1` each device’s output is buffered while it runs and shown as **one uninterrupted block** when it finishes, in completion order — never interleaved with another device. Not combinable with `-g`/`-l`/`-z`/`-Z`/`-o`/`-e`/`-s`/`-S`/`--db-backfill`. See [Parallel fetching](#parallel). On Windows there is no fork, so `-P` always runs sequentially (`N>1` is reduced to 1).
 <!--/flag-->
 
 #### Output option {.flag-group}
 
 <!--flag: -f file | optional-->
-Writes the **result data** to `file` instead of stdout: the retrieved config (`-g`), the diff (`-m`), or the listing rows (`-l`, `-z`, `-Z`, `-o`, `-s`, `-S`, `-t`). The file is created/overwritten as needed. It does **not** apply to `--check-template`, whose ok/error result is written to the log only.
+Writes the **result data** to `file` instead of stdout: the retrieved config (`-g`), the diff (`-m`), or the listing rows (`-l`, `-z`, `-Z`, `-o`, `-e`, `-s`, `-S`, `-t`, `--list-allowed-dirs`). The file is created/overwritten as needed. It does **not** apply to `--check-template`, whose ok/error result is written to the log only.
 
 The file receives *only* that data — never the screen output. All `info:`/`debug:`/`error:` lines, including the “checked N backup(s), …” summary and the “wrote … to file” confirmation, are log messages and always go to stderr.
 
-For the listing/check modes (`-l`, `-z`, `-Z`, `-o`, `-s`, `-S`) the result data **ends with one summary line prefixed by `#`**, carrying the same text the run logs — e.g. `# dev=sw01: checked 2 backup(s), no zero-byte backups found` — so the output is never empty and is self-describing: a reader can tell “checked, nothing found” from “nothing was written” without the exit status or stderr. The rows before it contain only the items *found*. The trailer is part of the result stream, so stdout and `-f` carry identical content. It is *not* added to `-g` or `-m`, which stay byte-exact.
+For the listing/check modes (`-l`, `-z`, `-Z`, `-o`, `-e`, `-s`, `-S`, `-t`, `--list-allowed-dirs`) the result data **ends with one summary line prefixed by `#`**, carrying the same text the run logs — e.g. `# dev=sw01: checked 2 backup(s), no zero-byte backups found` — so the output is never empty and is self-describing: a reader can tell “checked, nothing found” from “nothing was written” without the exit status or stderr. The rows before it contain only the items *found*. The trailer is part of the result stream, so stdout and `-f` carry identical content. It is *not* added to `-g` or `-m`, which stay byte-exact.
 
 > [!warn] Format change for parsers (v9.55)
 > Anything that parses these listings — fetchconfig-web in particular — must skip lines starting with `#`. Before v9.55 a check that found nothing produced a 0-byte file.
 <!--/flag-->
 
-<!--flag: --clean-lock-dir [N] | no device table-->
-Removes device lock files older than `N` days (by mtime) from the lock directory, then exits. With `-T`, only shows what **would** be removed (dry run). `N` defaults to `30`, minimum `1`. A lock file is removed **only if it is not currently held** — the cleaner `flock()`s each candidate first and keeps any live lock — so an in-use lock is never deleted. The lock directory is `<dir of fetchconfig.pl>/.lock` by default; pass `-devices=` if a custom `lock_dir=` applies. Exits `0` on success, `2` on a bad `N` or an unusable lock directory.
+<!--flag: --clean-lock-dir [N] | needs a device table-->
+Removes device lock files older than `N` days (by mtime) from the lock directory, then exits. With `-T`, only shows what **would** be removed (dry run). `N` defaults to `30`, minimum `1`. A lock file is removed **only if it is not currently held** — the cleaner `flock()`s each candidate first and keeps any live lock — so an in-use lock is never deleted. At least one `-devices=`/`-line=` is required (the devices-required check runs before this mode); the lock directory is `<dir of fetchconfig.pl>/.lock` by default, so pass the device table that configures a custom `lock_dir=`/`directory: lock` to clean that directory instead. Exits `0` on success, `2` on a bad `N` or an unusable lock directory.
+<!--/flag-->
+
+<!--flag: --db-backfill | needs db:-->
+Reconstructs the history database from the backups already on disk (requires a `db:` line; see [Backup-history database](#backup-history)), then exits — use it once after first enabling `db:`, since otherwise only new runs populate the DB. For every loaded device it scans its `repository=` and, for each stored backup not yet in the DB, inserts a `backup_versions` row (its sha1 **recomputed from the file** — identical to what a live save stores) and a `backup_runs` row (state `success`, `changed`, `run_end` = the backup's timestamp, no duration); it also inserts a `backup_current` row for each device that has none yet, from `<dev_id>.status` plus the newest backup. When the fetchconfig-web 2.12 line-delta columns exist it records `lines_added`/`lines_removed` on each version and UPDATEs existing version rows whose deltas are still empty. Idempotent and repeatable: an existing row is left alone, so a re-run only fills what is still missing (and does not re-hash a backup already recorded), and a `backup_current` row a live run wrote is never overwritten. Connects up front and aborts if the DB is unreachable. With `-T` it **previews** the counts (what would be inserted) without hashing or writing. Only saved backups can be reconstructed: the dense run history (unchanged or failed runs leave no file) is not on disk, so backfilled `backup_runs` rows are the saved change-events only (state `success`, no durations) — the full run history accrues from live runs afterwards. Mutually exclusive with the lookup/maintenance modes (`-g`/`-l`/`-z`/`-Z`/`-o`/`-e`/`-s`/`-S`); `-T` previews it. Exits `0` on success, `1` if the DB is unreachable or a write failed.
 <!--/flag-->
 
 #### Generic options {.flag-group}
@@ -808,7 +818,7 @@ backup_changed=changed
 | `backup_end_date` / `backup_end_time` | When the fetch finished (local time). |
 | `backup_duration_sec` | Whole seconds the fetch took — the same value logged for the run and shown in the summary e-mail. |
 | `backup_state` | `success`, `failed`, or `skipped`. |
-| `backup_changed` | `unchanged` or `changed` for a `changes_only=1` device; `forced` for a `changes_only=0` device (saved regardless of any comparison); `unknown` when the state is failed or skipped. |
+| `backup_changed` | `initial` for a device's first-ever backup (no previous config to compare, whatever `changes_only` is); then `unchanged` or `changed` for a `changes_only=1` device; `forced` for a `changes_only=0` device (saved regardless of any comparison); `unknown` when the state is failed or skipped. |
 
 ## ProCurve SNMP backups (ProVision, 4000M/8000M) {#procurve-snmp} {nav: ProCurve SNMP backups}
 

@@ -42,6 +42,7 @@ use strict;
 use warnings;
 use Text::ParseWords ();
 use Time::Local qw(timelocal timegm);
+use Digest::SHA ();   # core; only used by the --db-backfill path
 
 # A true-UTC instant -> the "local wall-clock epoch" convention the DB uses
 # (local date/time encoded as seconds, as if UTC; see
@@ -60,6 +61,8 @@ my %db_cfg;        # parsed db: options
 my $db_seen = 0;   # a db: line was present
 my $log;           # logger (fetchconfig::Logger)
 my %summary;       # drain result for the status mail
+my $delta_cols;    # 1/0 after probing: does backup_versions have lines_added/_removed?
+                   # (undef = not probed -> treated as absent; keeps unit tests 8.2-neutral)
 
 my $DEFAULT_PORT          = 5432;
 my $DEFAULT_CONNECT_TMO   = 5;
@@ -68,6 +71,10 @@ my $DEFAULT_SSLMODE       = 'disable';   # local DB on the same box; no TLS by d
 
 # End-of-run log section header, same 92-char width as Mailer's "-----[email]-----".
 my $SECTION_DIVIDER = '-----[DB writer]----------------------------------------------------------------------------';
+
+# --db-backfill logs its own section under this label, same width as the writer one.
+my $BACKFILL_DIVIDER = '-----[DB backfill]'
+    . ('-' x (length($SECTION_DIVIDER) - length('-----[DB backfill]')));
 
 sub configured { $db_seen }
 
@@ -177,6 +184,315 @@ sub finish {
     $log->info($line) if $log && defined($line);
 }
 
+# --- Backfill (--db-backfill) -------------------------------------------------
+# Reconstruct the DB history from the backups already on disk, for every loaded
+# device. Direct writes, idempotent and repeatable: an existing row is left
+# alone, so a re-run only fills what is still missing (and does not re-hash a
+# backup that is already recorded). Fills:
+#   backup_versions - one row per on-disk backup; sha1 recomputed from the file
+#                     bytes (the live writer hashes the same bytes it writes, so
+#                     the value is identical).
+#   backup_runs     - one row per on-disk backup (state=success, changed=changed,
+#                     run_end = the file timestamp, duration_sec NULL). The dense
+#                     run history (unchanged/failed runs) left no file and cannot
+#                     be reconstructed; only the saved change-events are added.
+#   backup_current  - one row per device that has none yet, from <dev_id>.status
+#                     (the authoritative last run) plus the newest backup (size,
+#                     last_good); never overwrites a row a real run already wrote.
+# $preview (-T): report what WOULD be inserted; connects read-only, no hashing,
+# no writes. Returns a process exit code (0 ok, 1 DB unreachable or write error).
+sub backfill {
+    my ($class, $logger, $preview) = @_;
+    $log = $logger if defined($logger);
+
+    $log->info($BACKFILL_DIVIDER) if $log;
+
+    unless ($db_seen) {
+        $log->error("--db-backfill: no db: configured in the device table") if $log;
+        return 1;
+    }
+    unless (eval { require DBI; 1 }) {
+        $log->error("--db-backfill: DBI not available (install DBI and DBD::Pg)") if $log;
+        return 1;
+    }
+
+    my $dbh = _connect();
+    unless ($dbh) {
+        $log->error("--db-backfill: cannot connect to the history database") if $log;
+        return 1;
+    }
+
+    my @dev_ids = fetchconfig::model::Detector->device_ids;
+    $log->info("--db-backfill: scanning " . scalar(@dev_ids) . " device(s)"
+               . ($preview ? " (preview - no writes)" : "")) if $log;
+
+    my %t = (ver => 0, vupd => 0, run => 0, cur => 0, vskip => 0, rskip => 0, cskip => 0, errors => 0);
+
+    for my $dev_id (@dev_ids) {
+        my $info = fetchconfig::model::Detector->device_info($dev_id);
+        next unless defined($info);
+        my $mod  = $info->{model};
+        my $tab  = $info->{dev_opt_tab};
+        my $repo = $mod->dev_option($tab, "repository");
+        next unless defined($repo) && length($repo);
+
+        # Enumerate on-disk backups (quietly - an empty device is not an error).
+        my %dir_tab;
+        $mod->scan_dir(\%dir_tab, $dev_id, $repo);
+        my @unparsed;
+        my @files = fetchconfig::model::Abstract::sort_backups_desc(
+                        $dev_id, [keys %dir_tab], \@unparsed);
+
+        my ($newest_ts, $newest_size);
+        my $prev_lines;   # normalized lines of the previous (older) backup, for the delta
+        my %d = (ver => 0, vupd => 0, run => 0, cur => 0, vskip => 0, rskip => 0, cskip => 0);
+        my $dev_err = 0;
+
+        # Oldest first, so each version's delta is against its immediate predecessor.
+        for my $file (reverse @files) {
+            my $fts = fetchconfig::model::Abstract->backup_epoch_from_filename($dev_id, $file);
+            next unless defined($fts);
+            my $dir  = $dir_tab{$file};
+            my $path = "$dir/$file";
+            $log->debug("process: $path") if $log;
+            my $size = (stat($path))[7];
+            $newest_ts = $fts; $newest_size = $size;   # oldest-first: the last seen is newest
+
+            # Normalized line view (ignore-aware where the model's rules are loaded,
+            # raw otherwise - e.g. a template not loaded in backfill) and the delta
+            # against the previous version. undef = baseline or an unreadable file.
+            my $curr_lines = $mod->config_norm_lines($dir, $file);
+            my ($la, $lr);
+            if (defined($prev_lines) && defined($curr_lines)) {
+                ($la, $lr) = fetchconfig::model::Abstract::line_delta($prev_lines, $curr_lines);
+            }
+            $prev_lines = $curr_lines if defined($curr_lines);
+
+            # --- backup_versions: insert a missing row, or fill a NULL delta -------
+            if ($delta_cols) {
+                my ($ok, $row) = _fetch_row($dbh,
+                    'SELECT lines_added FROM backup_versions WHERE dev_id = ? AND file_timestamp = ?',
+                    $dev_id, $fts);
+                if (!$ok) { $dev_err = 1; last; }
+                if (!$row) {                                   # no row -> insert (with delta)
+                    if ($preview) { $d{ver}++; }
+                    else {
+                        my $sha1 = _sha1_file($path);
+                        if (!defined $sha1) {
+                            $log->error("--db-backfill: cannot read $path - skipping its version row") if $log;
+                            $t{errors}++;
+                        }
+                        elsif (defined _apply_op($dbh, { op => 'version', dev_id => $dev_id,
+                                file_timestamp => $fts, path => $path, size_bytes => $size,
+                                sha1 => $sha1, lines_added => $la, lines_removed => $lr })) { $d{ver}++; }
+                        else { $dev_err = 1; last; }
+                    }
+                }
+                elsif (!defined($row->[0]) && defined($la)) {  # existing row, NULL delta -> fill it
+                    if ($preview) { $d{vupd}++; }
+                    elsif (defined _do($dbh,
+                        'UPDATE backup_versions SET lines_added = ?, lines_removed = ?
+                         WHERE dev_id = ? AND file_timestamp = ?',
+                        $la, $lr, $dev_id, $fts)) { $d{vupd}++; }
+                    else { $dev_err = 1; last; }
+                }
+                else { $d{vskip}++; }                          # baseline, or delta already present
+            }
+            else {
+                # Web schema < 2.12 (no delta columns): original insert-missing only.
+                my $ve = _row_exists($dbh,
+                    'SELECT 1 FROM backup_versions WHERE dev_id = ? AND file_timestamp = ?',
+                    $dev_id, $fts);
+                if (!defined $ve) { $dev_err = 1; last; }
+                elsif ($ve)       { $d{vskip}++; }
+                elsif ($preview)  { $d{ver}++; }
+                else {
+                    my $sha1 = _sha1_file($path);
+                    if (!defined $sha1) {
+                        $log->error("--db-backfill: cannot read $path - skipping its version row") if $log;
+                        $t{errors}++;
+                    }
+                    elsif (defined _apply_op($dbh, { op => 'version', dev_id => $dev_id,
+                            file_timestamp => $fts, path => $path,
+                            size_bytes => $size, sha1 => $sha1 })) { $d{ver}++; }
+                    else { $dev_err = 1; last; }
+                }
+            }
+
+            # --- backup_runs: synthetic change-event (run_end = the file timestamp) -
+            my $re = _row_exists($dbh,
+                'SELECT 1 FROM backup_runs WHERE dev_id = ? AND run_end = ?',
+                $dev_id, $fts);
+            if (!defined $re) { $dev_err = 1; last; }
+            elsif ($re)       { $d{rskip}++; }
+            elsif ($preview)  { $d{run}++; }
+            elsif (defined _apply_op($dbh, { op => 'run', dev_id => $dev_id, run_end => $fts,
+                    state => 'success', changed => 'changed', duration_sec => undef,
+                    size_bytes => $size, fail_reason => undef, repository => $repo }))
+                              { $d{run}++; }
+            else              { $dev_err = 1; last; }
+        }
+
+        # backup_current - only for a device that has no row yet.
+        unless ($dev_err) {
+            my $ce = _row_exists($dbh,
+                'SELECT 1 FROM backup_current WHERE dev_id = ?', $dev_id);
+            if (!defined $ce) { $dev_err = 1; }
+            elsif ($ce)       { $d{cskip}++; }
+            else {
+                my $cur = _current_row($dev_id, $repo, $newest_ts, $newest_size);
+                if ($cur && $preview) { $d{cur}++; }
+                elsif ($cur) {
+                    if (defined _do($dbh,
+                        'INSERT INTO backup_current
+                           (dev_id, repository, run_end, state, changed, duration_sec,
+                            size_bytes, fail_reason, last_good_at, last_good_size)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        @{$cur}{qw(dev_id repository run_end state changed duration_sec
+                                   size_bytes fail_reason last_good_at last_good_size)}))
+                        { $d{cur}++; }
+                    else { $dev_err = 1; }
+                }
+            }
+        }
+
+        if ($preview) {
+            $dbh->rollback;
+        }
+        elsif ($dev_err) {
+            $dbh->rollback;
+            $t{errors}++;
+            $log->error("--db-backfill: dev=$dev_id rolled back after a DB error") if $log;
+            next;   # do not fold this device's tentative counts
+        }
+        elsif (!$dbh->commit) {
+            $t{errors}++;
+            $log->error("--db-backfill: dev=$dev_id commit failed: "
+                       . ($DBI::errstr // 'unknown')) if $log;
+            next;
+        }
+        $t{$_} += $d{$_} for keys %d;
+    }
+
+    $dbh->disconnect;
+
+    if ($log) {
+        my $verb  = $preview ? "would add"  : "added";
+        my $verb2 = $preview ? "would fill" : "filled";
+        $log->info(sprintf(
+            "--db-backfill: %s %d version, %d run, %d current row(s); %s %d line-delta(s) "
+            . "on existing rows; skipped %d/%d/%d already present; %d error(s)",
+            $verb, $t{ver}, $t{run}, $t{cur}, $verb2, $t{vupd},
+            $t{vskip}, $t{rskip}, $t{cskip}, $t{errors}));
+        if ($t{errors}) { $log->error("--db-backfill: finished with $t{errors} error(s)"); }
+        else            { $log->info("Success"); }
+    }
+
+    return $t{errors} ? 1 : 0;
+}
+
+# Build a backup_current row for a device that has none yet, from its .status
+# file (the authoritative last run) plus the newest on-disk backup (size +
+# last_good). Falls back to the newest backup alone - a saved backup is a
+# successful run by definition - when there is no .status. Returns a hashref, or
+# undef if there is nothing on disk to record.
+sub _current_row {
+    my ($dev_id, $repo, $newest_ts, $newest_size) = @_;
+
+    my %s = _read_status("$repo/$dev_id.status");
+    if (defined($s{state}) && defined($s{run_end})) {
+        my $ok = ($s{state} eq 'success');
+        return {
+            dev_id         => $dev_id,
+            repository     => $repo,
+            run_end        => $s{run_end},
+            state          => $s{state},
+            changed        => (defined($s{changed}) ? $s{changed} : 'unknown'),
+            duration_sec   => $s{duration_sec},
+            size_bytes     => ($ok ? $newest_size : undef),
+            fail_reason    => undef,
+            last_good_at   => ($ok ? $s{run_end} : $newest_ts),
+            last_good_size => $newest_size,
+        };
+    }
+    return undef unless defined($newest_ts);   # no .status and no backups on disk
+    return {
+        dev_id         => $dev_id,
+        repository     => $repo,
+        run_end        => $newest_ts,
+        state          => 'success',
+        changed        => 'changed',
+        duration_sec   => undef,
+        size_bytes     => $newest_size,
+        fail_reason    => undef,
+        last_good_at   => $newest_ts,
+        last_good_size => $newest_size,
+    };
+}
+
+# Parse a <dev_id>.status file. Returns a hash with state/changed/duration_sec
+# and run_end (the end date+time encoded with the DB's local-wall-clock-epoch
+# convention, same as a backup's file_timestamp). Empty list if unreadable.
+sub _read_status {
+    my ($path) = @_;
+    open(my $fh, '<', $path) or return ();
+    my %raw;
+    while (my $ln = <$fh>) {
+        $raw{$1} = $2 if $ln =~ /^([a-z_]+)\s*=\s*(.*?)\s*$/;
+    }
+    close $fh;
+
+    my %out;
+    $out{state}        = $raw{backup_state}   if defined $raw{backup_state};
+    $out{changed}      = $raw{backup_changed} if defined $raw{backup_changed};
+    $out{duration_sec} = $raw{backup_duration_sec}
+        if defined($raw{backup_duration_sec}) && $raw{backup_duration_sec} =~ /^\d+$/;
+    if (defined($raw{backup_end_date}) && defined($raw{backup_end_time})
+        && $raw{backup_end_date} =~ /^(\d{4})-(\d{2})-(\d{2})$/) {
+        my ($y, $mo, $dd) = ($1, $2, $3);
+        if ($raw{backup_end_time} =~ /^(\d{2}):(\d{2}):(\d{2})$/) {
+            $out{run_end} =
+                fetchconfig::model::Abstract::backup_epoch_from_parts($y, $mo, $dd, $1, $2, $3);
+        }
+    }
+    %out;
+}
+
+# Whether a row exists (1/0); undef on a DB error so the caller can abort.
+sub _row_exists {
+    my ($dbh, $sql, @bind) = @_;
+    my $sth = $dbh->prepare($sql) or return undef;
+    return undef unless defined $sth->execute(@bind);
+    my $row = $sth->fetchrow_arrayref;
+    $sth->finish;
+    return $row ? 1 : 0;
+}
+
+# Fetch one row: returns ($ok, $row). $ok=0 on a DB error (caller aborts); $row is
+# the first row's arrayref, or undef when no row matched (a column value may itself
+# be undef for a NULL). Used by backfill to tell "no version row" from "row present
+# with a NULL delta" from "row already has a delta".
+sub _fetch_row {
+    my ($dbh, $sql, @bind) = @_;
+    my $sth = $dbh->prepare($sql) or return (0, undef);
+    return (0, undef) unless defined $sth->execute(@bind);
+    my $row = $sth->fetchrow_arrayref;
+    $sth->finish;
+    (1, $row);
+}
+
+# sha1 of a file's raw bytes - identical to what a live save records (it hashes
+# the exact bytes it writes). undef if the file cannot be read.
+sub _sha1_file {
+    my ($path) = @_;
+    open(my $fh, '<', $path) or return undef;
+    binmode $fh;
+    my $sha = Digest::SHA->new(1);
+    my $ok  = eval { $sha->addfile($fh); 1 };
+    close $fh;
+    return $ok ? $sha->hexdigest : undef;
+}
+
 # Build the per-repository op list from the run's results and expire events.
 sub _ops_by_repo {
     my ($results, $expires) = @_;
@@ -219,11 +535,14 @@ sub _ops_by_repo {
         };
 
         # version (sparse) - only a retained backup carries path/sha1/timestamp.
+        # lines_added/lines_removed are the per-version delta (undef = baseline or
+        # not computed); they round-trip through the spool like any other field.
         if (defined($r->{path}) && defined($r->{file_timestamp}) && defined($r->{sha1})) {
             push @{ $by_repo{$repo} }, {
                 op => 'version', dev_id => $r->{dev_id},
                 file_timestamp => $r->{file_timestamp}, path => $r->{path},
                 size_bytes => $size, sha1 => $r->{sha1},
+                lines_added => $r->{lines_added}, lines_removed => $r->{lines_removed},
             };
         }
     }
@@ -394,6 +713,18 @@ sub _apply_op {
     }
 
     if ($kind eq 'version') {
+        # Write lines_added/lines_removed too when the web 2.12 columns exist
+        # (probed at connect); otherwise the original 5-column insert.
+        if ($delta_cols) {
+            my $sql = 'INSERT INTO backup_versions
+                         (dev_id, file_timestamp, path, size_bytes, sha1, lines_added, lines_removed)
+                       SELECT ?, ?, ?, ?, ?, ?, ?
+                       WHERE NOT EXISTS (SELECT 1 FROM backup_versions WHERE dev_id = ? AND file_timestamp = ?)';
+            return _do($dbh, $sql,
+                $op->{dev_id}, $op->{file_timestamp}, $op->{path}, $op->{size_bytes}, $op->{sha1},
+                $op->{lines_added}, $op->{lines_removed},
+                $op->{dev_id}, $op->{file_timestamp});
+        }
         my $sql = 'INSERT INTO backup_versions
                      (dev_id, file_timestamp, path, size_bytes, sha1)
                    SELECT ?, ?, ?, ?, ?
@@ -474,7 +805,24 @@ sub _connect {
         _warn("DB connect failed (spool kept): " . ($DBI::errstr // 'unknown'));
         return undef;
     }
+    _probe_delta_cols($dbh);
     $dbh;
+}
+
+# Do the backup_versions.lines_added/lines_removed columns exist (web schema
+# >= 2.12)? Probed once per connection so the writer stays compatible with a web
+# side not yet upgraded: present -> write the deltas; absent -> write as before
+# and the columns simply go unpopulated until the 2.12 migration is applied.
+sub _probe_delta_cols {
+    my ($dbh) = @_;
+    my $r = _row_exists($dbh,
+        "SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'backup_versions' AND column_name = 'lines_added'");
+    $delta_cols = (defined($r) && $r) ? 1 : 0;
+    if (!$delta_cols && $log) {
+        $log->info("DB: backup_versions has no lines_added/lines_removed yet"
+                   . " - run the fetchconfig-web 2.12 upgrade to enable line deltas");
+    }
 }
 
 # The spool files of one repository, oldest-first. A name is .db-<pid>-<stamp>;

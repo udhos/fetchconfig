@@ -543,6 +543,19 @@ sub fetch_device {
     my $saved_meta = $mod->{saved};
     my $backup_kept = !($dev_changes_only && $cfg_equal);
 
+    # DB history: the line delta for this retained backup's version row -
+    # lines_added/lines_removed over the ignore-normalized diff against the
+    # previous config. undef (baseline) when there is no previous to compare.
+    my ($lines_added, $lines_removed);
+    if ($backup_kept && $saved_meta && defined($latest_dir)) {
+        my $prev_lines = $mod->config_norm_lines($latest_dir, $latest_file);
+        my $curr_lines = $mod->config_norm_lines($config_dir, $config_file);
+        if (defined($prev_lines) && defined($curr_lines)) {
+            ($lines_added, $lines_removed) =
+                fetchconfig::model::Abstract::line_delta($prev_lines, $curr_lines);
+        }
+    }
+
     #
     # Record this device's outcome for the end-of-run backup summary
     # e-mail (see Mailer.pm). "changed"/"unchanged" is only reported
@@ -573,6 +586,8 @@ sub fetch_device {
 	    path           => $saved_meta->{path},
 	    file_timestamp => $saved_meta->{file_epoch},
 	    sha1           => $saved_meta->{sha1},
+	    lines_added    => $lines_added,
+	    lines_removed  => $lines_removed,
 	) : ()),
 	to           => $dev_email_to,
 	);

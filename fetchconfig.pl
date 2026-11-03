@@ -94,6 +94,7 @@ my $template_syntax;    # set by --template-syntax FILE: print the template's '#
 my $list_template;      # set by -t/--list-template: list available templates from all template_dir=
 my $list_allowed_dirs;  # set by --list-allowed-dirs: list the directory: allowlist
 my $clean_lock_dir;     # set by --clean-lock-dir N: remove lock files older than N days, then exit
+my $db_backfill;        # set by --db-backfill: reconstruct the history DB from on-disk backups, then exit
 my $retrieve_out_file;  # set by -f: optional output file (default: stdout)
 my $parallel = 1;       # set by -P N: number of concurrent fetch workers (1 = sequential, the default)
 
@@ -140,6 +141,7 @@ my $got = GetOptions(
     't|list-template'  => \$list_template,
     'list-allowed-dirs' => \$list_allowed_dirs,
     'clean-lock-dir:i'  => \$clean_lock_dir,   # N days; :i => value optional (default 30)
+    'db-backfill'       => \$db_backfill,
     'n=s'       => \$retrieve_index,   # validated as a positive integer below
     'm=s'       => \$compare_index,
     'P=s'       => \$parallel,
@@ -242,8 +244,8 @@ if ((@device_file_list < 1) && (@line_list < 1)) {
     die "\n";
 }
 
-if ((grep { defined($_) } ($retrieve_dev_id, $list_dev_id, $zero_check_dev_id, $zero_check_all, $orphan_check, $empty_check, $suffix_check_dev_id, $suffix_check_all)) > 1) {
-    $log->error("-g, -l, -z, -Z, -o, -e, -s and -S are mutually exclusive");
+if ((grep { defined($_) } ($retrieve_dev_id, $list_dev_id, $zero_check_dev_id, $zero_check_all, $orphan_check, $empty_check, $suffix_check_dev_id, $suffix_check_all, $db_backfill)) > 1) {
+    $log->error("-g, -l, -z, -Z, -o, -e, -s, -S and --db-backfill are mutually exclusive");
     &usage;
     die "\n";
 }
@@ -269,8 +271,8 @@ if (defined($orphan_delete)
     die "\n";
 }
 
-if (defined($orphan_test) && !defined($orphan_delete) && !defined($clean_lock_dir)) {
-    $log->error("-T requires -D (or --clean-lock-dir)");
+if (defined($orphan_test) && !defined($orphan_delete) && !defined($clean_lock_dir) && !defined($db_backfill)) {
+    $log->error("-T requires -D (or --clean-lock-dir, or --db-backfill)");
     &usage;
     die "\n";
 }
@@ -284,7 +286,7 @@ $default_lock_dir .= '/.lock';
 fetchconfig::model::Detector->init($log, $default_lock_dir);
 fetchconfig::Report->init($log);
 
-my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs) || defined($template_syntax) || defined($clean_lock_dir);
+my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs) || defined($template_syntax) || defined($clean_lock_dir) || defined($db_backfill);
 if ($parallel > 1 && $lookup_only) {
     $log->error("-P applies to fetching only and cannot be combined with -g/-l/-z/-Z/-o/-e/-s/-S");
     &usage;
@@ -363,6 +365,18 @@ if (defined($empty_check)) {
 if (defined($orphan_check)) {
     fetchconfig::Tools::check_orphaned_backups($retrieve_out_file, $orphan_delete, $orphan_test);
     exit;
+}
+
+# --db-backfill: reconstruct the history DB from the backups already on disk
+# (one backup_versions + backup_runs row per stored backup, backup_current for
+# devices not yet recorded), then exit. Requires a db: line. -T previews counts.
+if (defined($db_backfill)) {
+    unless (fetchconfig::History->configured) {
+        $log->error("--db-backfill requires a db: line in the device table");
+        &usage;
+        die "\n";
+    }
+    exit(fetchconfig::History->backfill($log, $orphan_test));
 }
 
 if (defined($list_template)) {
@@ -490,6 +504,7 @@ sub usage_text {
     $t .= "       $me [-devices=file] [-line=string] -o -D [-T] [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -e [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -e -D [-T] [-f file]\n";
+    $t .= "       $me [-devices=file] [-line=string] --db-backfill [-T]\n";
     $t .= "\n";
     $t .= "       -devices=file  device table file to load (repeatable); a relative name is looked for in the\n";
     $t .= "                      current directory first, then beside fetchconfig.pl (its own directory)\n";
@@ -562,6 +577,12 @@ sub usage_text {
     $t .= "       --template-syntax PATH print the template's declared syntax style (the value of its\n";
     $t .= "                      # syntax_style: <token> header comment) to stdout, for a config viewer;\n";
     $t .= "                      exits 0 if declared, 1 if not. Backup behaviour is never affected.\n";
+    $t .= "       --db-backfill         backfill the history database from the backups already on disk\n";
+    $t .= "                      (requires a db: line): one backup_versions row (with sha1, recomputed\n";
+    $t .= "                      from the file) and one backup_runs row per stored backup, plus\n";
+    $t .= "                      backup_current for devices not yet recorded. Idempotent and repeatable;\n";
+    $t .= "                      never overwrites a row a real run wrote. -T previews the counts without\n";
+    $t .= "                      hashing or writing. Then exit.\n";
     $t .= "       -f file        write the result data (config/diff/listing rows) to file instead of stdout; log\n";
     $t .= "                      messages still go to stderr. A check that finds nothing writes an EMPTY file -\n";
     $t .= "                      that is the expected result; the outcome is in the exit status. Does NOT apply\n";

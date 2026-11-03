@@ -1,6 +1,34 @@
 fetchconfig -- Changes
 ======================
 
+9.77
+====
+
++ Per-version line deltas (lines_added/lines_removed on backup_versions): the
+  +added/-removed of the ignore-normalized diff against the previous version, so a
+  same-size edit no longer reads as 0 B. The live writer computes them from the
+  normalized view; --db-backfill fills them too, and UPDATEs existing rows whose
+  deltas are still NULL. The two columns are owned by fetchconfig-web 2.12 - the
+  engine probes for them and writes them only when present, so an older web side
+  keeps working (columns stay unpopulated). Dependency-free line diff; a backfilled
+  generic-template device counts raw lines (its template is not loaded).
++ Corrected several documentation issues across DEVELOPER-GUIDE, README and the
+  HTML manual (and tidied two older CHANGES entries), found by auditing the docs
+  against the code: the per-device pipeline order, the backup/.status on-disk
+  paths, model registration, directory-allowlist and exit-code details, the
+  per-option mutual-exclusion lists (now including --db-backfill), and a few stale
+  notes. No code change.
+
+9.76
+====
+
++ New "--db-backfill": fill the history DB from the backups already on disk -- a
+  backup_versions row (sha1 recomputed from the file, identical to a live save)
+  and a backup_runs row per stored backup, plus backup_current where missing.
+  Idempotent and repeatable; "-T" previews the counts; needs a "db:" line and
+  never overwrites a row a live run wrote. Only saved change-events are added --
+  the dense run history (unchanged/failed runs) leaves no file to rebuild from.
+
 9.75
 ====
 
@@ -20,10 +48,10 @@ fetchconfig -- Changes
 + Summary mail renders correctly in Outlook (Word engine): the report button is a
   VML button and the status pill a table-cell badge, both behind [if mso] blocks
   (normal styled HTML for every other client). The summary tables use soft zebra
-  shading with no visible cell borders (cleaner, and it removes the 1px row seam
-  Word drew between bordered rows); all clients render it the same. The HTML part
-  is now sent quoted-printable (was 8bit) so an MTA can never fold a long
-  table-row line past the 998-octet SMTP limit and corrupt the markup.
+  shading, no cell borders, and border-collapse so Word leaves no inter-row gap to
+  paint (the faint 1px seam it drew under darker rows); all clients render it the
+  same. The HTML part is now sent quoted-printable (was 8bit) so an MTA can never
+  fold a long table-row line past the 998-octet SMTP limit and corrupt the markup.
 + Schema, writer role and grants are owned by fetchconfig-web
   (fetchconfig-web-dbsetup.pl --upgrade); the engine only writes, never DDL. See
   README ("db:") and DEVELOPER-GUIDE.
@@ -214,9 +242,10 @@ those marked "# Note: Verified on real hardware." have already been checked.
   <title> to build its Help-menu entries). The hero carries the
   testers/compatibility notice as a
   red info box plus a pointer to the fetchconfig-web companion project. The old
-  hand-maintained fetchconfig-documentation.html has been removed: README.html
-  (generated from README.md) supersedes it and adds the pager_cmd option the old
-  page was missing.
+  hand-maintained fetchconfig-documentation.html was retired in favour of
+  README.html (generated from README.md), which added the pager_cmd option the old
+  page was missing. (A styled fetchconfig-documentation manual was later
+  reintroduced as a generated .md and is the current reference.)
 
 + contrib/windows/: Python ports of the two developer tools -
   record_session.py and generate_template.py - with the same command line
@@ -289,10 +318,7 @@ those marked "# Note: Verified on real hardware." have already been checked.
 + Documentation and source-comment consistency pass (README, HTML manual,
   and in-source comments brought into line with the 9.69 code - the -D/-T
   option descriptions, the same-second backup note now that writes use
-  O_EXCL, and the system-directory/allowlist wording), and a CHANGES
-  correction: the device-locking, O_EXCL, keep=/timeout validation and
-  permission-revert entries below were released in 9.69 and are filed
-  under 9.69.
+  O_EXCL, and the system-directory/allowlist wording).
 
 9.69
 ====

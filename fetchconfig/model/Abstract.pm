@@ -1356,6 +1356,92 @@ sub read_lines_canon {
     join('', @lines);
 }
 
+#
+# config_ignore_re / config_canon - the model's change-detection normalization,
+# exposed so the per-version line-delta counter (lines_added/lines_removed) uses
+# the SAME ignore/canon view config_equal() compares with. Base model: none (its
+# config_equal is a byte comparison, so the delta is over raw lines). Models that
+# ignore a volatile line, or canonicalise part of a line, override these.
+#
+sub config_ignore_re { undef }
+sub config_canon     { undef }
+
+#
+# The config at $dir/$file as an arrayref of NORMALIZED lines - the ignore/canon
+# view config_equal() uses - for counting line deltas. undef on a read error.
+# (Under --db-backfill a GenericTemplate device has no template loaded, so its
+# cur_ignore_re is undef and this returns raw lines; that is accepted - see the
+# backfill caveat in the DEVELOPER-GUIDE.)
+#
+sub config_norm_lines {
+    my ($self, $dir, $file) = @_;
+
+    my $path      = "$dir/$file";
+    my $canon     = $self->config_canon;
+    my $ignore_re = $self->config_ignore_re;
+
+    local *IN;
+    if (!open(IN, '<', $path)) {
+        $self->log_error("could not read for line count: $path: $!");
+        return undef;
+    }
+    my @lines;
+    while (my $line = <IN>) {
+        if ($canon) {
+            for my $rule (@$canon) {
+                my ($re, $rep) = @$rule;
+                $line =~ s/$re/$rep/g;
+            }
+        }
+        next if defined($ignore_re) && $line =~ /$ignore_re/;
+        push @lines, $line;
+    }
+    if (!close(IN)) {
+        $self->log_error("could not close after line count: $path: $!");
+        return undef;
+    }
+    \@lines;
+}
+
+#
+# line_delta(\@prev, \@curr) -> ($added, $removed): a dependency-free line diff.
+# added = curr lines not in the longest common subsequence, removed = prev lines
+# not in it (the usual +added / -removed). Common prefix and suffix are trimmed
+# first (consecutive config versions share almost everything), then an LCS-length
+# DP runs over the small remainder, so it stays cheap even for large configs.
+# Not a method - call as fetchconfig::model::Abstract::line_delta(\@a, \@b).
+#
+sub line_delta {
+    my ($prev, $curr) = @_;
+    my @a = @$prev;
+    my @b = @$curr;
+
+    my ($i, $j) = (0, 0);                       # trim common prefix
+    while ($i < @a && $j < @b && $a[$i] eq $b[$j]) { $i++; $j++; }
+    my ($p, $q) = ($#a, $#b);                   # trim common suffix
+    while ($p >= $i && $q >= $j && $a[$p] eq $b[$q]) { $p--; $q--; }
+
+    my @x = ($i <= $p) ? @a[$i .. $p] : ();     # remaining prev lines
+    my @y = ($j <= $q) ? @b[$j .. $q] : ();     # remaining curr lines
+    return (scalar(@y), 0) unless @x;           # only additions
+    return (0, scalar(@x)) unless @y;           # only removals
+
+    # LCS length via a single DP row (O(@x*@y) time, O(@y) space).
+    my @row = (0) x (scalar(@y) + 1);
+    for my $r (0 .. $#x) {
+        my $diag = 0;                           # L[r-1][c] (upper-left)
+        for my $c (0 .. $#y) {
+            my $up = $row[$c + 1];              # L[r-1][c+1]
+            $row[$c + 1] = ($x[$r] eq $y[$c])
+                ? $diag + 1
+                : ($up >= $row[$c] ? $up : $row[$c]);
+            $diag = $up;
+        }
+    }
+    my $lcs = $row[-1];
+    (scalar(@y) - $lcs, scalar(@x) - $lcs);     # (added, removed)
+}
+
 sub prune_dir_tree {
     my ($self, $depth, $dir) = @_;
 

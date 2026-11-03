@@ -400,10 +400,15 @@ find_latest($dev_id, $dev_opt_tab) -- method. ($dir, $file) of the most recent b
 
 config_equal($prev_dir, $prev_file, $curr_dir, $curr_file) -- method, overridable. Default: File::Compare byte equality. Returns true if equal.
 
-config_equal_ignoring_lines($prev_dir, $prev_file, $curr_dir, $curr_file, $ignore_re) -- method. Compares after removing every line matching $ignore_re from both files. Returns false if either file cannot be read (keeps the newer version). Wrap it in your config_equal override:
+config_equal_ignoring_lines($prev_dir, $prev_file, $curr_dir, $curr_file, $ignore_re) -- method. Compares after removing every line matching $ignore_re from both files. Returns false if either file cannot be read (keeps the newer version).
 
-    my $VOLATILE = qr/^!Time: /;             # NX-OS example
-    sub config_equal { my ($self, @a) = @_; $self->config_equal_ignoring_lines(@a, $VOLATILE) }
+config_ignore_re / config_canon -- methods, overridable (default: none). Expose your model's volatile-line regex (and any canonicalisation pairs) here, then wire config_equal to them. Prefer this over an inline regex: the SAME normalized view is reused by the per-version line-delta counter (lines_added/lines_removed), so a volatile line is excluded from both change detection and the counts. An inline regex that bypasses config_ignore_re would leave the deltas counting raw lines for that model.
+
+    sub config_ignore_re { qr/^!Time: / }    # NX-OS example
+    sub config_equal {
+        my ($self, @a) = @_;
+        $self->config_equal_ignoring_lines(@a, $self->config_ignore_re);
+    }
 
 parse_backup_filename($dev_id, $file) -- function. ($timestamp, $tz, $suffix) from a backup file name; recognises +0200, CEST/CET, -CEST, multi-word Windows zones, and none.
 
@@ -437,7 +442,7 @@ Never log a password or community string; log the device-table line only through
 9.4 Volatile lines and changes_only
 -----------------------------------
 
-If the device rewrites a line on every read -- a save timestamp (!!: Written by ...), an uptime, !Time:, a re-salted password hash -- changes_only will never discard a backup for that model. Override config_equal with config_equal_ignoring_lines and a tight regex for exactly that line. The line is still stored; it is only ignored for the comparison. Weigh what you ignore: the maintainer chose not to ignore Hirschmann's re-rendered password hashes because that would also hide a real password change.
+If the device rewrites a line on every read -- a save timestamp (!!: Written by ...), an uptime, !Time:, a re-salted password hash -- changes_only will never discard a backup for that model. Expose a tight regex for exactly that line as config_ignore_re and have config_equal use it (see 9.4 above); defining it there (rather than an inline regex in config_equal) also keeps the per-version line-delta counts (lines_added/lines_removed) ignore-aware for that model. The line is still stored; it is only ignored for the comparison and the counts. Weigh what you ignore: the maintainer chose not to ignore Hirschmann's re-rendered password hashes because that would also hide a real password change.
 
 9.5 Bytes, not characters
 -------------------------

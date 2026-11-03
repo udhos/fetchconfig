@@ -52,13 +52,17 @@ sub ssh_extra_opts { (-o => "KexAlgorithms=+diffie-hellman-group1-sha1", -o => "
 # nothing else in the configuration changed. Ignore that one line
 # when deciding whether the configuration actually changed.
 #
+# The one volatile line to ignore for change detection; also used by the
+# line-delta counter (config_norm_lines) so counts match the comparison.
+sub config_ignore_re { qr/^!!: Written by \S+ at / }
+
 sub config_equal {
     my ($self, $prev_dir, $prev_file, $curr_dir, $curr_file) = @_;
 
     $self->log_debug("ignore !!: Written by ...");
 
     $self->config_equal_ignoring_lines($prev_dir, $prev_file, $curr_dir, $curr_file,
-					qr/^!!: Written by \S+ at /);
+					$self->config_ignore_re);
 }
 sub fetch {
     my ($self, $file, $line_num, $line, $dev_id, $dev_host, $dev_opt_tab) = @_;

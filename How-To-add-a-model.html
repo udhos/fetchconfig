@@ -532,7 +532,7 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.75</span>
+      <span class="pill">v9.77</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
@@ -848,10 +848,14 @@ sub ssh_extra_opts {
 <p><strong><code>dump_config($dev_id, $dev_opt_tab, $conf_ref)</code></strong> -- method. Writes <code>@$conf_ref</code> (one line per element, newline-terminated) to the repository path for today, creating directories. Validates <code>filename_append_suffix</code> (must start with <code>.</code>, no <code>/</code> or whitespace). Honours <code>timezone=hide</code>. Returns <code>($config_dir, $config_file)</code>, or <code>undef</code> on failure (logged). This return value is what <code>fetch()</code> returns.</p>
 <p><strong><code>find_latest($dev_id, $dev_opt_tab)</code></strong> -- method. <code>($dir, $file)</code> of the most recent backup by <strong>parsed timestamp</strong> (never string order -- the timezone token varies by platform), or <code>undef</code> if none.</p>
 <p><strong><code>config_equal($prev_dir, $prev_file, $curr_dir, $curr_file)</code></strong> -- method, overridable. Default: <code>File::Compare</code> byte equality. Returns true if equal.</p>
-<p><strong><code>config_equal_ignoring_lines($prev_dir, $prev_file, $curr_dir, $curr_file, $ignore_re)</code></strong> -- method. Compares after removing every line matching <code>$ignore_re</code> from both files. Returns false if either file cannot be read (keeps the newer version). Wrap it in your <code>config_equal</code> override:</p>
+<p><strong><code>config_equal_ignoring_lines($prev_dir, $prev_file, $curr_dir, $curr_file, $ignore_re)</code></strong> -- method. Compares after removing every line matching <code>$ignore_re</code> from both files. Returns false if either file cannot be read (keeps the newer version).</p>
+<p><strong><code>config_ignore_re</code></strong> / <strong><code>config_canon</code></strong> -- methods, overridable (default: none). Expose your model&#x27;s volatile-line regex (and any canonicalisation pairs) here, then wire <code>config_equal</code> to them. Prefer this over an inline regex: the SAME normalized view is reused by the per-version line-delta counter (<code>lines_added</code>/<code>lines_removed</code>), so a volatile line is excluded from <em>both</em> change detection and the counts. An inline regex that bypasses <code>config_ignore_re</code> would leave the deltas counting raw lines for that model.</p>
 <span class="file-label">perl</span>
-<pre><code>my $VOLATILE = qr/^!Time: /;             # NX-OS example
-sub config_equal { my ($self, @a) = @_; $self-&gt;config_equal_ignoring_lines(@a, $VOLATILE) }</code></pre>
+<pre><code>sub config_ignore_re { qr/^!Time: / }    # NX-OS example
+sub config_equal {
+    my ($self, @a) = @_;
+    $self-&gt;config_equal_ignoring_lines(@a, $self-&gt;config_ignore_re);
+}</code></pre>
 <p><strong><code>parse_backup_filename($dev_id, $file)</code></strong> -- function. <code>($timestamp, $tz, $suffix)</code> from a backup file name; recognises <code>+0200</code>, <code>CEST</code>/<code>CET</code>, <code>-CEST</code>, multi-word Windows zones, and none.</p>
 <p><strong><code>sort_backups_desc($dev_id, $files_ref, $unparsed_ref)</code></strong> -- function. Sorts file names newest first by parsed timestamp; unparsable names go to <code>@$unparsed_ref</code>.</p>
 <p>The core calls <code>purge_ancient</code>, <code>config_discard</code>, <code>prune_dir_tree</code>, <code>scan_dir</code> itself; a model does not.</p>
@@ -868,7 +872,7 @@ sub config_equal { my ($self, @a) = @_; $self-&gt;config_equal_ignoring_lines(@a
 <h3 id="93-credentials">9.3 Credentials</h3>
 <p>Never log a password or community string; log the device-table line only through <code>mask_secrets</code>. Any file that records a session (<code>dump_log</code>, HTTP trace, SSH debug) gets <code>secure_debug_file</code> (0600) at creation. Never retry a password over a second, weaker channel after an authentication failure (see <code>MediantSBC.pm</code>&#x27;s <code>transport=auto</code> rule: fall back to telnet only when no SSH service answered).</p>
 <h3 id="94-volatile-lines-and-changes_only">9.4 Volatile lines and <code>changes_only</code></h3>
-<p>If the device rewrites a line on every read -- a save timestamp (<code>!!: Written by ...</code>), an uptime, <code>!Time:</code>, a re-salted password hash -- <code>changes_only</code> will never discard a backup for that model. Override <code>config_equal</code> with <code>config_equal_ignoring_lines</code> and a tight regex for exactly that line. The line is still <strong>stored</strong>; it is only ignored for the comparison. Weigh what you ignore: the maintainer chose <em>not</em> to ignore Hirschmann&#x27;s re-rendered password hashes because that would also hide a real password change.</p>
+<p>If the device rewrites a line on every read -- a save timestamp (<code>!!: Written by ...</code>), an uptime, <code>!Time:</code>, a re-salted password hash -- <code>changes_only</code> will never discard a backup for that model. Expose a tight regex for exactly that line as <code>config_ignore_re</code> and have <code>config_equal</code> use it (see 9.4 above); defining it there (rather than an inline regex in <code>config_equal</code>) also keeps the per-version line-delta counts (<code>lines_added</code>/<code>lines_removed</code>) ignore-aware for that model. The line is still <strong>stored</strong>; it is only ignored for the comparison and the counts. Weigh what you ignore: the maintainer chose <em>not</em> to ignore Hirschmann&#x27;s re-rendered password hashes because that would also hide a real password change.</p>
 <h3 id="95-bytes-not-characters">9.5 Bytes, not characters</h3>
 <p>Devices send bytes: UTF-8 hostnames, <code>\r\r\n</code>, NULs, cursor escapes, backspaces. Match and quote at the byte level (<code>regexp_quote_keep_bytes</code>, <code>stripansi</code>), and verify with a raw capture, never with a terminal window or a printable log -- both hide the very bytes that break extraction.</p>
 <h3 id="96-timeouts">9.6 Timeouts</h3>

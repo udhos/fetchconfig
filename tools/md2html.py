@@ -495,6 +495,10 @@ def to_text(md, wrap_width=None):
     # their own end marker, because a Mermaid arrow ("-->") would otherwise end
     # a generic <!-- ... --> match early. Each diagram's readable ASCII fallback
     # is a separate fenced block and is kept.
+    # the <!--stats--> ... <!--/stats--> hero tiles are a styled-HTML-only
+    # element (consumed by render-doc.py); drop the whole block, content and
+    # all, so it never appears in the plain-text companion.
+    md = re.sub(r'<!--stats-->.*?<!--/stats-->', '', md, flags=re.DOTALL)
     md = re.sub(r'<!--MERMAID.*?MERMAID-->', '', md, flags=re.DOTALL)
     md = re.sub(r'<!--.*?-->', '', md, flags=re.DOTALL)
     lines = md.replace('\r\n', '\n').split('\n')
@@ -523,7 +527,7 @@ def to_text(md, wrap_width=None):
             while i < n and lines[i].strip().startswith('|'):
                 rows.append(_split_row(lines[i]))
                 i += 1
-            if wrap_width and len(header) == 2:
+            if wrap_width and _should_wrap_last(header, rows, wrap_width):
                 out.extend(_format_table_wrapped(header, rows, wrap_width))
             else:
                 out.extend(_format_table(header, rows))
@@ -541,7 +545,10 @@ def to_text(md, wrap_width=None):
         h = re.match(r'^(#{1,6})\s+(.*)$', line)
         if h:
             level = len(h.group(1))
-            text = _inline_text(h.group(2))
+            # strip trailing styled-heading attributes ({#id}, {nav: ...},
+            # {.class}) that render-doc.py consumes; they are not plain text.
+            htext = re.sub(r'(?:\s*\{[^}]*\})+\s*$', '', h.group(2))
+            text = _inline_text(htext)
             out.append('')
             out.append(text)
             out.append(('=' if level <= 2 else '-') * max(3, len(text)))
@@ -565,7 +572,23 @@ def to_text(md, wrap_width=None):
         # blockquote
         bq = re.match(r'^\s*>\s?(.*)$', line)
         if bq:
-            out.extend(_wrap(_inline_text(bq.group(1)), initial='    ', subsequent='    '))
+            content = bq.group(1)
+            # A GitHub-alert marker on the first line ("> [!NOTE] Title",
+            # "> [!WARNING] ...") is not literal text: render it as a plain
+            # label in the text twin instead of leaking "[!note]".
+            am = re.match(r'^\[!(\w+)\]\s*(.*)$', content)
+            if am:
+                t = am.group(1).upper()
+                label = ('WARNING' if t in ('WARNING', 'CAUTION', 'WARN')
+                         else '' if t in ('PLAIN', 'BOX', 'NEUTRAL')
+                         else 'NOTE')
+                title = am.group(2).strip()
+                hdr = (label + (': ' + title if title else '')) if label else title
+                if hdr:
+                    out.extend(_wrap(_inline_text(hdr), initial='    ', subsequent='    '))
+                i += 1
+                continue
+            out.extend(_wrap(_inline_text(content), initial='    ', subsequent='    '))
             i += 1
             continue
         out.extend(_wrap(_inline_text(line)))
@@ -581,9 +604,11 @@ def _split_row(line):
     s = line.strip()
     s = re.sub(r'^\|', '', s)
     s = re.sub(r'\|$', '', s)
-    # split on unescaped pipes, then unescape \|
+    # split on unescaped pipes, then unescape \|. Cells are transliterated to
+    # ASCII here so table column widths are measured on the final text (a cell
+    # like "&#10003;" -> "yes" must be its final width before alignment).
     cells = re.split(r'(?<!\\)\|', s)
-    return [_inline_text(c.strip().replace('\\|', '|')) for c in cells]
+    return [_ascii(_inline_text(c.strip().replace('\\|', '|'))) for c in cells]
 
 
 def _format_table(header, rows):
@@ -608,51 +633,77 @@ def _format_table(header, rows):
     return out
 
 
-def _format_table_wrapped(header, rows, width=80):
-    """Render a 2-column table wrapped to `width` columns: column 1 is left-
-    justified; column 2's text is wrapped, with continuation lines aligned
-    under the description column, matching the README option-table style. An
-    over-long column-1 cell goes on its own line; an unbreakable token (e.g. a
-    URL) may still exceed `width`."""
-    gap = 2
-    h0 = _ascii(header[0]) if header else ''
-    h1 = _ascii(header[1]) if len(header) > 1 else ''
-    cells = [(_ascii(r[0]) if len(r) > 0 else '',
-              _ascii(r[1]) if len(r) > 1 else '') for r in rows]
-    c1w = max([len(h0)] + [len(c[0]) for c in cells])
-    c1w = min(c1w, max(10, width - gap - 36))   # keep room for the description
-    c2start = c1w + gap
-    out = ['']
+def _should_wrap_last(header, rows, width, gap=2):
+    """True when a table's LAST column is a wide prose column that should be
+    wrapped to fit `width` (a Key/Requirement/Description style table), and
+    False when the table is wide only because it has many short columns (the
+    per-model option matrix), which is left unwrapped."""
+    cols = max([len(header)] + [len(r) for r in rows]) if rows else len(header)
+    if cols < 2:
+        return False
+    w = [0] * cols
+    for r in [header] + rows:
+        rr = [_ascii(x) for x in r] + [''] * (cols - len(r))
+        for c in range(cols):
+            w[c] = max(w[c], len(rr[c]))
+    fixed = cols - 1
+    prefix_w = sum(w[:fixed]) + gap * fixed
+    last_avail = width - prefix_w
+    return last_avail >= 30 and w[fixed] > last_avail
 
-    def emit(prefix, desc):
-        words = desc.split()
+
+def _format_table_wrapped(header, rows, width=80):
+    """Render a table to `width` columns: every column but the last is left-
+    justified at its natural width; the last (description) column is word-
+    wrapped, with continuation lines aligned under it. Matches the README
+    option-table style and keeps the text companion within `width` columns.
+    An unbreakable token (e.g. a URL) may still exceed `width`."""
+    gap = 2
+    cols = max([len(header)] + [len(r) for r in rows]) if rows else len(header)
+
+    def pad(r):
+        return [_ascii(x) for x in r] + [''] * (cols - len(r))
+    H = pad(header)
+    R = [pad(r) for r in rows]
+    fixed = cols - 1
+    w = [len(H[c]) for c in range(cols)]
+    for r in R:
+        for c in range(cols):
+            w[c] = max(w[c], len(r[c]))
+    prefix_w = sum(w[:fixed]) + gap * fixed
+    last_avail = max(30, width - prefix_w)
+
+    def wrap_last(text):
+        words = text.split()
         if not words:
-            out.append(prefix.rstrip())
-            return
-        avail = width - c2start           # same width for first and continuation
+            return ['']
         lines = []
         cur = ''
-        for w in words:
+        for wd in words:
             if cur == '':
-                cur = w
-            elif len(cur) + 1 + len(w) <= avail:
-                cur += ' ' + w
+                cur = wd
+            elif len(cur) + 1 + len(wd) <= last_avail:
+                cur += ' ' + wd
             else:
-                lines.append(cur); cur = w
+                lines.append(cur); cur = wd
         if cur:
             lines.append(cur)
-        out.append(prefix + lines[0])
-        for ln in lines[1:]:
-            out.append(' ' * c2start + ln)
+        return lines
 
-    out.append(h0.ljust(c1w) + ' ' * gap + h1)
-    out.append('-' * c1w + ' ' * gap + '-' * (width - c2start))
-    for c1, c2 in cells:
-        if len(c1) <= c1w:
-            emit(c1.ljust(c1w) + ' ' * gap, c2)
-        else:
-            out.append(c1)
-            emit(' ' * c2start, c2)
+    def rowfmt(cells):
+        prefix = ''.join(cells[c].ljust(w[c]) + ' ' * gap for c in range(fixed))
+        wl = wrap_last(cells[fixed])
+        res = [prefix + wl[0]]
+        for ln in wl[1:]:
+            res.append(' ' * len(prefix) + ln)
+        return res
+
+    out = ['']
+    out.extend(rowfmt(H))
+    out.append(''.join('-' * w[c] + ' ' * gap for c in range(fixed))
+               + '-' * last_avail)
+    for r in R:
+        out.extend(rowfmt(r))
     out.append('')
     return out
 
@@ -663,18 +714,75 @@ def _ascii(s):
     for a, b in ((u'\u2014', ' - '), (u'\u2013', '-'), (u'\u2018', "'"),
                  (u'\u2019', "'"), (u'\u201c', '"'), (u'\u201d', '"'),
                  (u'\u2192', '->'), (u'\u2190', '<-'), (u'\u2026', '...'),
-                 (u'\u00a0', ' '), (u'\u00b7', '*')):
+                 (u'\u00a0', ' '), (u'\u00b7', '*'), (u'\u2713', 'yes'),
+                 (u'\u2717', 'no'), (u'\u2265', '>='), (u'\u2264', '<='),
+                 (u'\u00d7', 'x'), (u'\u2010', '-'), (u'\u2011', '-'),
+                 (u'\u2012', '-'), (u'\u2015', '-')):
         s = s.replace(a, b)
+    return s
+
+
+try:
+    _unichr = unichr          # Python 2
+except NameError:
+    _unichr = chr             # Python 3
+
+
+def _unescape(s):
+    """Decode the HTML entities the docs use, into their characters (which
+    _ascii() then transliterates to ASCII). Dependency-free and portable to
+    Python 2.7 and 3.x, so it does not rely on html.unescape()."""
+    def _num(m):
+        code = m.group(1)
+        try:
+            n = int(code[1:], 16) if code[:1] in ('x', 'X') else int(code)
+            return _unichr(n)
+        except (ValueError, OverflowError):
+            return m.group(0)
+    s = re.sub(r'&#([xX]?[0-9a-fA-F]+);', _num, s)
+    for name, ch in (('lt', '<'), ('gt', '>'), ('quot', '"'), ('apos', "'"),
+                     ('mdash', u'\u2014'), ('ndash', u'\u2013'),
+                     ('rarr', u'\u2192'), ('larr', u'\u2190'),
+                     ('hellip', u'\u2026'), ('middot', u'\u00b7'),
+                     ('nbsp', u'\u00a0'), ('ge', u'\u2265'), ('le', u'\u2264'),
+                     ('times', u'\u00d7'), ('check', u'\u2713'),
+                     ('rsquo', u'\u2019'), ('lsquo', u'\u2018'),
+                     ('ldquo', u'\u201c'), ('rdquo', u'\u201d'),
+                     ('amp', '&')):      # amp last, so &amp;lt; does not re-decode
+        s = s.replace('&%s;' % name, ch)
     return s
 
 
 def _inline_text(s):
     """Strip inline Markdown markup for the plain-text render."""
-    s = re.sub(r'`([^`]*)`', r'\1', s)                       # code spans
+    # Protect code-span contents FIRST, before the emphasis passes: a literal
+    # run of asterisks inside `...` (e.g. the password mask `****`) must not be
+    # treated as bold/italic once the backticks are gone. Stash each span behind
+    # a placeholder, run the emphasis/link passes on the rest, then restore it.
+    spans = []
+    def _stash(m):
+        spans.append(m.group(1))
+        return '\x00%d\x00' % (len(spans) - 1)
+    s = re.sub(r'`([^`]*)`', _stash, s)                      # code spans
     s = re.sub(r'\*\*([^*]+)\*\*', r'\1', s)                 # bold
     s = re.sub(r'__([^_]+)__', r'\1', s)                     # bold
     s = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'\1', s)        # italic
-    s = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1 (\2)', s)    # links -> text (url)
+    # links -> "text (url)", except a same-document anchor ([x](#id)) which has
+    # no meaning in plain text -> just "text".
+    def _link(m):
+        text, url = m.group(1), m.group(2)
+        if url.startswith('#'):
+            return text                          # same-doc anchor: no meaning in text
+        if re.match(r'^[A-Za-z0-9_.-]+\.md$', url):
+            # Relative sibling doc link: name the plain-text twin (X.md -> X).
+            twin = url[:-3]
+            return twin if text == url else '%s (%s)' % (text, twin)
+        return '%s (%s)' % (text, url)
+    s = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', _link, s)
+    s = _unescape(s)                                         # &#NNNN; / &name; -> char
+    # Restore code-span contents verbatim (still entity-decoded, as before, so a
+    # code span that used an entity keeps rendering it).
+    s = re.sub(r'\x00(\d+)\x00', lambda m: _unescape(spans[int(m.group(1))]), s)
     return s
 
 

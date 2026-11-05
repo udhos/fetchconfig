@@ -56,7 +56,7 @@ test-verbose:
 #   tools/gen-template-docs.pl - the per-template state-machine docs
 #                          (templates/<name>.md) parsed straight from the .tmpl
 #                          files, so the diagrams stay 1:1, plus the index table
-#                          in README.template_engine.md. Runs first, before the
+#                          in README.generic-model.md. Runs first, before the
 #                          .md converters below.
 #   tools/integrity.pl   - templates/integrity.sha1, a SHA-1 manifest of the
 #                          shipped templates (core Digest::SHA, so it works on
@@ -65,13 +65,11 @@ test-verbose:
 #   tools/render-doc.py  - the styled HTML (sidebar/hero/tables/tabs/callouts,
 #                          Mermaid with an embedded-SVG fallback from
 #                          tools/mermaid-cache/). README.md -> README.html,
-#                          fetchconfig-documentation.md -> fetchconfig-documentation.html,
 #                          X.md -> X.html. LICENSE.md is skipped (verbatim, below).
 #   tools/md2html.py     - the plain-text (ASCII) companions (authoritative), and
 #                          the verbatim LICENSE.html / LICENSE / COPYING.
-# fetchconfig-documentation.md is HTML-only (the styled reference), so its ASCII
-# companion is removed. Titles come from each .md's H1. (Diagrams: run
-# tools/gen-mermaid-svg.py only when a diagram changes; "make doc" embeds the cache.)
+# Titles come from each .md's H1. (Diagrams: run tools/gen-mermaid-svg.py only
+# when a diagram changes; "make doc" embeds the cache.)
 doc:
 \t\$(PERL) tools/gen-template-docs.pl templates
 \t\$(PERL) tools/integrity.pl templates
@@ -79,7 +77,6 @@ doc:
 \t\$(PYRUN) tools/md2html.py --all . --text-only
 \t\$(PYRUN) tools/md2html.py LICENSE.md LICENSE.html
 \tcp -f LICENSE COPYING
-\trm -f fetchconfig-documentation
 
 # Installation is done by hand (README); not implemented here.
 install:

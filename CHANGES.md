@@ -1,5 +1,42 @@
 # fetchconfig -- Changes
 
+## 9.78
+
++ New --rename-device-id --old X --new Y: renames a device id everywhere it is
+  used -- the device-table line (only field 2 is rewritten; model, host, options,
+  comment and spacing are preserved, via an atomic temp+rename), the on-disk
+  backup tree (every dated leaf directory <repo>/YYYYMM/YYYYMMDD/<id>/ and the
+  <id>.run.* files in it, plus the repository-root <id>.status/<id>.debug), and,
+  when a db: line is set, the backup-history database (UPDATE dev_id across
+  backup_current/backup_runs/backup_versions). The new id is validated against the
+  device-id rules and refused if it is already in use in the table, on disk, or in
+  the DB. The operation holds an exclusive lock on a new "<devices>.lock" sidecar;
+  an interrupted rename leaves a .rename-<old>-to-<new>.inprogress journal in the
+  repository so re-running resumes it. -T previews every change (and the SQL)
+  without writing. Exits 0 done, 1 if the DB change was left queued (DB
+  unreachable), 2 on a validation/collision refusal.
++ The DB rename is carried on the existing statistics outbox as a new op=rename
+  record, applied by the normal drain (idempotent by WHERE dev_id=old). It needs
+  GRANT UPDATE (dev_id) on the three history tables, added on the fetchconfig-web
+  side; without it the op stays queued and is reported.
++ New --replay-db-change: drain any pending history-DB operations (queued renames
+  or statistics left behind while the DB was down) from every loaded device's
+  repository outbox, then exit; no fetching. The catch-up after a DB outage. -T
+  reports what is pending. Requires a db: line.
++ Normal runs now take a SHARED lock on each -devices= file (the same
+  "<devices>.lock" sidecar) while they parse it, waiting up to 2 s; a run that
+  collides with an in-progress rename aborts rather than parse a table mid-change.
+  If the sidecar cannot be created (e.g. a read-only directory) the run proceeds
+  without locking, so this never breaks an existing deployment.
++ The --rename-device-id report e-mail now uses the same styled frame as the
+  backup summary mail (dark header bar with the inline logo and version, white
+  card, copyright/version footer) via a new Mailer::build_notice_html, instead of
+  a bare HTML list.
++ --rename-device-id now preserves the device-table file's owner, group and mode
+  across the atomic rewrite (the temp+rename would otherwise leave it owned by the
+  caller, e.g. root under cron, with the default umask mode), so fetchconfig-web
+  can still edit the table. A warning is logged if the owner cannot be restored.
+
 ## 9.77
 
 + Per-version line deltas (lines_added/lines_removed on backup_versions): the
@@ -16,6 +53,53 @@
   paths, model registration, directory-allowlist and exit-code details, the
   per-option mutual-exclusion lists (now including --db-backfill), and a few stale
   notes. No code change.
++ Documentation consolidated into a single manual: the standalone
+  fetchconfig-documentation.html/.md was merged into README.html/.md, which is now
+  the one styled manual - a deduplicated superset of both. All of the old manual's
+  content lives in README: the styled presentation, the command-line/flag reference,
+  the full per-model option tables, and a new "Upgrading & compatibility" chapter.
+  fetchconfig-documentation.md/.html were removed and "make doc" no longer
+  special-cases a second manual. The code-box highlighter now colours all four
+  device-table directives (default:/email:/db:/directory:) consistently. The
+  plain-text generator (tools/md2html.py) was also fixed: it drops the HTML-only
+  hero tiles from the text README, wraps wide description tables to 80 columns,
+  and renders the per-model matrix and HTML entities as ASCII. Fixed a Mermaid
+  syntax error in the DEVELOPER-GUIDE sequence diagram (a ";" in a message label
+  ends the statement) and refreshed the diagram SVG cache so every diagram ships
+  pre-rendered. No change to fetchconfig itself.
++ Merged README.generic-model, README.template_engine and README.record-session
+  into a single README.generic-model (the generic model and template engine, plus
+  the record-session.pl capture tool); the other two files were removed and all
+  current references repointed. The styled doc hero now shows the full
+  "fetchconfig -- <title>" at one size (no separate small eyebrow), and a stale
+  fallback lede on docs without an intro paragraph was dropped. No change to
+  fetchconfig itself.
++ Documentation navigation and emphasis styling: DEVELOPER-GUIDE,
+  README.generic-model and How-To-add-a-model now group their sidebar nav into
+  labelled sections, and DEVELOPER-GUIDE drops its manual section numbers in
+  favour of linked cross-references (so renumbering can no longer go stale). A
+  few key asides are rendered as note/warning callouts. The plain-text doc
+  generator (tools/md2html.py) now renders GitHub-alert markers ("[!NOTE]",
+  "[!WARNING]") as clean "NOTE:"/"WARNING:" labels instead of leaking the raw
+  marker. No change to fetchconfig itself.
++ Cross-document references now resolve per output format: a relative sibling
+  link written as "[X.md](X.md)" in the Markdown becomes a link to X.html in the
+  generated HTML and the bare text-twin name "X" in the plain-text version. The
+  DEVELOPER-GUIDE document map uses this, so each format points at the file a
+  reader of that format can actually open. No change to fetchconfig itself.
++ Removed the DEVELOPER-GUIDE references to the deferred SSH host-key
+  verification design (audit finding F3) and its out-of-tree plan file; the
+  current host-key behaviour stays documented in the README security section.
+  No change to fetchconfig itself.
++ README: added a consolidated "Exit codes" section (one row per mode, plus the
+  cross-cutting 255/2 codes) so a script author has every option's return status
+  in one place; the per-flag exit lists are unchanged. No change to fetchconfig
+  itself.
++ Doc tooling: both doc generators now treat an inline code span as atomic, so a
+  literal asterisk run inside backticks (e.g. the password mask) can no longer be
+  swallowed by the bold/italic passes -- it was rendering "`****` &rarr; `****`"
+  as mangled emphasis in HTML and the wrong asterisk count in the text twin.
+  No change to fetchconfig itself.
 
 ## 9.76
 

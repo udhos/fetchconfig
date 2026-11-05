@@ -473,6 +473,18 @@ sub init {
 # values overwrite earlier ones for the same key (same merge rule
 # used by "default:").
 #
+#
+# The globally configured admin recipient (email: to=...), or undef if no
+# usable mail is configured (no "to=", or no "smtp=" to send through). Used by
+# --rename-device-id to decide whether to mail the operation report or print it.
+#
+sub configured_recipient {
+    my ($class) = @_;
+    return undef unless defined($email_config{to})   && length($email_config{to});
+    return undef unless defined($email_config{smtp}) && length($email_config{smtp});
+    return $email_config{to};
+}
+
 sub parse_email_line {
     my ($class, $file, $line_num, $line, $rest) = @_;
 
@@ -995,6 +1007,59 @@ sub build_report_html {
 	. qq{</td></tr></table>\n};
     $html .= "</td></tr></table>\n";
 
+    $html .= "</body></html>\n";
+
+    $html;
+}
+
+#
+# A simple notice e-mail in the SAME visual frame as the backup summary: grey
+# canvas, centered white rounded card with the dark-blue header bar (inline
+# cid:fcwlogo + "fetchconfig vX.Y"), and the copyright/version footer below the
+# card. The body is a heading plus a bulleted list of plain-text items. Used for
+# the --rename-device-id report so it matches the backup mail. Goes through
+# send_mail (which attaches the logo as cid:fcwlogo), exactly like the summary.
+#
+sub build_notice_html {
+    my ($class, $heading, $items_ref) = @_;
+
+    my $ver = escape_html(fetchconfig::Constants::version());
+    my $ff  = $FONT_FAMILY;
+
+    my $html = '<!DOCTYPE html><html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head>'
+	. '<meta http-equiv="Content-Type" content="text/html; charset=utf-8">'
+	. '<meta name="viewport" content="width=device-width, initial-scale=1">'
+	. '<!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->'
+	. '</head>' . "\n"
+	. qq{<body style="margin:0;padding:0;background:$MAIL_CANVAS_BG;font-family:$ff;color:#222;">\n}
+	. qq{<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:$MAIL_CANVAS_BG;"><tr><td align="center" style="padding:24px 12px;">\n}
+	. qq{<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:820px;background:$MAIL_CARD_BG;border:1px solid $MAIL_CARD_BORDER;border-radius:10px;overflow:hidden;">\n}
+	. qq{<tr><td style="background:$MAIL_HEADER_BG;padding:16px 24px;">}
+	. qq{<table role="presentation" cellpadding="0" cellspacing="0"><tr>}
+	. qq{<td style="vertical-align:middle;"><img src="cid:fcwlogo" alt="" width="40" height="40" style="display:block;border-radius:8px;"></td>}
+	. qq{<td style="vertical-align:middle;padding-left:14px;color:#ffffff;font-size:20px;font-weight:600;">fetchconfig <span style="opacity:0.8;font-weight:400;">v$ver</span></td>}
+	. qq{</tr></table></td></tr>\n}
+	. qq{<tr><td style="padding:24px;font-size:14px;line-height:1.5;">\n};
+
+    $html .= '<p style="font-family:' . $ff . ';margin:0 0 16px;">' . escape_html($heading) . "</p>\n"
+	if defined($heading);
+
+    if ($items_ref && @$items_ref) {
+	$html .= qq{<ul style="font-family:$ff;margin:0;padding-left:22px;">\n};
+	$html .= '<li style="margin:0 0 6px;">' . escape_html($_) . "</li>\n" for @$items_ref;
+	$html .= "</ul>\n";
+    }
+
+    my $footer = $email_config{footer};
+    $footer = '(c) 2006-2026 Everton da Silva Marques, Rainer Tammer and others'
+	unless defined($footer);
+
+    $html .= "</td></tr>\n</table>\n";
+    $html .= qq{<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:820px;"><tr>}
+	. qq{<td style="padding:14px 8px 0;text-align:center;font-family:$ff;font-size:12px;color:$MAIL_FOOTER_FG;">}
+	. escape_html($footer) . ' - Version ' . $ver
+	. qq{</td></tr></table>\n};
+    $html .= "</td></tr></table>\n";
     $html .= "</body></html>\n";
 
     $html;

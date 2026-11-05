@@ -3,16 +3,15 @@ procurve template -- state machine
 
 State machine of the procurve generic-model template (selected with
 model=procurve), parsed from templates/procurve.tmpl. HP ProCurve. See
-README.template_engine.html (../README.template_engine.html) for the engine
-and grammar and README.generic-model.html (../README.generic-model.html) for
-selecting the model in the device table.
+README.generic-model.html (../README.generic-model.html) for the generic
+model, the template grammar and the engine.
 
 Template settings
 =================
 
 - status: Verified on real hardware.
 - transport: ssh telnet
-- prompt: head '(?:\x1b\[[\d;?][A-Za-z])', tail '# ?' (the bareword prompt = head + learned hostname + tail)
+- prompt: head '(?:\x1b\[[\d;?]*[A-Za-z])*', tail '# ?' (the bareword prompt = head + learned hostname + tail)
 - show command: sent as a literal in the show state (see the table)
 - saved file starts at: capture_from /^;/
 - strip_ansi yes

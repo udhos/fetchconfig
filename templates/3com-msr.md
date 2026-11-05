@@ -2,9 +2,8 @@
 
 State machine of the `3com-msr` generic-model template (selected with
 `model=3com-msr`), parsed from `templates/3com-msr.tmpl`. 3Com/H3C MSR. See
-[README.template_engine.html](../README.template_engine.html) for the engine
-and grammar and [README.generic-model.html](../README.generic-model.html) for
-selecting the model in the device table.
+[README.generic-model.html](../README.generic-model.html) for the generic
+model, the template grammar and the engine.
 
 ## Template settings
 

@@ -1,13 +1,13 @@
 #!/usr/bin/perl
 # gen-template-docs.pl - generate a state-machine reference doc for each
-# generic-model template, and the template index in README.template_engine.md.
+# generic-model template, and the template index in README.generic-model.md.
 #
 # For every <name>.tmpl it writes <name>.md beside it: the template settings, a
 # Mermaid stateDiagram-v2 (with a plain-text ASCII twin), and a states table. The
 # template is parsed with the authoritative fetchconfig parser
 # (fetchconfig::model::GenericTemplateParser), so the diagram is exactly 1:1 with
 # the file. It also refreshes the "Model state machines" index table in
-# README.template_engine.md (between the TEMPLATE-INDEX markers), so the index
+# README.generic-model.md (between the TEMPLATE-INDEX markers), so the index
 # stays in sync. Re-run after editing a template, then tools/gen-mermaid-svg.py
 # and "make doc".
 #
@@ -44,7 +44,7 @@ for my $file (@files) {
     push @index, { name => $meta->{name}, transports => $meta->{transports},
                    status => $meta->{status}, link => $link };
 }
-update_index("$FindBin::RealBin/../README.template_engine.md", \@index);
+update_index("$FindBin::RealBin/../README.generic-model.md", \@index);
 
 # ---------------------------------------------------------------------------
 sub slurp { my ($p) = @_; open my $f, '<', $p or die "read $p: $!"; local $/; <$f> }
@@ -64,9 +64,8 @@ sub gen_doc {
     push @o, "";
     push @o, "State machine of the `$base` generic-model template (selected with";
     push @o, "`model=$base`), parsed from `$file`.${desc} See";
-    push @o, "[README.template_engine.html](../README.template_engine.html) for the engine";
-    push @o, "and grammar and [README.generic-model.html](../README.generic-model.html) for";
-    push @o, "selecting the model in the device table.";
+    push @o, "[README.generic-model.html](../README.generic-model.html) for the generic";
+    push @o, "model, the template grammar and the engine.";
     push @o, "";
     push @o, "## Template settings";
     push @o, "";
@@ -103,7 +102,7 @@ sub gen_doc {
     return (join("\n", @o), \%meta);
 }
 
-# ---- refresh the index table in README.template_engine.md ------------------
+# ---- refresh the index table in README.generic-model.md --------------------
 sub update_index {
     my ($readme, $idx) = @_;
     unless (-f $readme) { warn "gen-template-docs.pl: $readme not found; index not updated\n"; return; }

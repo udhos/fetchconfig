@@ -4,6 +4,8 @@
 
 ---
 
+<!--nav-group: Overview-->
+
 ## 1. Scope and Audience
 
 This manual is for a software engineer who has to make fetchconfig back up a device family it does not yet support. It assumes working Perl, familiarity with `Net::Telnet`-style expect programming, and access to at least one device of the new family (or a byte-accurate capture of a session with it).
@@ -55,6 +57,8 @@ A model may override:
 | `interrupt_screens()` | `()` | Screens that interpose before the prompt (banner, menu, save question) and the keystroke that dismisses each. |
 
 Everything else -- options, repository I/O, comparison, expiry, logging, SSH transport, escape stripping, prompt matching, pager driving -- is in `Abstract` and documented in section 8. **Use it. Do not copy code from another model into yours;** every copy that ever existed diverged and each divergence became a bug report.
+
+<!--nav-group: Procedure-->
 
 ## 4. Procedure
 
@@ -320,6 +324,8 @@ Keep the `.debug` file of a successful run with the model's source: it is the on
 - [ ] `fetchconfig/Constants.pm` -- version bump.
 - [ ] `perl -I. -c` on every changed file; the whole tree compiles.
 - [ ] The mock replay and both live runs of section 6 pass.
+
+<!--nav-group: Reference-->
 
 ## 8. Shared API Reference
 

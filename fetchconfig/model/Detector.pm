@@ -931,6 +931,19 @@ sub device_info {
 }
 
 #
+# True if $id is a valid device id: it matches $DEV_ID_RE (the exact rule
+# parse() enforces on the device table) and is not made only of dots. This is
+# the single source of truth for the id syntax, reused by --rename-device-id so
+# a renamed id can never be something the table parser would later reject.
+#
+sub valid_dev_id {
+    my ($class, $id) = @_;
+    return 0 unless defined($id) && $id =~ $DEV_ID_RE;
+    return 0 if $id =~ /^\.+$/;
+    return 1;
+}
+
+#
 # True if any device's lock directory could not be created/used; the
 # driver turns this into exit 10.
 #

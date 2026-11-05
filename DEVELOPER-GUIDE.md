@@ -10,20 +10,22 @@ remain authoritative for their topics and are referenced from here:
 - `README` -- the user manual (installation, every option, email, the
   directory allowlist, command-line reference).
 - `How-To-add-a-model` -- the step-by-step recipe for a new device model.
-- `README.generic-model` -- the template-driven `generic` model.
-- `README.template_engine` -- the template grammar and parser internals.
-- `README.record-session` -- `tools/record-session.pl`, used to capture a
-  device session when writing a new model.
+- `README.generic-model` -- the template-driven `generic` model & template
+  engine: grammar and parser internals, execution semantics, writing and
+  generating templates, and `tools/record-session.pl` for capturing a device
+  session when writing a new model.
 - `DEPENDENCIES` -- the Perl module dependency matrix.
 
 Where this guide found those documents lacking a detail an extender needs,
 that detail is added here and noted as such.
 
-Target version: 9.77. Perl floor: 5.26.
+Target version: 9.78. Perl floor: 5.26.
 
 ---
 
-## 1. What fetchconfig is
+<!--nav-group: Overview-->
+
+## What fetchconfig is
 
 fetchconfig is a **command-line tool** (not a daemon) that logs in to network
 devices, retrieves their running configuration, and stores a timestamped copy
@@ -43,13 +45,15 @@ Key properties that shape the whole design:
   before fetching.
 - **The device table is the trust boundary.** Whoever can write the device
   table supplies every device credential and can cause code execution via
-  `on_fetch_run`. See section 9 (Security).
+  `on_fetch_run`. See [Security mechanisms](#security-mechanisms) (Security).
 
 ---
 
-## 2. Architecture and execution model
+<!--nav-group: Architecture-->
 
-### 2.1 Module map
+## Architecture and execution model
+
+### Module map
 
 | File | Role |
 |------|------|
@@ -58,12 +62,15 @@ Key properties that shape the whole design:
 | `fetchconfig/model/Abstract.pm` | The base class for every model. Provides the shared API: SSH/telnet session helpers, prompt handling, backup write/compare/expire, option accessors, secret handling, the debug-file helpers, locking primitives. |
 | `fetchconfig/model/*.pm` | The device models (34 device models + `AbstractHTTP` base + `GenericTemplate`/`GenericTemplateParser`). Each implements `do_fetch()` for its transport/CLI dialect. |
 | `fetchconfig/Tools.pm` | The maintenance/lookup modes (`-g`, `-l`, `-z/-Z`, `-o`, `-e`, `-s/-S`, `--list-allowed-dirs`, `--clean-lock-dir`, etc.) and their shared filesystem helpers. |
-| `fetchconfig/Mailer.pm` | SMTP delivery and the result record: `record_result()`, the per-recipient grouping, the HTML + plain-text summary mail. |
+| `fetchconfig/Rename.pm` | `--rename-device-id` (device table + on-disk backups + history DB) and the `--replay-db-change` outbox flush. |
+| `fetchconfig/Lock.pm` | Advisory `flock` on the `<devices>.lock` sidecar: a shared lock for a run's table parse, an exclusive lock for a rename ([Locking](#locking)). |
+| `fetchconfig/History.pm` | The optional backup-history DB writer: the per-repository outbox spool, the drain/`_apply_op` (`run`/`version`/`current`/`expire`/`rename` ops), `--db-backfill` and the `--replay-db-change` drain ([Backup-history DB writer (optional)](#backup-history-db-writer-optional)). |
+| `fetchconfig/Mailer.pm` | SMTP delivery and the result record: `record_result()`, the per-recipient grouping, the HTML + plain-text summary mail, and the shared notice frame (`build_notice_html`). |
 | `fetchconfig/Report.pm` | The on-disk HTML change report and the config-diff masking (`mask_line`). |
 | `fetchconfig/Constants.pm` | `version()` and a few constants. |
 | `fetchconfig/Logger.pm` | The logger object (prefix, levels: debug/info/error). |
 
-### 2.2 The two phases
+### The two phases
 
 fetchconfig runs in two clearly separated phases. Keeping them separate is a
 deliberate design rule -- understand it before adding per-device behaviour.
@@ -73,7 +80,7 @@ deliberate design rule -- understand it before adding per-device behaviour.
 calls `Detector::parse()` on each line. `parse()`:
 
 1. recognises the line type (`email:`, `directory:`, `default:`, or a device
-   line -- see section 4),
+   line -- see [The device table format](#the-device-table-format)),
 2. for a device line, resolves the model, merges `default:` options with the
    device's own options into a fresh `$dev_opt_tab`, validates (`dev_id`
    pattern, numeric `keep`), and records the device in `%dev_info_table` +
@@ -87,9 +94,9 @@ entering phase 2.
 After phase 1, `fetchconfig.pl` either dispatches to a maintenance/lookup
 mode and exits, or calls `run_fetch_phase()`, which iterates `@dev_order` and
 calls `Detector::fetch_device($dev_id)` for each -- sequentially, or in forked
-workers under `-P` (section 2.4).
+workers under `-P` ([Parallel fetch (-P N)](#parallel-fetch--p-n)).
 
-### 2.3 The per-device pipeline (`fetch_device`)
+### The per-device pipeline (`fetch_device`)
 
 For each device, `fetch_device()` performs, in order:
 
@@ -103,7 +110,7 @@ For each device, `fetch_device()` performs, in order:
    below, so the scan happens even for a device a later guard will skip.
 3. **System-directory check** (always): reject a `repository=`,
    `template_dir=` or `on_fetch_run` program that points into a system
-   directory; skip the device if so (section 9).
+   directory; skip the device if so ([Security mechanisms](#security-mechanisms)).
 4. **No-allowlist warning** (if no `directory:` section): warn once per run
    per distinct unrestricted directory.
 5. **Directory-allowlist enforcement** (only if a `directory:` section
@@ -111,7 +118,7 @@ For each device, `fetch_device()` performs, in order:
    `on_fetch_run`'s program directory must be allowed; a `$TAG` is expanded
    to its real path. Off-list -> skip the device.
 6. **Lock** (if `lock=on`): acquire a per-device flock; on contention,
-   retry, then record `skipped` and return (section 8).
+   retry, then record `skipped` and return ([Locking](#locking)).
 7. **Fetch**: `$mod->fetch(...)` -> the model's `do_fetch()` logs in, runs the
    show-config command, and returns the written backup path (or undef on
    failure). On `debug=on`, the session is captured to `<dev_id>.debug`.
@@ -121,17 +128,17 @@ For each device, `fetch_device()` performs, in order:
 9. **Record**: `Mailer::record_result(...)` logs the per-device outcome and
    writes the `.status` file.
 10. **on_fetch_run / on_fetch_cat**: if set, run the external program (shell-free;
-    section 9) and/or copy the config to stdout. Both run regardless of whether
+    [Security mechanisms](#security-mechanisms)) and/or copy the config to stdout. Both run regardless of whether
     the config changed.
 11. **Discard**: only if `changes_only` is set *and* the config was unchanged,
     delete the just-written file (`config_discard`) so only real changes are kept.
 12. **Expire**: `purge_ancient` deletes the oldest backups beyond `keep=N`; each
-    backup it rotates out emits a DB expire event (section 14).
+    backup it rotates out emits a DB expire event ([Backup-history DB writer (optional)](#backup-history-db-writer-optional)).
 
 The lock filehandle is held in a lexical for the whole of `fetch_device`, so
 it releases automatically when the sub returns, by any path.
 
-### 2.3.1 Sequence diagram -- one device through `fetch_device`
+### Sequence diagram -- one device through `fetch_device`
 
 Time runs downward. `-->` is a return. A model's `do_fetch` is the only box
 that talks to the device; everything else is core. The three early guards
@@ -180,7 +187,7 @@ sequenceDiagram
     M-->>F: config path or undef
     F-->>S: if undef, record failed
     F->>F: config_equal(latest, new)
-    F->>S: record success (changed, unchanged, or initial); write .status
+    F->>S: record success (changed, unchanged, or initial) and write .status
     opt on_fetch_run / on_fetch_cat set
         F->>S: run on_fetch_run (shell-free) and/or cat to stdout
     end
@@ -193,9 +200,9 @@ MERMAID-->
 
 Under `-P`, the whole column from `fetch_device` down runs inside a forked
 worker; the `record_result` payloads travel back to the parent through the
-result sink (section 2.4), not shared memory.
+result sink ([Parallel fetch (-P N)](#parallel-fetch--p-n)), not shared memory.
 
-### 2.4 Parallel fetch (`-P N`)
+### Parallel fetch (`-P N`)
 
 `run_fetch_phase($parallel)` runs devices concurrently when `-P N` is given
 (N >= 1 worker processes). It relies on POSIX `fork`, so it is a no-op on
@@ -223,12 +230,12 @@ arguments.
 
 ---
 
-## 3. Data structures
+## Data structures
 
 All of these are file-scoped (`my`) package variables unless noted. "File" =
 the `.pm` that declares them.
 
-### 3.1 Detector.pm -- the device registry
+### Detector.pm -- the device registry
 
 - **`%model_table`** : `label` -> model object. Populated by `Detector::init`,
   which constructs one instance of every model class and calls
@@ -260,7 +267,7 @@ the `.pm` that declares them.
   - **`%dir_allow_path`** : normalised allowed path -> type, for membership tests.
   - **`$dir_allow_present`** : true once any `directory:` line has been seen (switches the allowlist from "off/opt-in" to "enforced").
   - **`@dir_allow_rows`** : ordered `[type, tag, path]` for `--list-allowed-dirs`.
-  - **`@dir_allow_errors`** : `[reason, ...]` for each rejected `directory:` line; a non-empty list aborts the run before any fetch (section 9) and is what `--list-allowed-dirs` lints.
+  - **`@dir_allow_errors`** : `[reason, ...]` for each rejected `directory:` line; a non-empty list aborts the run before any fetch ([Security mechanisms](#security-mechanisms)) and is what `--list-allowed-dirs` lints.
   - **`$dir_allow_fetch_run_none`** / **`$dir_allow_report_none`** : set by `directory: fetch_run none` / `directory: report none` (disable that capability).
   - **`%warned_unlisted_dir`** : dedup set for the "no allowlist entry" warning, reset per device-table load.
 
@@ -277,12 +284,12 @@ the `.pm` that declares them.
 - **`$lock_dir_failed`** : set if any device's lock dir could not be created
   or used; the driver turns this into exit 10 after the run.
 
-### 3.2 `$dev_opt_tab` -- the per-device option hash
+### `$dev_opt_tab` -- the per-device option hash
 
 The single most important structure for an extender. It is a flat hashref:
 option name -> string value, built in phase 1 by merging the model's
 `default:` options under the device line's own options (device wins). Every
-option in section 4 appears here by its bare name (`repository`, `pass`, `keep`,
+option in [The device table format](#the-device-table-format) appears here by its bare name (`repository`, `pass`, `keep`,
 `debug`, `lock`, `to`, ...). Models and the pipeline read it **only** through
 the Abstract accessors, never by direct hash access:
 
@@ -304,7 +311,7 @@ the Abstract accessors, never by direct hash access:
 No parse change is needed -- `parse_options` accepts any `key=value`; the
 option "exists" as soon as something reads it.
 
-### 3.3 Mailer.pm -- the result record
+### Mailer.pm -- the result record
 
 - **`@results`** : one hashref per device outcome, pushed by
   `record_result(%args)`. Under `-P` every field is serialised through the result
@@ -343,7 +350,7 @@ option "exists" as soon as something reads it.
   as a `multipart/related` `Content-ID: <fcwlogo>` part. Independent of the
   on-disk report's `report_logo=`.
 
-### 3.4 On-disk structures
+### On-disk structures
 
 - **Backup file** : `<repository>/YYYYMM/YYYYMMDD/<dev_id>/<dev_id>.run.YYYYMMDD.HHMMSS[tz]`
   (optionally plus `filename_append_suffix`). `parse_backup_filename()` and
@@ -351,7 +358,7 @@ option "exists" as soon as something reads it.
   `YYYYMMDD.HHMMSS`, never by a plain string sort of the whole name (so the
   timezone token and a suffix cannot disturb the order). Written with
   `O_EXCL` so two runs completing in the same second cannot silently
-  overwrite one another (section 9).
+  overwrite one another ([Security mechanisms](#security-mechanisms)).
 
 - **`.status` file** : `<repository>/<dev_id>.status` -- the last-run result
   for that device (written atomically via a dotfile temp + rename -- the temp,
@@ -359,20 +366,22 @@ option "exists" as soon as something reads it.
   the maintenance modes.
 
 - **`.debug` file** : `<repository>/<dev_id>.debug` -- the full session trace
-  when `debug=on` (0600; section 6). Overwritten each run.
+  when `debug=on` (0600; [Debug tracing (debug=on)](#debug-tracing-debugon)). Overwritten each run.
 
 - **Lock file** : `<lock_dir>/<sha256(dev_id)>.lock` -- a flock holder, never
-  unlinked on release (section 8).
+  unlinked on release ([Locking](#locking)).
 
 ---
 
-## 4. The device table format
+<!--nav-group: Device table-->
+
+## The device table format
 
 The device table is a line-oriented text file (one or more, via `-devices=`;
 individual lines can also be injected with `-line=`). Blank lines and `#`
 comment lines are ignored. There are four line types, recognised by prefix.
 
-### 4.1 Device line
+### Device line
 
 ```
 <model>  <dev_id>  <host>  <opt1=val1,opt2=val2,...>
@@ -395,7 +404,7 @@ Example:
 cisco-ios  rtr01  10.0.0.1  user=backup,pass="s3cr3t",enable=en,repository=$REPO1,keep=30
 ```
 
-### 4.2 `default:` line
+### `default:` line
 
 ```
 default:  <model>  <opt1=val1,...>
@@ -406,7 +415,7 @@ unless it overrides them. Merging is per-option (device value wins). A bad
 value inherited from a `default:` line (e.g. a non-numeric `keep`) rejects
 every device that inherits it.
 
-### 4.3 `email:` line
+### `email:` line
 
 ```
 email:  from=...,to=...,smtp=...,...
@@ -419,7 +428,7 @@ connection is ever attempted. Options: `from`, `to`, `smtp` (`host` or
 (`FILE|none`), `report_days`, `mask_secrets` (`off` to disable), `footer`.
 See `README` -> EMAIL NOTIFICATIONS for each.
 
-### 4.4 `directory:` line (the allowlist)
+### `directory:` line (the allowlist)
 
 ```
 directory:  <type>  <$TAG|none>  [<abs-path>]
@@ -437,7 +446,7 @@ otherwise malformed, is recorded in `@dir_allow_errors` and **aborts the run**
 before any fetch. See `README` -> DIRECTORY ALLOWLIST for the full semantics
 and `--list-allowed-dirs` for the linter.
 
-### 4.5 Options available for all models
+### Options available for all models
 
 `debug`, `to`, `on_fetch_run`, `on_fetch_cat`, `timezone`,
 `filename_append_suffix`, `comment`, `site`, and the locking options (`lock`,
@@ -448,9 +457,11 @@ options tables and the model sections in `README` (the DEVICE OPTIONS section).
 
 ---
 
-## 5. Models and the model API
+<!--nav-group: Models-->
 
-### 5.1 Lifecycle
+## Models and the model API
+
+### Lifecycle
 
 Each model is a subclass of `fetchconfig::model::Abstract`. `Detector::init`
 constructs one instance of every model class and calls `Detector->register($mod)`
@@ -463,13 +474,13 @@ implementation in Abstract delegates to the model's `do_fetch(...)`. A model
 therefore implements **`do_fetch`** (and `label`), and overrides prompt/login
 hooks as needed; everything else is inherited.
 
-### 5.2 The shared API (Abstract.pm)
+### The shared API (Abstract.pm)
 
 The methods a model (or an extender) relies on. Signatures are indicative;
 read `Abstract.pm` for exact argument lists.
 
 **Session / transport**
-- `ssh_open($dev_host, $dev_user, $dev_pass, $dev_timeout, $debug_fh)` -- open a Net::OpenSSH session (SSH models). Host-key policy is set here (section 9, deliberate non-mitigation).
+- `ssh_open($dev_host, $dev_user, $dev_pass, $dev_timeout, $debug_fh)` -- open a Net::OpenSSH session (SSH models). Host-key policy (accept any key, keep none) is set here.
 - `open_ssh_debug_file(...)` / `open_telnet_debug_file($t, $dev_opt_tab, $repo, $dev_id, $dev_host)` -- when `debug=on`, open `<dev_id>.debug` (0600) and attach it as the SSH/telnet session log. The telnet helper (9.71) is what gives every telnet model `debug=`; call it right after the connection opens and `close()` the returned handle at session end.
 - `wait_for_command_prompt(...)`, `expect_enable_prompt(...)`, `expect_enable_prompt_paging_auto(...)`, `drain_until_idle(...)`, `chat_banner(...)`, `chat_show_conf(...)` -- prompt and login helpers. Models override `prompt_head()` / `prompt_tail()` / `interrupt_screens()` / `ssh_extra_opts()` to tune behaviour.
 
@@ -483,10 +494,10 @@ read `Abstract.pm` for exact argument lists.
 - `config_discard($dir, $file)` -- remove the just-written backup when it
   equals the previous one, and prune the dir if emptied.
 - `purge_ancient($dev_id, $dev_opt_tab)` -- delete backups beyond `keep=N`
-  (validates `keep`; section 9).
+  (validates `keep`; [Security mechanisms](#security-mechanisms)).
 
 **Options / secrets / text**
-- `dev_option*` accessors (section 3.2).
+- `dev_option*` accessors ([$dev_opt_tab -- the per-device option hash](#dev_opt_tab----the-per-device-option-hash)).
 - `print_secret($t, $secret)` -- send a password/secret to the device **without
   logging it** (suspends the debug log around the send, writes a masked
   marker). Every model sends credentials through this; a new model MUST too.
@@ -498,9 +509,9 @@ read `Abstract.pm` for exact argument lists.
   quoting for learned prompts, etc.).
 
 **Locking**
-- `lock_dir_resolve`, `device_lock_path`, `acquire_device_lock` (section 8).
+- `lock_dir_resolve`, `device_lock_path`, `acquire_device_lock` ([Locking](#locking)).
 
-### 5.2.1 Call graph -- core <-> model <-> Abstract
+### Call graph -- core <-> model <-> Abstract
 
 How control flows into a model and what the model calls back. `( )` = a hook
 the model overrides; `[ ]` = a shared helper the model calls. Arrows point
@@ -571,24 +582,26 @@ everything else and never reimplements them. These core-driven helpers --
 (which core calls before the fetch) -- run in core, not the model; a model
 just returns the written path.
 
-### 5.3 Adding a model
+### Adding a model
 
 Follow `How-To-add-a-model` (the authoritative recipe) together with the
-data-flow context in section 2.3/section 5.2. In short: create `fetchconfig/model/Yours.pm`
+data-flow context in [The per-device pipeline (fetch_device)](#the-per-device-pipeline-fetch_device)/[The shared API (Abstract.pm)](#the-shared-api-abstractpm). In short: create `fetchconfig/model/Yours.pm`
 as an `Abstract` subclass, implement `label` and `do_fetch`, send credentials
 with `print_secret`, call `open_telnet_debug_file`/`open_ssh_debug_file` so
 `debug=` works, write the config with `dump_config`, and register the model.
 Add it to `t/00-compile.t`'s expectations and the per-model matrix in the
 HTML docs. Capture a real session first with `tools/record-session.pl`
-(`README.record-session`).
+(see `README.generic-model`).
 
 For a device that speaks a config-template rather than a bespoke dialect,
-prefer the `generic` model and a template -- see `README.generic-model` and
-`README.template_engine`; no Perl is needed.
+prefer the `generic` model and a template -- see `README.generic-model`; no
+Perl is needed.
 
 ---
 
-## 6. Debug tracing (`debug=on`)
+<!--nav-group: Operations-->
+
+## Debug tracing (`debug=on`)
 
 `debug=on` writes a 0600 `<repository>/<dev_id>.debug` session trace, available
 for **every** model (since 9.71). Three mechanisms, all producing the same
@@ -608,7 +621,7 @@ troubleshooting.
 
 ---
 
-## 7. Maintenance / lookup modes (Tools.pm)
+## Maintenance / lookup modes (Tools.pm)
 
 These are standalone modes: they use phase-1 registration, operate on the
 stored backups (never fetch), and exit. Summary (see `README` command-line
@@ -634,7 +647,7 @@ through `$opt_fail` -> `die`, which exits 255); lookup modes also use `1`
 
 ---
 
-## 8. Locking
+## Locking
 
 `lock=on` serialises concurrent backups of the same device (overlapping cron,
 or a web "Backup Now" over a cron run). Mechanism:
@@ -656,11 +669,38 @@ Works across the forked `-P` workers and across separate invocations. Requires
 a **local** filesystem (flock over NFS on AIX is unreliable) -- a documented
 operator responsibility.
 
+### Device-table file lock (`<devices>.lock`)
+
+Separate from the per-device lock above, and about the *table file* rather than
+a device. `--rename-device-id` rewrites a device-table line in place; a
+concurrent fetch run must not parse a table mid-rename. The lock object is a
+**sidecar** `<devices>.lock` next to each `-devices=` file (not the file itself:
+the rename swaps the table's inode via temp+rename, so a lock on the file's own
+descriptor would not cover the swap), handled by `fetchconfig::Lock`:
+
+- A **normal run** takes a **shared** lock (`LOCK_SH`) while `load_device_list`
+  parses each `-devices=` file, with a **2 s** bounded, non-blocking acquire,
+  released before fetching. On timeout it logs and **exits 2** rather than parse
+  a table a rename is changing.
+- `--rename-device-id` / `--replay-db-change` take an **exclusive** lock
+  (`LOCK_EX`), the rename holding it across the re-check, the on-disk sweep and
+  the atomic table rewrite.
+- If the sidecar cannot be created (e.g. a read-only directory), a run proceeds
+  **without** the lock (fail-open, so locking never breaks an existing
+  deployment); a rename refuses (fail-closed, for safety).
+
+Like the per-device lock this is `flock`-based, so the same local-filesystem
+requirement applies. NB: on AIX `flock` is emulated via per-process `fcntl`
+locks, so contention is only meaningful **between processes** (a run vs a
+rename), which is the only case that matters here.
+
 ---
 
-## 9. Security mechanisms
+<!--nav-group: Security-->
 
-### 9.1 Trust model (read this first)
+## Security mechanisms
+
+### Trust model (read this first)
 
 - **The device table is the credential store and a code-execution surface.**
   Whoever can write it already holds every device password and, via
@@ -673,7 +713,7 @@ operator responsibility.
   **deliberately umask-readable**, not owner-only (see 9.6) -- an unprivileged
   reader must be able to read them.
 
-### 9.2 Credential handling
+### Credential handling
 
 - **`print_secret`** sends passwords to the device without logging them
   (suspends the session log around the send, leaves a masked marker). Every
@@ -689,7 +729,7 @@ operator responsibility.
   best-effort and biases toward masking (a false positive hides a non-secret
   in the diff view; never the reverse).
 
-### 9.3 Command execution -- `on_fetch_run`
+### Command execution -- `on_fetch_run`
 
 `on_fetch_run` is executed **without a shell**: the configured value is split
 into argv with `Text::ParseWords::shellwords` and run with the list form of
@@ -698,7 +738,7 @@ Shell metacharacters (`;`, `|`, `$(...)`, backticks, `>`) are passed to the
 program as literal text, not interpreted. The program must not live in a
 system directory. A start failure, signal, or non-zero exit is logged.
 
-### 9.4 Path safety
+### Path safety
 
 - **`dev_id` whitelist** `^[\w.-]+$` (dots-only rejected) -- prevents a device
   id from escaping the repository via `../`.
@@ -718,12 +758,12 @@ system directory. A start failure, signal, or non-zero exit is logged.
   two runs finishing in the same one-second filename window cannot silently
   overwrite each other (the second is refused and reported).
 
-### 9.5 Locking
+### Locking
 
-See section 8 -- `O_NOFOLLOW` on the lock file, 0600 lock files, 0700 lock dir,
+See [Locking](#locking) -- `O_NOFOLLOW` on the lock file, 0600 lock files, 0700 lock dir,
 flock-based, never-unlink-on-release, flock-first cleanup.
 
-### 9.6 File permissions
+### File permissions
 
 Backup files and their directories, and the `.status` file, are created with
 the **process umask** -- deliberately not forced owner-only, because the
@@ -732,27 +772,22 @@ directory yourself if the host is shared. The `.debug` file is **0600**
 (it can contain secrets even though passwords are masked). Parallel-fetch
 worker scratch files are owner-only (they live in a private temp dir).
 
-### 9.7 Mail
+### Mail
 
 - **SMTP header-injection** -- `from`, `subject`, and every recipient have
   CR/LF stripped before the headers are written.
 - **No plaintext fallback** -- `tls=starttls|ssl` never silently downgrades to
   an unencrypted send; if TLS fails the mail is skipped and logged.
 
-### 9.8 Deliberate NON-mitigations (do not "fix" these blindly)
+### Deliberate NON-mitigations (do not "fix" these blindly)
 
-- **SSH host-key verification is OFF** (`StrictHostKeyChecking=no`,
-  `UserKnownHostsFile=/dev/null`). This is a known, deferred exposure
-  (audit finding F3) traded off against switch-key churn on hardware swaps.
-  A design for TOFU verification plus a `--forget-host` operator command is
-  specified in `fetchconfig-F3-ssh-hostkey-plan.md` for when it is addressed.
-  Turning verification on without that operator tooling would break the
-  hardware-swap workflow.
 - **Repository is umask-readable by design** (9.6) -- not a permissions bug.
 
 ---
 
-## 10. Notification subsystem (Mailer / Report)
+<!--nav-group: Notifications-->
+
+## Notification subsystem (Mailer / Report)
 
 - **`send_summaries`** builds `@global_rows` from `@results` and sends the
   global summary to the `email: to=` recipient, then groups devices by their
@@ -773,45 +808,47 @@ worker scratch files are owner-only (they live in a private temp dir).
 
 ---
 
-## 11. Extension recipes
+<!--nav-group: Extending-->
+
+## Extension recipes
 
 Concrete "how to add X". Each assumes you have read the relevant section above.
 
-### 11.1 Add a device option
+### Add a device option
 1. Choose the accessor by type: directory-valued (register in
    `%DIR_VALUED_OPTION`), numeric (`dev_option_posint`), boolean
-   (`dev_option_flag`), plain (`dev_option`). section 3.2.
+   (`dev_option_flag`), plain (`dev_option`). [$dev_opt_tab -- the per-device option hash](#dev_opt_tab----the-per-device-option-hash).
 2. Read it where it applies (a model's `do_fetch`, the pipeline, or a
    maintenance mode). No parser change is needed.
 3. If it is universal, document it in the README "available for all models"
    block and the HTML matrix intro; if model-specific, in that model's
    section and matrix row.
-4. Add a test under `t/` (see section 12).
+4. Add a test under `t/` (see [Testing](#testing)).
 
-### 11.2 Add a new model
-See section 5.3 + `How-To-add-a-model`.
+### Add a new model
+See [Adding a model](#adding-a-model) + `How-To-add-a-model`.
 
-### 11.3 Add a maintenance/lookup mode
+### Add a maintenance/lookup mode
 1. Add the CLI option in `fetchconfig.pl` `GetOptions` and a dispatch block
    (model it on `--list-allowed-dirs`/`--clean-lock-dir`: it runs after
    phase-1 load, does its job on the stored backups, and exits). Add it to the
    `$lookup_only` set so no fetch phase runs.
 2. Implement the work in `Tools.pm`, reusing its filesystem helpers
    (`parse_backup_filename`, `sort_backups_desc`, `dir_is_empty`, ...).
-3. Pick an exit code consistent with section 7; document in README + HTML + usage.
+3. Pick an exit code consistent with [Maintenance / lookup modes (Tools.pm)](#maintenance--lookup-modes-toolspm); document in README + HTML + usage.
 4. Add a test.
 
-### 11.4 Add a per-device result field (e.g. a new mail column)
+### Add a per-device result field (e.g. a new mail column)
 1. Pass it as a new `record_result` argument where the outcome is known
    (`fetch_device`). It is then automatically in `@results`, the `.status`
-   file, and (under `-P`) the result sink -- see section 2.4.
+   file, and (under `-P`) the result sink -- see [Parallel fetch (-P N)](#parallel-fetch--p-n).
 2. Render it in `build_report_html` and `build_report_text` (keep the two in
    sync) and, if appropriate, in the statistics tally (`row_state`).
 3. Add a test asserting it appears in both mail parts.
 
 ---
 
-## 12. Testing
+## Testing
 
 The test suite is in `t/` (TAP, run with `prove -I. t/` or `make test`).
 Files are numbered by area: `00-compile` (every model + the driver compile),
@@ -837,7 +874,7 @@ tagging a release. On a bare dev box, test the pure helpers directly.
 
 ---
 
-## 13. Conventions and gotchas
+## Conventions and gotchas
 
 - **Phases are sacred.** Never fetch in phase 1 (parse/register); never rely
   on parse-time side effects in phase 2.
@@ -852,7 +889,7 @@ tagging a release. On a bare dev box, test the pure helpers directly.
   than expecting external assignment to work.
 - **`-P` isolates package state.** A value a worker must return to the parent
   goes through `record_result` (the result sink), not a package variable
-  (section 2.4).
+  ([Parallel fetch (-P N)](#parallel-fetch--p-n)).
 - **MIME is byte-sensitive.** The summary mail's MIME must match the
   fetchconfig-web mailer exactly (CRLF, folded boundaries, 12-byte random
   boundaries, base64 wrapped at 76). Do not "tidy" the `send_mail` emission.
@@ -872,7 +909,9 @@ tagging a release. On a bare dev box, test the pure helpers directly.
 
 ---
 
-## 14. Backup-history DB writer (optional)
+<!--nav-group: Backup-history DB-->
+
+## Backup-history DB writer (optional)
 
 Off unless a `db:` line is set (default: level). It records two timelines to
 PostgreSQL for a dashboard; the engine only writes, never issues DDL. Module:
@@ -955,6 +994,20 @@ file), so only the saved change-events are added. It logs its own
 `process: <path>` debug line per backup, then the counts summary and a final
 `Success` (or, on a failure, the error count).
 
+Device-id rename on the outbox. `--rename-device-id` ([Locking](#locking) covers
+the table lock) emits one **`op=rename`** record (`old_dev_id`/`new_dev_id`) into
+the device's repository spool via `History::queue_rename`, then drains it
+(`History::replay`) at the end of the command. `_apply_op`'s `rename` kind runs
+`UPDATE {backup_current,backup_runs,backup_versions} SET dev_id=new WHERE
+dev_id=old` in the file's transaction; it is idempotent (once applied, `WHERE
+dev_id=old` matches nothing) and needs `GRANT UPDATE (dev_id)` on the three tables
+(fetchconfig-web side). If the DB is down the op simply stays in the outbox, like
+any other, and the next run's drain -- or an explicit `--replay-db-change`
+(`History::replay` over every loaded device's repository, no fetch) -- applies it.
+A live pre-check (`row_count_for_dev`) refuses a rename into an id that already has
+rows; if the DB is unreachable at rename time the apply-time transaction is the
+backstop.
+
 Per-version line deltas (`lines_added`/`lines_removed`, web 2.12). These are the
 +added/-removed of `Abstract::line_delta` (a dependency-free diff: trim the common
 prefix/suffix, then an LCS-length DP; `added = curr - LCS`, `removed = prev - LCS`)
@@ -992,19 +1045,19 @@ and fetchconfig-web renders them as-is, with no timezone conversion.
 token is ignored, and `timegm` does not consult the host zone. (Spool file-age
 pruning uses real elapsed time, independent of this display convention.)
 
-## 15. Document map
+<!--nav-group: Reference-->
+
+## Document map
 
 | To learn... | Read... |
 |-----------|-------|
-| How to use fetchconfig, every option | `README` |
+| How to use fetchconfig, every option | [README.md](README.md) |
 | Internals, data structures, security, how to extend | this guide |
-| How to add a device model (recipe) | `How-To-add-a-model` |
-| The template-driven `generic` model | `README.generic-model` |
-| The template grammar and parser | `README.template_engine` |
-| Capturing a device session for a new model | `README.record-session` |
-| The Perl module dependency matrix | `DEPENDENCIES` |
-| The SSH host-key verification design (deferred) | `fetchconfig-F3-ssh-hostkey-plan.md` |
+| How to add a device model (recipe) | [How-To-add-a-model.md](How-To-add-a-model.md) |
+| The `generic` model, template grammar/engine, and capturing a session | [README.generic-model.md](README.generic-model.md) |
+| The Perl module dependency matrix | [DEPENDENCIES.md](DEPENDENCIES.md) |
 
+> [!note] Diagrams
 > The two diagrams in this guide are ASCII in the Markdown (readable on
 > GitHub and offline) and rendered Mermaid in the generated HTML. The HTML
 > loads Mermaid from a pinned CDN (`mermaid@11.6.0`), so an internet

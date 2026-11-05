@@ -990,9 +990,16 @@ def inline(text):
         idx = m.end()
     parts.append(('t', text[idx:]))
     out = ''
+    code_spans = []
     for kind, seg in parts:
         if kind == 'c':
-            out += '<code>' + html.escape(seg) + '</code>'
+            # Stash the rendered code span behind a placeholder so the bold/
+            # italic passes below cannot reach into it. Emitting <code> straight
+            # into `out` let a literal run like "****" inside a code span be
+            # chewed by the emphasis regexes (a stray "*" could even pair with
+            # one in a neighbouring span). The placeholder carries no asterisks.
+            code_spans.append('<code>' + html.escape(seg) + '</code>')
+            out += '\x00C%d\x00' % (len(code_spans) - 1)
         else:
             seg = html.escape(seg)
             # restore HTML entities the source intentionally used (e.g. &#10003;
@@ -1009,6 +1016,14 @@ def inline(text):
                 text, url = m.group(1), m.group(2)
                 if url.startswith('#'):
                     url = '#' + slug(url[1:])
+                elif re.match(r'^[A-Za-z0-9_.-]+\.md$', url):
+                    # Relative sibling doc link: point at the generated HTML
+                    # twin instead of the raw .md (X.md -> X.html), and retarget
+                    # a self-labelled cell (text == "X.md") to match.
+                    html_url = url[:-3] + '.html'
+                    if text == url:
+                        text = html_url
+                    url = html_url
                 return '<a href="%s">%s</a>' % (html.escape(url), text)
             seg = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', _link, seg)
             out += seg
@@ -1024,6 +1039,8 @@ def inline(text):
     # alone) -> superscript link to the definition below.
     out = re.sub(r'\[\^(\d+)\]',
                  r'<sup class="fnref"><a href="#fn-\1">\1</a></sup>', out)
+    # Restore the code spans now that the emphasis passes are done.
+    out = re.sub(r'\x00C(\d+)\x00', lambda m: code_spans[int(m.group(1))], out)
     return out
 
 # ---- code-block syntax highlighting -----------------------------------------
@@ -1031,7 +1048,9 @@ def inline(text):
 #   .c  whole-line comments  (# ... , :: ... , SQL-style "-- ...")
 #   .s  double-quoted strings
 #   .k  fetchconfig option flags (-g, -devices=, --check-template, ...) and the
-#       config directives "default:" / "email:"
+#       device-table control directives "default:" / "email:" / "db:" /
+#       "directory:" (every WORD: line-label the parser recognises, so they are
+#       all highlighted consistently)
 # Flags are highlighted only on lines that invoke fetchconfig.pl, so ordinary
 # shell flags ("ln -s", "tar -xzf") are left uncoloured, matching the reference.
 def _highlight_code(esc):
@@ -1049,7 +1068,7 @@ def _highlight_code(esc):
         if 'fetchconfig.pl' in s:
             s = re.sub(r'(?<![\w/.\-])(-{1,2}[A-Za-z][\w\-]*=?)',
                        r'<span class="k">\1</span>', s)
-        s = re.sub(r'^(\s*)(default:|email:)', r'\1<span class="k">\2</span>', s)
+        s = re.sub(r'^(\s*)(default:|email:|db:|directory:)', r'\1<span class="k">\2</span>', s)
         s = re.sub(r'\x00S(\d+)\x00',
                    lambda m: '<span class="s">%s</span>' % strs[int(m.group(1))], s)
         out_lines.append(s)
@@ -1432,18 +1451,19 @@ _intro_body_lines = intro[_kk:]
 # generic doc: its hero title comes from the H1 itself and the app-specific
 # warnings/stats are omitted.
 is_app_doc = _h1.lower().startswith('fetchconfig')
-if is_app_doc:
-    hero_title_plain = 'fetchconfig'
-    _sm = re.match(r'^fetchconfig(?:\.pl)?\s*(?:--|-|\u2014)\s*(.+)$', _h1)
-    eyebrow = _sm.group(1).strip() if _sm else 'Documentation'
+# The hero shows the FULL document title at one size ("fetchconfig -- <subtitle>",
+# with the dash normalised to an em dash) - not the brand big with the subtitle as
+# a small eyebrow above it. There is no separate eyebrow line.
+hero_title_plain = re.sub(r'\s*(?:--|\u2014)\s*', u' \u2014 ', _h1.strip(), count=1)
+eyebrow = ''
+# Browser <title>: "<brand> -- <subtitle>".
+_sm = re.match(r'^(.*?)\s*(?:--|\u2014)\s*(.+)$', _h1)
+if _sm:
+    page_title = html.escape(_sm.group(1).strip()) + ' &mdash; ' + html.escape(_sm.group(2).strip())
 else:
-    _sm = re.match(r'^(.*?)\s*(?:--|\u2014)\s*(.+)$', _h1)
-    hero_title_plain = (_sm.group(1).strip() if _sm else (_h1.strip() or 'Documentation'))
-    eyebrow = _sm.group(2).strip() if _sm else 'Documentation'
+    page_title = html.escape(_h1.strip() or 'Documentation')
 hero_title = html.escape(hero_title_plain)
-page_title = html.escape(hero_title_plain) + ' &mdash; ' + html.escape(eyebrow)
-lede = inline(' '.join(_lede_lines)) if _lede_lines else \
-    "A single-file Perl CGI front-end for fetchconfig: a browser UI for browsing device backups, viewing and comparing configurations, checking run status, and editing the device table &mdash; backed by a PostgreSQL user database."
+lede = ('<p class="lede">%s</p>' % inline(' '.join(_lede_lines))) if _lede_lines else ''
 
 # Version strings for the sidebar pill, hero tile and hero warning, read from
 # fetchconfig.cgi next to this script. Falls back to '?' with a warning on
@@ -1560,9 +1580,8 @@ page = (u"""<!DOCTYPE html>
   <div class="main-col">
 
     <div class="hero">
-      <div class="hero-eyebrow">{eyebrow}</div>
       <h1 class="hero-title">{hero_title}</h1>
-      <p class="lede">{lede}</p>
+      {lede}
       {hero_warnings}
       {hero_stats}
     </div>

@@ -35,6 +35,8 @@ use fetchconfig::Report;
 use fetchconfig::History;
 use fetchconfig::model::Detector;
 use fetchconfig::Tools;
+use fetchconfig::Lock;
+use fetchconfig::Rename;
 use Getopt::Long qw(GetOptionsFromArray);
 
 sub basename {
@@ -95,6 +97,10 @@ my $list_template;      # set by -t/--list-template: list available templates fr
 my $list_allowed_dirs;  # set by --list-allowed-dirs: list the directory: allowlist
 my $clean_lock_dir;     # set by --clean-lock-dir N: remove lock files older than N days, then exit
 my $db_backfill;        # set by --db-backfill: reconstruct the history DB from on-disk backups, then exit
+my $rename_device_id;   # set by --rename-device-id: rename a device id (table + backups + DB), then exit
+my $rename_old;         # set by --old: the current device id to rename (with --rename-device-id)
+my $rename_new;         # set by --new: the new device id (with --rename-device-id)
+my $replay_db_change;   # set by --replay-db-change: drain the pending DB outbox ops, then exit
 my $retrieve_out_file;  # set by -f: optional output file (default: stdout)
 my $parallel = 1;       # set by -P N: number of concurrent fetch workers (1 = sequential, the default)
 
@@ -142,6 +148,10 @@ my $got = GetOptions(
     'list-allowed-dirs' => \$list_allowed_dirs,
     'clean-lock-dir:i'  => \$clean_lock_dir,   # N days; :i => value optional (default 30)
     'db-backfill'       => \$db_backfill,
+    'rename-device-id'  => \$rename_device_id,
+    'old=s'             => \$rename_old,
+    'new=s'             => \$rename_new,
+    'replay-db-change'  => \$replay_db_change,
     'n=s'       => \$retrieve_index,   # validated as a positive integer below
     'm=s'       => \$compare_index,
     'P=s'       => \$parallel,
@@ -244,10 +254,24 @@ if ((@device_file_list < 1) && (@line_list < 1)) {
     die "\n";
 }
 
-if ((grep { defined($_) } ($retrieve_dev_id, $list_dev_id, $zero_check_dev_id, $zero_check_all, $orphan_check, $empty_check, $suffix_check_dev_id, $suffix_check_all, $db_backfill)) > 1) {
-    $log->error("-g, -l, -z, -Z, -o, -e, -s, -S and --db-backfill are mutually exclusive");
+if ((grep { defined($_) } ($retrieve_dev_id, $list_dev_id, $zero_check_dev_id, $zero_check_all, $orphan_check, $empty_check, $suffix_check_dev_id, $suffix_check_all, $db_backfill, $rename_device_id, $replay_db_change)) > 1) {
+    $log->error("-g, -l, -z, -Z, -o, -e, -s, -S, --db-backfill, --rename-device-id and --replay-db-change are mutually exclusive");
     &usage;
     die "\n";
+}
+
+# --old/--new belong to --rename-device-id, and it requires both.
+if ((defined($rename_old) || defined($rename_new)) && !defined($rename_device_id)) {
+    $log->error("--old and --new are only valid with --rename-device-id");
+    &usage;
+    die "\n";
+}
+if (defined($rename_device_id)) {
+    if (!defined($rename_old) || $rename_old eq '' || !defined($rename_new) || $rename_new eq '') {
+        $log->error("--rename-device-id requires --old <id> and --new <id>");
+        &usage;
+        die "\n";
+    }
 }
 
 if (defined($compare_index)) {
@@ -271,8 +295,9 @@ if (defined($orphan_delete)
     die "\n";
 }
 
-if (defined($orphan_test) && !defined($orphan_delete) && !defined($clean_lock_dir) && !defined($db_backfill)) {
-    $log->error("-T requires -D (or --clean-lock-dir, or --db-backfill)");
+if (defined($orphan_test) && !defined($orphan_delete) && !defined($clean_lock_dir) && !defined($db_backfill)
+    && !defined($rename_device_id) && !defined($replay_db_change)) {
+    $log->error("-T requires -D (or --clean-lock-dir, --db-backfill, --rename-device-id, or --replay-db-change)");
     &usage;
     die "\n";
 }
@@ -286,7 +311,7 @@ $default_lock_dir .= '/.lock';
 fetchconfig::model::Detector->init($log, $default_lock_dir);
 fetchconfig::Report->init($log);
 
-my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs) || defined($template_syntax) || defined($clean_lock_dir) || defined($db_backfill);
+my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs) || defined($template_syntax) || defined($clean_lock_dir) || defined($db_backfill) || defined($rename_device_id) || defined($replay_db_change);
 if ($parallel > 1 && $lookup_only) {
     $log->error("-P applies to fetching only and cannot be combined with -g/-l/-z/-Z/-o/-e/-s/-S");
     &usage;
@@ -377,6 +402,32 @@ if (defined($db_backfill)) {
         die "\n";
     }
     exit(fetchconfig::History->backfill($log, $orphan_test));
+}
+
+# --rename-device-id --old X --new Y [-T]: rename a device id in the device
+# table, the on-disk backup tree, and (if db: is set) the history DB, then exit.
+# The DB change is carried on the outbox and drained at the end of the command;
+# if the DB is unreachable it stays queued (exit 1) for a later --replay-db-change
+# or the next run. -T previews everything without writing.
+if (defined($rename_device_id)) {
+    exit(fetchconfig::Rename->run(
+        log     => $log,
+        old     => $rename_old,
+        new     => $rename_new,
+        dry_run => $orphan_test,
+    ));
+}
+
+# --replay-db-change [-T]: drain any pending DB outbox operations (renames or
+# stalled statistics) for every loaded device's repository, then exit. The
+# lightweight catch-up after a DB outage; no fetching. -T previews what is pending.
+if (defined($replay_db_change)) {
+    unless (fetchconfig::History->configured) {
+        $log->error("--replay-db-change requires a db: line in the device table");
+        &usage;
+        die "\n";
+    }
+    exit(fetchconfig::Rename->replay_db(log => $log, dry_run => $orphan_test));
 }
 
 if (defined($list_template)) {
@@ -505,6 +556,8 @@ sub usage_text {
     $t .= "       $me [-devices=file] [-line=string] -e [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] -e -D [-T] [-f file]\n";
     $t .= "       $me [-devices=file] [-line=string] --db-backfill [-T]\n";
+    $t .= "       $me [-devices=file] --rename-device-id --old X --new Y [-T]\n";
+    $t .= "       $me [-devices=file] --replay-db-change [-T]\n";
     $t .= "\n";
     $t .= "       -devices=file  device table file to load (repeatable); a relative name is looked for in the\n";
     $t .= "                      current directory first, then beside fetchconfig.pl (its own directory)\n";
@@ -583,6 +636,22 @@ sub usage_text {
     $t .= "                      backup_current for devices not yet recorded. Idempotent and repeatable;\n";
     $t .= "                      never overwrites a row a real run wrote. -T previews the counts without\n";
     $t .= "                      hashing or writing. Then exit.\n";
+    $t .= "       --rename-device-id    rename a device id everywhere: the device-table line, the on-disk\n";
+    $t .= "                      backup tree (every dated leaf directory and the backup files in it, plus the\n";
+    $t .= "                      repository-root <id>.status/<id>.debug), and - if a db: line is set - the\n";
+    $t .= "                      history database (carried on the outbox). Requires --old <current-id> and\n";
+    $t .= "                      --new <new-id>; the new id must match the device-id rules and must not be in\n";
+    $t .= "                      use (table, disk, or DB). The device-table file is locked while it runs.\n";
+    $t .= "                      -T previews every change without writing. Exits 0 on success, 1 if the DB\n";
+    $t .= "                      change was left queued (DB unreachable - apply it later with\n";
+    $t .= "                      --replay-db-change), 2 on a validation or name-collision refusal.\n";
+    $t .= "       --old X        with --rename-device-id: the current device id to rename\n";
+    $t .= "       --new Y        with --rename-device-id: the new device id\n";
+    $t .= "       --replay-db-change    drain any pending history-DB operations from the per-repository\n";
+    $t .= "                      outbox (device-id renames or statistics left queued while the DB was down),\n";
+    $t .= "                      for every loaded device's repository, then exit; no fetching. Requires a\n";
+    $t .= "                      db: line. -T reports what is pending without applying it. Exits 0 if nothing\n";
+    $t .= "                      is pending after the drain, 1 if ops remain (DB still unreachable).\n";
     $t .= "       -f file        write the result data (config/diff/listing rows) to file instead of stdout; log\n";
     $t .= "                      messages still go to stderr. A check that finds nothing writes an EMPTY file -\n";
     $t .= "                      that is the expected result; the outcome is in the exit status. Does NOT apply\n";
@@ -797,6 +866,19 @@ sub load_device_list {
 
     my $path = resolve_device_file($filename);
 
+    # Serialize against an in-progress --rename-device-id, which holds an
+    # EXCLUSIVE lock on this file (a "<devices>.lock" sidecar) while it rewrites
+    # a device id. Take a SHARED lock for the brief parse; if a rename holds the
+    # file, wait up to 2 s then abort rather than parse a table mid-change. If the
+    # lock cannot be created at all (e.g. a read-only directory), proceed without
+    # it so locking never breaks an otherwise-fine deployment.
+    my ($dt_lock, $dt_st) = fetchconfig::Lock->acquire($path, exclusive => 0, timeout => 2);
+    if ($dt_st eq 'timeout') {
+        $log->error("could not read device list: $filename is locked by another operation"
+            . " (a device-id rename in progress?) - try again");
+        exit 2;
+    }
+
     local *IN;
 
     if (!open(IN, '<', $path)) {
@@ -806,6 +888,7 @@ sub load_device_list {
 	else {
 	    $log->error("could not read device list: $filename (looked in the current directory and $FindBin::Bin): $!");
 	}
+	fetchconfig::Lock->release($dt_lock) if defined $dt_lock;
 	return;
     }
 
@@ -826,6 +909,7 @@ sub load_device_list {
     }
 
     close IN;
+    fetchconfig::Lock->release($dt_lock) if defined $dt_lock;
 }
 
 sub load_line {

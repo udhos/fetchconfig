@@ -76,6 +76,10 @@ my $SECTION_DIVIDER = '-----[DB writer]-----------------------------------------
 my $BACKFILL_DIVIDER = '-----[DB backfill]'
     . ('-' x (length($SECTION_DIVIDER) - length('-----[DB backfill]')));
 
+# --replay-db-change and the end-of-rename drain log under this label.
+my $REPLAY_DIVIDER = '-----[DB replay]'
+    . ('-' x (length($SECTION_DIVIDER) - length('-----[DB replay]')));
+
 sub configured { $db_seen }
 
 #
@@ -182,6 +186,72 @@ sub finish {
     # Close the section with the result line (same text as the mail footer).
     my $line = $class->status_line;
     $log->info($line) if $log && defined($line);
+}
+
+# --- Device-id rename support + standalone outbox replay ----------------------
+
+# Queue one op=rename into $repo's outbox (its own spool file, timestamp-ordered
+# with any other ops). The drain -- replay() below, or the next run's finish --
+# applies it. Idempotent at apply time (WHERE dev_id=<old>). Returns 1 if the op
+# was written to the outbox, 0 otherwise.
+sub queue_rename {
+    my ($class, $logger, $repo, $old, $new) = @_;
+    $log = $logger if defined($logger);
+    return 0 unless defined($repo) && length($repo);
+    return _write_spool($repo, [ { op => 'rename', old_dev_id => $old, new_dev_id => $new } ]) ? 1 : 0;
+}
+
+# Drain the outboxes of the given repositories on demand: the end-of-rename
+# apply, and the standalone --replay-db-change maintenance mode. Mirrors finish's
+# drain + status line but is not tied to a fetch run. $preview only reports what
+# is pending (no DB writes). Returns 0 if nothing is left pending, 1 otherwise.
+sub replay {
+    my ($class, $logger, $repos_ref, $preview) = @_;
+    $log = $logger if defined($logger);
+    my @repos = $repos_ref ? @$repos_ref : ();
+
+    $log->info($REPLAY_DIVIDER) if $log;
+
+    if ($preview) {
+        my ($pending, $oldest) = (0, undef);
+        for my $repo (@repos) {
+            for my $f (_spool_files($repo)) {
+                $pending++;
+                $oldest = $f->{stamp} if !defined($oldest) || $f->{stamp} lt $oldest;
+            }
+        }
+        $log->info("--replay-db-change: $pending pending DB spool file(s)"
+            . (defined($oldest) ? " (oldest $oldest)" : "")
+            . " - preview, nothing applied") if $log;
+        return $pending ? 1 : 0;
+    }
+
+    my %repos = map { $_ => 1 } @repos;
+    _drain(\%repos);
+    my $line = $class->status_line;
+    $log->info($line) if $log && defined($line);
+    return ($summary{ok} ? 0 : 1);
+}
+
+# Total rows the DB currently holds for $dev_id across the three tables, or undef
+# if the DB is unreachable / DBI is unavailable (the caller then skips the live
+# pre-check and relies on the apply-time transaction as the backstop). Used by
+# --rename-device-id to refuse a new id that already has DB rows (a ghost from a
+# previously-deleted device).
+sub row_count_for_dev {
+    my ($class, $logger, $dev_id) = @_;
+    $log = $logger if defined($logger);
+    return undef unless $db_seen;
+    return undef unless eval { require DBI; 1 };
+    my $dbh = _connect() or return undef;
+    my $total = 0;
+    for my $tbl (qw(backup_current backup_runs backup_versions)) {
+        my ($n) = $dbh->selectrow_array("SELECT COUNT(*) FROM $tbl WHERE dev_id = ?", undef, $dev_id);
+        if (!defined($n)) { $dbh->disconnect; return undef; }
+        $total += $n;
+    }
+    $dbh->disconnect;
+    return $total;
 }
 
 # --- Backfill (--db-backfill) -------------------------------------------------
@@ -573,7 +643,7 @@ sub _write_spool {
 
     if (!open(my $fh, '>', $tmp)) {
         _warn("cannot write DB spool $tmp: $!");
-        return;
+        return 0;
     }
     else {
         for my $op (@$ops) {
@@ -582,13 +652,15 @@ sub _write_spool {
         if (!close($fh)) {
             _warn("cannot close DB spool $tmp: $!");
             unlink $tmp;
-            return;
+            return 0;
         }
     }
     if (!rename($tmp, $final)) {
         _warn("cannot finalize DB spool $final: $!");
         unlink $tmp;
+        return 0;
     }
+    return 1;
 }
 
 # Drain the spool files of every given repository into the DB. One transaction
@@ -774,6 +846,20 @@ sub _apply_op {
         my $sql = 'UPDATE backup_versions SET expired=true, expired_at=?
                    WHERE dev_id=? AND file_timestamp=?';
         return defined(_do($dbh, $sql, _local_epoch(time), $op->{dev_id}, $op->{file_timestamp})) ? 1 : 0;
+    }
+
+    # Device-id rename (--rename-device-id): move every row of the device from
+    # the old id to the new one, in the same transaction as any neighbouring
+    # ops. Idempotent: once applied, WHERE dev_id=<old> matches nothing and the
+    # three UPDATEs are 0-row no-ops. The table names are fixed, never input.
+    # Needs GRANT UPDATE (dev_id) on the three tables (fetchconfig-web schema).
+    if ($kind eq 'rename') {
+        for my $tbl (qw(backup_current backup_runs backup_versions)) {
+            my $r = _do($dbh, "UPDATE $tbl SET dev_id=? WHERE dev_id=?",
+                        $op->{new_dev_id}, $op->{old_dev_id});
+            return 0 unless defined($r);
+        }
+        return 1;
     }
 
     _warn("unknown DB op '$kind' in spool - skipping");

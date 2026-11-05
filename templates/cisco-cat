@@ -3,9 +3,8 @@ cisco-cat template -- state machine
 
 State machine of the cisco-cat generic-model template (selected with
 model=cisco-cat), parsed from templates/cisco-cat.tmpl. Cisco Catalyst CatOS over telnet. See
-README.template_engine.html (../README.template_engine.html) for the engine
-and grammar and README.generic-model.html (../README.generic-model.html) for
-selecting the model in the device table.
+README.generic-model.html (../README.generic-model.html) for the generic
+model, the template grammar and the engine.
 
 Template settings
 =================

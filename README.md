@@ -53,12 +53,14 @@ A few changes alter *behaviour* on first upgrade, even though the configuration 
 
 ## Installation {#installation}
 
+In a hurry? [QUICK-INSTALL.md](QUICK-INSTALL.md) has the essential steps with no fuss; the sections below are the full reference.
+
 <!--tabs-->
 
 <!--tab: UNIX / Linux-->
 
 1. fetchconfig.pl expects a Perl interpreter at `/usr/bin/perl`.
-2. Install the Perl modules you need — see [Perl module requirements](#modules). Most are in the Perl core (5.26+); the non-core ones are `Net::Telnet` and `Net::SMTP` (every run), `Net::OpenSSH` (SSH devices), `LWP::UserAgent`/`HTTP::Request::Common` (web-UI models), and `Net::SNMP`/`Net::TFTP` (`procurve-snmp`).
+2. Install the Perl modules you need — see [Perl module requirements](#modules). Most are in the Perl core (5.26+); the non-core ones are `Net::Telnet` and `Net::SMTP` (every run), `Net::OpenSSH` (SSH devices), `LWP::UserAgent`/`HTTP::Request::Common` (web-UI models), and `Net::SNMP` (`procurve-snmp` and SNMP device inventory on any model) and `Net::TFTP` (`procurve-snmp`).
 3. Unpack the fetchconfig tarball at a suitable location.
 
 ```shell
@@ -72,7 +74,7 @@ ln -s fetchconfig-0.0 fetchconfig
 <!--tab: Windows-->
 
 1. fetchconfig.pl expects to find a Perl interpreter in the `PATH`.
-2. Install the Perl modules you need — see [Perl module requirements](#modules). Most are in the Perl core (5.26+); the non-core ones are `Net::Telnet` and `Net::SMTP` (every run), `Net::OpenSSH` (SSH devices), `LWP::UserAgent`/`HTTP::Request::Common` (web-UI models), and `Net::SNMP`/`Net::TFTP` (`procurve-snmp`). **On native Windows the SSH models do not run** (`Net::OpenSSH`/`IO::Pty` are unavailable there), so only telnet, web-UI and `procurve-snmp` devices work; backup comparison (`-g … -m`) and change-report diffs are disabled, `-P` always runs sequentially, and `chmod`/`umask` hardening is a no-op (rely on folder ACLs). Under Cygwin/WSL it behaves as on Linux. See [Platform support](#platform-support).
+2. Install the Perl modules you need — see [Perl module requirements](#modules). Most are in the Perl core (5.26+); the non-core ones are `Net::Telnet` and `Net::SMTP` (every run), `Net::OpenSSH` (SSH devices), `LWP::UserAgent`/`HTTP::Request::Common` (web-UI models), and `Net::SNMP` (`procurve-snmp` and SNMP device inventory on any model) and `Net::TFTP` (`procurve-snmp`). **On native Windows the SSH models do not run** (`Net::OpenSSH`/`IO::Pty` are unavailable there), so only telnet, web-UI and `procurve-snmp` devices work; backup comparison (`-g … -m`) and change-report diffs are disabled, `-P` always runs sequentially, and `chmod`/`umask` hardening is a no-op (rely on folder ACLs). Under Cygwin/WSL it behaves as on Linux. See [Platform support](#platform-support).
 3. Unpack the fetchconfig tarball at a suitable location. From the command line, [gzip](http://www.gzip.org) and [tar](http://gnuwin32.sourceforge.net/packages/tar.htm) can be used — or a GUI archiver such as WinZip.
 
 ```cmd
@@ -111,7 +113,7 @@ fetchconfig runs on Perl 5.26 or later (tested on 5.26, 5.28 and 5.40; see the D
 | `Net::SMTP` | Every run. Part of the core *libnet* distribution (core since Perl 5.7.3), so no separate installation is needed. fetchconfig loads its reporting code on every run — it writes the per-device [status file](#status-file) even when no e-mail is configured — so this must be present regardless. No SMTP connection is made unless an `email:` line is configured. |
 | `Net::OpenSSH` | All SSH-based models: `cisco-ios-ssh`, `cisco-asa-ssh`, `comware-ssh`, `procurve-ssh`, `planet-ssh`, `aruba-cx-ssh` and any other `*-ssh` model. |
 | `LWP::UserAgent`, `HTTP::Request::Common` | The web-UI models `tplink-web-sg105e` and `procurve-web-1700` (no CLI). Both come with the *libwww-perl* distribution. |
-| `Net::SNMP`, `Net::TFTP` | The `procurve-snmp` model (HP ProCurve ProVision, including the 4000M/8000M chassis), which backs up over SNMP + TFTP. |
+| `Net::SNMP` | The `procurve-snmp` model (HP ProCurve ProVision, including the 4000M/8000M chassis), and the [SNMP device inventory](#snmp-inventory) (9.80), which any model can use. `Net::TFTP` additionally for `procurve-snmp`'s file transfer. SNMPv3 (either use) also needs `Digest::HMAC` and `Crypt::DES`/`Crypt::Rijndael`. |
 | `IO::Socket::SSL` (needs `Net::SSLeay`) | Only if TLS is enabled for the summary e-mail (`email: tls=starttls` or `tls=ssl`). Plain SMTP does not need it. `Mozilla::CA` is optional, for a CA bundle where the system has none. |
 
 ```shell
@@ -175,7 +177,26 @@ cisco-ios       vpn-gw          192.168.0.1     keep=10,changes_only=1
 > [!note] dev-unique-id constraints
 > Must be (a) an unique identifier across all devices, and (b) a valid filesystem's directory name.
 
-Beside the two line types above, the device table also accepts the control directives `email:` (see [E-mail notifications](#email-notifications)), `db:` (see [Backup-history database](#backup-history)) and `directory:` (see [Directory allowlist](#directory-allowlist)).
+Beside the two line types above, the device table also accepts the control directives `email:` (see [E-mail notifications](#email-notifications)), `db:` (see [Backup-history database](#backup-history)), `directory:` (see [Directory allowlist](#directory-allowlist)) and `pw:` (see [Credential aliases](#credential-aliases)).
+
+### Line syntax {#devtable-syntax}
+
+The device-table line forms as syntax (railroad) diagrams — follow each path left→right; a branch is an alternative, and an item the line skips past is optional:
+
+```railroad
+devtable-line
+A line is a `default:` options line, a device line (**model first**, then the unique id and host, then optional options), or one of the control directives below.
+```
+
+```railroad
+devtable-options
+`options` on a `default:` or device line are comma-separated `key=value` pairs (e.g. `user=backup,pass=secret,keep=10`).
+```
+
+```railroad
+devtable-directives
+The control directives: `email:`, `db:`, `directory:` (`<type> $TAG path` — `$TAG` and `path` are required; only `fetch_run`/`report` may instead be `none`) and `pw:`.
+```
 
 ## Device table on the command line {#embedding} {nav: Device table on the CLI}
 
@@ -224,9 +245,11 @@ A value off the list, of the wrong type, an undefined tag, or with illegal conte
 
 ## E-mail notifications {#email-notifications}
 
-fetchconfig.pl can e-mail a summary of a run's backup results as an HTML table (Device‑ID, Date, Time, State, Size, Changes). This is entirely optional: unless an `email:` line is present, no SMTP connection is ever attempted.
+fetchconfig.pl can e-mail a summary of a run's backup results as an HTML table (Device‑ID, Date, Time, State, Size, Changes, Inventory). This is entirely optional: unless an `email:` line is present, no SMTP connection is ever attempted.
 
-The message is laid out as a white rounded card on a grey canvas, with a dark-blue (`#1f4e79`) header bar carrying a small logo and “fetchconfig vX.Y”, and the copyright footer below the card — matching the fetchconfig-web mails. The header logo is embedded in the message as a `multipart/related` inline image (`Content-ID <fcwlogo>`); it is independent of the `report_logo=` used inside the on-disk HTML report, which is unchanged. The message is multipart: the HTML part above, and a plain-text part carrying the same statistics and per-device tables rendered as plain text (auto-sized columns, no diffs), so a text-only mail client or a notification preview still shows the result summary.
+The summary carries two small count tables — a backup **Statistics** table (success/failed, changed/unchanged/…) and, directly below it, an **Inventory** table counting the per-device [SNMP inventory](#snmp-inventory) outcome (`success` / `failed` / `N/A` / `not due`, summing to the device total) — followed by the per-device table whose last column, **Inventory**, shows each device's state: `success` (green), `failed` (red), `N/A` (no SNMP configured, grey), or `not due` (an `snmp_inventory_interval` skip — the read was not due this run, amber). Devices with no SNMP inventory simply show `N/A`.
+
+The message is laid out as a white rounded card on a grey canvas, with a dark-blue (`#1f4e79`) header bar carrying a small logo and “fetchconfig vX.Y”, and the copyright footer below the card — matching the fetchconfig-web mails. The header logo is embedded in the message as a `multipart/related` inline image (`Content-ID <fcwlogo>`); it is independent of the `report_logo=` used inside the on-disk HTML report, which is unchanged. The message is multipart: the HTML part above, and a plain-text part carrying the same statistics, inventory, and per-device tables rendered as plain text (auto-sized columns, no diffs), so a text-only mail client or a notification preview still shows the result summary.
 
 ### 1. Configure the sender, recipient, and SMTP server
 
@@ -434,6 +457,7 @@ The generic model's device-table options — and the template-only directives �
 >
 > - [README.generic-model](README.generic-model.html) — the generic model & template engine: architecture, template grammar, execution semantics, writing and generating templates, and the `record-session.pl` capture tool
 > - [How to add a model](How-To-add-a-model.html) — writing a new per-device Perl model (the alternative to a template)
+> - [README.fc-snmp-inventory](README.fc-snmp-inventory.html) — the read-only `tools/fc-snmp-inventory.pl` SNMP inventory probe: what a device exposes, what the inventory feature derives from it, and which `snmp-profiles.conf` directive to add when onboarding a new device or vendor
 
 The template parser is production-ready; the execution engine has been verified on Cisco IOS-XE over telnet and SSH and on an HP ProCurve menu switch. Verify a template against the target device before relying on it.
 
@@ -482,15 +506,160 @@ fetchconfig.pl -devices=... -g <dev_id> | uudecode -o config.cfg
 
 ## ProCurve SNMP backups (ProVision, 4000M/8000M) {#procurve-snmp} {nav: ProCurve SNMP}
 
-The older HP ProCurve ProVision chassis (4000M, 8000M) can only be managed remotely through a VT100 menu, which is not usable for scripted backup. They will, however, export a text copy of their configuration over TFTP when told to over SNMP, and that is what `procurve-snmp` does. It is a transport unlike the other models — no shell and no web UI, but SNMP plus TFTP — and so has no `user`/`pass`: the credential is the SNMP read-write `community`.
+The older HP ProCurve ProVision chassis (4000M, 8000M) can only be managed remotely through a VT100 menu, which is not usable for scripted backup. They will, however, export a text copy of their configuration over TFTP when told to over SNMP, and that is what `procurve-snmp` does. It is a transport unlike the other models — no shell and no web UI, but SNMP plus TFTP — and so has no `user`/`pass`: the credential is the SNMP read-write `snmp_community` (renamed from `community` in 9.80).
 
 An SNMP set arms the switch’s TFTP export, the config is fetched from the switch by TFTP, and a second SNMP set disables the export again. That disable always runs, even when the transfer failed, so the switch is never left with its TFTP server open.
+
+> [!note] SNMP options renamed in 9.80
+> `procurve-snmp` now uses the shared `snmp_*` option namespace (see [SNMP device inventory](#snmp-inventory)): `community` → `snmp_community`, and the SNMP timeout is `snmp_timeout` (no longer the shared telnet/SSH `timeout`). **`snmp_timeout` defaults to 5 s, down from the old implicit `timeout=30`** — set `snmp_timeout=30` on these lines to keep the former behaviour, especially if the TFTP export is slow. A site that keeps a separate read-write community can set `snmp_write_community`; otherwise `snmp_community` must be read-WRITE for this model. Update affected device-table lines when upgrading.
 
 > [!note] browse vs. running-config
 > The default `remote_file=browse` produces a human-readable report — fine for backup and change tracking, but a display export, not a file that can be TFTP’d back to restore the switch. Later ProVision models also accept `remote_file=running-config`, a replayable config.
 
 > [!warn] TFTP is inbound
 > The switch pushes the file to the backup host over TFTP (UDP/69 inbound, then a data port). A host firewall on the backup machine can block this; it then shows up as a TFTP get failure or timeout, not a hang.
+
+## SNMP device inventory {#snmp-inventory} {nav: SNMP inventory}
+
+During a normal backup run, fetchconfig can also collect a **hardware inventory** of each device over SNMP — vendor, model, serial number, OS version, and the serial-bearing parts (stack members, modules, power supplies, and optionally optics) — and write it to the fetchconfig-web dashboard database (schema 2.15). It is **model-independent**: one collector runs for every model, reading the standard **ENTITY-MIB** physical table plus the system group, so it works across vendors without per-model parsing.
+
+Inventory is **entirely opt-in and off by default**: it runs for a device only when SNMP credentials are configured for it — `snmp_community` (or `snmp_write_community`) for SNMPv1/v2c, or `snmp_user` for SNMPv3. A read-WRITE community reads fine, so a `procurve-snmp` device that carries only `snmp_write_community` is inventoried too (the read session falls back to it). It is **independent of the config backup** (a device whose SSH/telnet backup failed, or an SNMP-only device, still gets inventory) and **never affects the backup**: an SNMP failure is a warning unless `snmp_fatal=on`.
+
+> [!note] Requires the fetchconfig-web 2.15 database (2.16/2.17 for the extra fields)
+> The inventory tables are created and owned by fetchconfig-web (`fetchconfig-web-dbsetup.pl --upgrade`, schema 2.15). The engine only writes them, through the same store-and-forward outbox as the [backup-history DB](#backup-history). Against a database not yet migrated to 2.15 the inventory writes are silently skipped — backups and backup history are unaffected. The two later additions need a newer schema and are written only where the column exists: per-component firmware/ROMMON (`fw_version`) needs **2.16**, and the `sysName`/`sysLocation`/`sysContact` headline needs **2.17** (the engine probes for each and omits it against an older DB, so one engine build runs against 2.15/2.16/2.17).
+
+### SNMP options
+
+All of these are ordinary device-table options: set them on a model’s `default:` line (shared) and override per device as needed — except `snmp_profile_file`, which is `default:`-only (see its note below).
+
+| Option | Default | Meaning |
+|---|---|---|
+| `snmp_community` | *(none)* | SNMP read community (v1/v2c). Its presence enables inventory. Secret. For `procurve-snmp` it must be read-WRITE. |
+| `snmp_write_community` | `= snmp_community` | Read-WRITE community. Used by `procurve-snmp` to arm the TFTP export, and also enables/serves the inventory read when no `snmp_community` is set. Secret. |
+| `snmp_version` | `2c` | `1`, `2c`, or `3`. |
+| `snmp_port` | `161` | SNMP agent UDP port. |
+| `snmp_timeout` | `5` | Per-request timeout, seconds (SNMP-specific — not the telnet/SSH `timeout`). |
+| `snmp_retries` | `1` | Retries per request. |
+| `snmp_max_repetitions` | `25` | GET-BULK max-repetitions for the ENTITY-MIB walk (v2c/v3). Higher = fewer round-trips on a large stack; lower it only if an agent rejects a big bulk response. Ignored for v1 (no GET-BULK). |
+| `snmp_user` | *(none)* | SNMPv3 user. Its presence enables inventory. |
+| `snmp_level` | *derived* | SNMPv3 `noAuthNoPriv` / `authNoPriv` / `authPriv`; derived from the credentials given, or set to assert a minimum. |
+| `snmp_authproto` | `sha` | SNMPv3 auth protocol (`md5`/`sha`/…). |
+| `snmp_authpass` | *(none)* | SNMPv3 auth passphrase. Secret. |
+| `snmp_privproto` | `aes` | SNMPv3 privacy protocol (`des`/`aes`/…). |
+| `snmp_privpass` | *(none)* | SNMPv3 privacy passphrase. Secret. |
+| `snmp_inventory` | `on` | Master switch (boolean: `on`/`off`, `1`/`0`, `yes`/`no`). `off`/`0` disables inventory on a device even if a community is inherited from `default:`. |
+| `snmp_inventory_level` | `1` | `1` = chassis + modules + power supplies; `2` also captures transceivers/optics (higher churn). |
+| `snmp_inventory_history` | `on` | Boolean (`on`/`off`, `1`/`0`). Whether a hardware/OS change appends an audit row to the inventory history. |
+| `snmp_fatal` | `off` | Boolean (`on`/`off`, `1`/`0`). `on` makes a failed inventory attempt a device error (exit 11); the config backup is never affected. |
+| `snmp_inventory_interval` | `0` | Seconds. `0` (default) collects inventory every run. When set, a run **skips** the SNMP read if the last successful inventory for the device is younger than this, and carries that result forward (DB and `.status` unchanged) — so config backups stay fast on a device whose SNMP inventory is slow. A failed or missing prior forces a fresh read. E.g. `86400` = at most once a day. |
+| `snmp_profile_file` | shipped `snmp-profiles.conf` | Optional override for the vendor/model profile file (`vendor`, `model`, `oid` and `override` lines keyed by `sysObjectID` or enterprise number). **`default:`-only** — see the note below. |
+
+> [!note] `snmp_profile_file` is a `default:`-only option
+> `snmp_profile_file` may be set **only on a `default:` line**, never on a device line. One file serves the whole fleet (it can list many vendors/models), and the parsed file is cached process-wide, so a value on a device line would not take effect anyway — the engine therefore **ignores a device-line `snmp_profile_file` and logs a warning**. It is the only `snmp_*` (and, currently, the only device-table) option restricted this way; every other `snmp_*` option is usable on both `default:` and device lines.
+
+A minimal SNMPv2c setup is one line on the model’s `default:`:
+
+```
+default:  cisco-ios  user=backup,pass=secret,snmp_community=public
+```
+
+Stacks are reported with every member’s serial; the dashboard shows make/model/serial/OS and, per device, a `disabled` / `successful` / `failed` state. Each run also logs one per-device line for the inventory outcome (`SNMP inventory read successful (…) in N secs`, `read failed after N secs: …`, or `disabled`), alongside the config-retrieval line — note the config-retrieval time does **not** include the SNMP work, which the inventory line times separately.
+
+The same per-device state and headline are also written to the `<dev_id>.status` file (in addition to the database): an `inventory=disabled|successful|failed` line, and on a successful/failed read the `inventory_source`/`inventory_vendor`/`inventory_model`/`inventory_serial`/`inventory_os_version`/`inventory_sysname`/`inventory_syslocation`/`inventory_syscontact`/`inventory_member_count`/`inventory_hw_set` values. A device not configured for inventory writes no `inventory*` keys. The full component list and change history live only in the database.
+
+`backup_duration_sec` (in `.status`, and the duration in the summary and the history DB) is the **whole** per-device time — config fetch **plus** the SNMP inventory collection — so a dashboard spinner keyed on it reflects the real wall-clock, not just the config fetch. The two per-device log lines break the total down (`config retrieval took N secs` + `SNMP inventory read … in N secs`).
+
+Performance: on a large stack most of the `entPhysicalTable` is ports and sensors the inventory never stores, and some agents (notably HPE Comware IRF stacks) serve that table slowly. So on v2c/v3 the collector **GET-BULK-walks only `entPhysicalClass`** (the one column it must read for every row) and then **GETs the descriptive columns for just the parts it keeps** — chassis, modules, power supplies (and transceivers at level 2) — instead of pulling every column for every port. `snmp_max_repetitions` (default 25) tunes the class walk; raise it (e.g. 50–100) on a slow agent to cut round-trips. On v1 (GET-NEXT only, no GET-BULK) it falls back to a full per-column walk and is unavoidably slower — prefer v2c/v3 for inventory. Some agents (again, Comware IRF stacks) serve the `entPhysicalClass` pass slowly no matter how it is batched; if a device's inventory stays costly and its hardware rarely changes, set **`snmp_inventory_interval`** so the slow read runs only every so often (e.g. once a day) while config backups stay fast every run — the last inventory is carried forward in between.
+
+### Identification and best-effort fallbacks
+
+The collector derives vendor, model, serial and OS version from the ENTITY-MIB, with fallbacks for devices whose ENTITY-MIB is sparse (notably the old menu-only ProCurve chassis such as the 4000M/8000M, which report a chassis descr but no serial and no software rev):
+
+- **vendor** — the canonical name from the vendor registry in `snmp-profiles.conf` (matched by `sysObjectID`, full or longest prefix, then enterprise number; built-in: Cisco, HP, Hirschmann (Belden), Zyxel Communications, PLANET Technology Corporation, Aruba Networks, HPE Comware, HPE Aruba Networking), else the ENTITY `entPhysicalMfgName` as reported, else `unknown`. The raw `entPhysicalMfgName` is always kept too, as `vendor_raw`.
+- **model** — ENTITY `entPhysicalModelName`, else `entPhysicalDescr`, else a `sysObjectID → model` lookup from the profile file’s `model` lines (built-in: the 4000M `J4121A` and 8000M `J4110A`). Add more with `model <sysObjectID> <name>`.
+- **os_version** — ENTITY software/firmware rev, else a best-effort parse of `sysDescr` (`revision C.09.30`, `Version 17.12.04`, …).
+- **sysName / sysLocation / sysContact** — the device's own configured name, location and contact (SNMPv2-MIB system group), read on every device regardless of ENTITY-MIB and stored verbatim (`device_inventory`, web schema 2.17; the engine writes them only when those columns exist). These are current-state only — a rename or relocation does **not** write a change-history row.
+- **member_count** — the number of serial-bearing chassis (a stack counts its members); when no chassis carries a serial, the count of physical chassis entities instead, so a lone serial-less chassis is `1`.
+
+Each stored component carries its own running software (`entPhysicalSoftwareRev`) and firmware/ROMMON (`entPhysicalFirmwareRev`) revisions — so a stack's per-member IOS and ROMMON are both recorded (the firmware goes to `device_inventory_component.fw_version`, web schema 2.16; the engine populates it only when that column exists and the agent returns a non-empty value, mostly Cisco). A device with no serial anywhere still records `successful` with the data it could read; only parts that carry a serial appear in the component list, and `hw_set` covers only serial-bearing chassis/modules/power supplies.
+
+**Devices that describe themselves as a `stack`** rather than a `chassis` in the ENTITY-MIB (entPhysicalClass `stack`, e.g. Zyxel single-unit switches) are handled automatically: when the table has no `chassis` entry but does have one or more `stack` entries, each stack entry is **promoted to a chassis**, so its model/serial/OS/hardware revision are harvested exactly like a normal chassis (and counted as a member). A device with a real chassis keeps it and ignores the `stack` entry, which there is only a logical container.
+
+**Devices with no ENTITY-MIB at all** — e.g. Hirschmann classic RS/MACH switches, which keep their identity in a private MIB — are **not** marked `failed` as long as they answer the system group. The collector records a one-device headline: vendor from the `sysObjectID` enterprise, plus model/serial/OS read from the vendor's **private MIB** when `snmp-profiles.conf` has `oid` lines for it. An `oid` line names a headline field (`model`, `serial` or `os_version`), the matching enterprise number or `sysObjectID`, a fully-indexed instance OID, and an optional regex whose first capture group is taken from the raw value:
+
+```
+oid model      248  1.3.6.1.4.1.248.14.1.1.9.1.3.1
+oid os_version 248  1.3.6.1.4.1.248.14.1.1.2.0  SW:\s*(\S+)
+```
+
+`oid` lines are read **only when the ENTITY-MIB is absent**, and only for fields still empty — real ENTITY data always wins. Resolve a vendor's private-MIB symbols to numeric OIDs offline (`snmptranslate -On`); the runtime uses numeric OIDs only.
+
+An `oid` (or `override`) OID that ends in **`.*`** is a bare table-**column** base rather than a fully-indexed instance: the engine walks it with a single GETNEXT and takes the first row inside that column. This is for a single value whose index is per-device and not known in advance, so one line serves the whole fleet with no hard-coded index. The walk is opt-in per rule (only the line carrying `.*`); every plain instance OID keeps its exact-GET behaviour, so no other model is affected.
+
+**Member tables (`members`).** When a device *aggregates others* — e.g. an Aruba virtual-controller AP that lists all of its member APs in `AI-AP-MIB::aiAPTable` — a `members` line records **one chassis member per row**, like a stack. Each value is a table-**column** base; the engine walks the serial column (which enumerates the members) and joins the model/name/os columns by the same per-row index (a MAC), producing one component per member (with `member_count`, `member_serials` and `hw_set` following). `serial=` is required; `model=`/`name=`/`os=` are optional. The member whose name matches the device's `sysName` (the controller's own entry) becomes the primary, and the headline serial is the primary's:
+
+```
+members 14823  serial=1.3.6.1.4.1.14823.2.3.3.1.2.1.1.4  model=…1.6  name=…1.2
+```
+
+Like every other profile directive, `members` is keyed by enterprise number or `sysObjectID`, so it is **not** Aruba-specific — any device that lists its sub-units in a private-MIB table (another WLAN controller, a modular system) can be inventoried this way with one line and no code change. It is read on the ENTITY-less path (a device with a real ENTITY-MIB stack already yields members directly).
+
+To work out which of these directives (if any) a device needs, use the read-only probe `tools/fc-snmp-inventory.pl`: it prints what SNMP exposes, what the inventory feature derives from it, and which `snmp-profiles.conf` directive matched — see [README.fc-snmp-inventory](README.fc-snmp-inventory.html).
+
+**Correcting a wrong ENTITY value (`override`).** Some devices implement the ENTITY-MIB but populate it with the wrong thing — e.g. PLANET's Vitesse-based switches report the SoC codename `Luton26` in `entPhysicalModelName`, while the real product (`IGS-5225-8P4S`) is only in `sysDescr`. An `override` line **replaces** a present-but-wrong field (unlike `oid`, which only fills an empty one):
+
+```
+override model 10456  sysdescr  ^PLANET,\s*([^,]+)
+```
+
+`override <field> <enterprise|sysObjectID> <source> [<regex>]` — `<field>` is `model`, `serial` or `os_version`; `<source>` is a numeric OID (GET one instance) or a symbol naming already-collected data (`sysdescr`, `entdescr`, `entmodel`, `entserial`); the optional regex's first capture group (trimmed) becomes the value. A regex miss leaves the ENTITY value in place — an override never blanks a field. Matched most-specific-first, and consulted **before** the ENTITY value. Both `oid` and `override` apply on the ENTITY-less headline path as well, so a device with no ENTITY-MIB can still get its model/serial/OS from `sysDescr` or a private MIB. Aruba WLAN APs/controllers (AOS-8 / Instant, enterprise 14823) are the worked example: the shipped profile carries `override model 14823 sysdescr MODEL:\s*([^)]+)` (model from the `(MODEL: nnn)` token; OS then from the `sysDescr` parse) and a `members` line that walks the AI-AP table so a virtual controller inventories all of its member APs (see *Member tables* above).
+
+**File syntax.** One directive per line; leading/trailing whitespace is ignored and fields are whitespace-separated (a name or regex is read verbatim to the end of the line, so it may contain spaces). A line whose first non-blank character is `#` is a comment and blank lines are skipped — there are **no inline comments** (a `#` after a directive becomes part of the value). A match token is read as an enterprise number when it is all digits, otherwise as a `sysObjectID`/prefix when dotted. A line that matches no directive, or whose field/OID/match is malformed, is **silently ignored** (no error) — so after adding a line, confirm it took effect with the `profile` section of `tools/fc-snmp-inventory.pl`. The file is optional and merges on top of the built-in registries.
+
+## Credential aliases (`pw:`) {#credential-aliases} {nav: Credential aliases}
+
+A `pw:` line defines a username or password **once** and lets you reference it as `$Alias` on any `default:` or device line — exactly like a [`directory:` tag](#directory-allowlist). Change a shared password in one place instead of on every line.
+
+```
+pw: user $Admin  backup
+pw: pass $AdminPw secret
+
+default:  cisco-ios  user=$Admin,pass=$AdminPw
+default:  cisco-ios-ssh  user=$Admin,pass=$AdminPw,enable=$AdminPw
+```
+
+- `pw: <kind> $Alias <value>` — `kind` is `user` or `pass`. The alias name is `$Name`: a `$` followed by a **letter or underscore — not a digit** — then any letters, digits or underscores (`$Admin`, `$pass_site1`). The value follows the same quoting rules as an inline `user=`/`pass=` value (quote anything with a comma or space), so an alias is a drop-in for what you would otherwise type inline.
+- An alias is used as the **whole value** of a credential option: `user=$Admin`, not `user=pre$Admin`.
+- **user**-kind aliases fit `user=` and `snmp_user=`; **pass**-kind aliases fit `pass=`, `enable=`, and the SNMP secrets `snmp_community=` / `snmp_write_community=` / `snmp_authpass=` / `snmp_privpass=`. So one `pw: pass` alias can feed a telnet password and an SNMPv3 passphrase alike.
+- `pass`-kind values are masked in logs. An undefined alias, or one used in the wrong kind of slot, is rejected with a clear error (the device is not logged into with a literal `$Name`).
+
+### Literal credentials that start with `$` or `\` {#credential-literals} {nav: Literal $ credentials}
+
+A credential value is interpreted by its **first character** — the three forms are mutually exclusive:
+
+- **`"` → a quoted literal** — fully verbatim, never an alias, and the backslash rules below do not apply inside it. Use quotes for any value that contains a comma or whitespace (required on `default:`/device lines, which are split on both), and as the simplest way to write a literal that starts with `$`.
+- **`$` → an alias reference** — it must match `$Name` (`^\$[A-Za-z_][A-Za-z0-9_]*$`) and resolve to a defined `pw:` alias of the right kind (user-kind for `user`/`snmp_user`; pass-kind for the rest). An undefined or wrong-kind alias is a **hard error** (the run, and a fetchconfig-web save, are rejected), never a silent literal.
+- **anything else → an unquoted literal**, with a **first-character-only** de-escape: a leading `\$` becomes `$`, a leading `\\` becomes `\`, and any other first character is taken as-is. Interior `\` and `$` are never touched, so ordinary values like `DOMAIN\user` or `pa$$w0rd` need no escaping at all.
+
+To force a literal that starts with `$` or `\`, either quote it (`"$ecret"`) or escape the first character (`\$ecret`). You never need both — a value that needs quoting is simply quoted.
+
+| Entered (after `pass=`) | Interpreted as | Rule |
+|---|---|---|
+| `$NetPass` (defined) | the alias's value | unquoted `$`, valid name, defined |
+| `$nope` (undefined) | **error** | undefined alias rejected |
+| `\$abc` | `$abc` | unquoted, leading `\$`→`$` |
+| `\\$xyz` | `\$xyz` | unquoted, leading `\\`→`\`, rest verbatim |
+| `ab$cd` | `ab$cd` | `$` not the first character |
+| `C:\tools` | `C:\tools` | verbatim |
+| `C:\\tools` | `C:\\tools` | interior untouched |
+| `DOMAIN\user` | `DOMAIN\user` | verbatim |
+| `pa\$\$` | `pa\$\$` | interior untouched |
+| `"$abc"` | `$abc` | quoted → fully literal |
+| `"$ab,cd"` | `$ab,cd` | quoted → literal (handles the comma and the `$`) |
+| `"my,pass"` | `my,pass` | quoted → literal (comma) |
+| `"$NetPass"` | `$NetPass` (the literal, not the alias) | quoted → literal |
+
+This grammar only affects a value whose **first character** is `$` or a backslash. Everything else — including a value that merely *contains* a dollar or a backslash, such as `DOMAIN\user` or `pa$$w0rd` — is stored verbatim and needs no change. When you upgrade a table that already holds a credential starting with `$` or a backslash, re-save it in the escaped or quoted form shown above.
 
 <!--nav-group: Reference-->
 
@@ -708,6 +877,10 @@ Lists the generic-model templates available to the loaded devices, one TAB-separ
 Lists the `directory:` allowlist configured in the device table (see [Directory allowlist](#directory-allowlist)), one TAB-separated row per entry: `<id> <type> <tag> <path>`. It also lints: exit `0` if a `directory:` section exists and every entry is valid (well-formed and its path exists on disk), `1` if no section, `2` if any entry is invalid.
 <!--/flag-->
 
+<!--flag: --list-credentials | honours -f-->
+Lists the `pw:` credential aliases configured in the device table (see [Credential aliases](#credential-aliases)), one TAB-separated row per alias: `<id> <kind> <name>`. **Values are never shown** — a `pass` alias's secret never leaves the table. It also lints: exit `0` if every alias is well-formed and every credential reference across the table resolves to a defined alias of the right kind, `1` if no aliases are configured, `2` if a `pw:` line or a reference is invalid. fetchconfig-web can gate device-table saves on this (`validate_table_with_fetchconfig`).
+<!--/flag-->
+
 <!--flag: --check-template PATH | no device table-->
 Structurally checks the generic-model template at PATH (grammar + the load-time validator) and exits. PATH must be the **full path** to the `.tmpl` file — a bare name is not resolved, as the same name can exist in different `template_dir` directories. Prints `ok` or the errors; exits `0` ok, `1` errors, `2` file problem. Structural check only. Does not honour `-f`. It needs no device table and does **not** apply the directory: allowlist — any readable `.tmpl` path is checked.
 <!--/flag-->
@@ -725,11 +898,11 @@ Fetch with `N` concurrent worker processes (default 1 = sequential, device-table
 #### Output option {.flag-group}
 
 <!--flag: -f file | optional-->
-Writes the **result data** to `file` instead of stdout: the retrieved config (`-g`), the diff (`-m`), or the listing rows (`-l`, `-z`, `-Z`, `-o`, `-e`, `-s`, `-S`, `-t`, `--list-allowed-dirs`). The file is created/overwritten as needed. It does **not** apply to `--check-template`, whose ok/error result is written to the log only.
+Writes the **result data** to `file` instead of stdout: the retrieved config (`-g`), the diff (`-m`), or the listing rows (`-l`, `-z`, `-Z`, `-o`, `-e`, `-s`, `-S`, `-t`, `--list-allowed-dirs`, `--list-credentials`). The file is created/overwritten as needed. It does **not** apply to `--check-template`, whose ok/error result is written to the log only.
 
 The file receives *only* that data — never the screen output. All `info:`/`debug:`/`error:` lines, including the “checked N backup(s), …” summary and the “wrote … to file” confirmation, are log messages and always go to stderr.
 
-For the listing/check modes (`-l`, `-z`, `-Z`, `-o`, `-e`, `-s`, `-S`, `-t`, `--list-allowed-dirs`) the result data **ends with one summary line prefixed by `#`**, carrying the same text the run logs — e.g. `# dev=sw01: checked 2 backup(s), no zero-byte backups found` — so the output is never empty and is self-describing: a reader can tell “checked, nothing found” from “nothing was written” without the exit status or stderr. The rows before it contain only the items *found*. The trailer is part of the result stream, so stdout and `-f` carry identical content. It is *not* added to `-g` or `-m`, which stay byte-exact.
+For the listing/check modes (`-l`, `-z`, `-Z`, `-o`, `-e`, `-s`, `-S`, `-t`, `--list-allowed-dirs`, `--list-credentials`) the result data **ends with one summary line prefixed by `#`**, carrying the same text the run logs — e.g. `# dev=sw01: checked 2 backup(s), no zero-byte backups found` — so the output is never empty and is self-describing: a reader can tell “checked, nothing found” from “nothing was written” without the exit status or stderr. The rows before it contain only the items *found*. The trailer is part of the result stream, so stdout and `-f` carry identical content. It is *not* added to `-g` or `-m`, which stay byte-exact.
 
 > [!warn] Format change for parsers (v9.55)
 > Anything that parses these listings — fetchconfig-web in particular — must skip lines starting with `#`. Before v9.55 a check that found nothing produced a 0-byte file.
@@ -781,7 +954,7 @@ Per mode (a mode not listing a code never returns it):
 
 | Mode | Exit status |
 |---|---|
-| *(no mode flag)* — normal fetch run | `0` the run completed. `10` a device's lock directory could not be created or used (misconfiguration). A per-device fetch failure is logged and does **not** change the exit. |
+| *(no mode flag)* — normal fetch run | `0` the run completed. `10` a device's lock directory could not be created or used (misconfiguration). `11` a device with `snmp_fatal=on` had its SNMP inventory collection fail (backups are unaffected). A per-device fetch failure is logged and does **not** change the exit. |
 | `-g` — retrieve a backup | `0` backup emitted. `1` unknown device, no `repository`, or the selected backup does not exist. |
 | `-g … -m` — compare two backups | `0` the two backups are identical. `1` they differ, **or** an in-mode error prevented the compare (a missing backup, or `diff` could not run) — on Linux/AIX these are not distinguished from "differ". `2` native Windows only: compare is unsupported (it needs an external `diff`). |
 | `-l` — list backups | `0` listed (zero or more rows). `1` unknown device or no `repository`. |
@@ -791,6 +964,7 @@ Per mode (a mode not listing a code never returns it):
 | `-s` / `-S` — suffix check | `0` suffixes are consistent and the configured suffix matches. `1` inconsistent suffixes, or an unknown device. `2` consistent, but the configured suffix does not match. |
 | `-t` / `--list-template` | `0` at least one template found. `1` none found. `2` a configured template directory is missing (regardless of what else was found). |
 | `--list-allowed-dirs` | `0` a `directory:` section exists and every entry is valid. `1` no section. `2` an entry is invalid. |
+| `--list-credentials` | `0` every `pw:` alias is well-formed and every credential reference resolves (right kind). `1` no aliases. `2` a `pw:` line or a reference is invalid. |
 | `--check-template` | `0` ok. `1` structural errors. `2` file problem (PATH unreadable). |
 | `--template-syntax` | `0` a syntax token is declared (printed to stdout). `1` none declared (nothing printed). `2` file problem (error to stderr). |
 | `--clean-lock-dir` | `0` success. `2` a bad `N`, or an unusable lock directory. With `-T` it previews and writes nothing. |
@@ -804,6 +978,8 @@ Per mode (a mode not listing a code never returns it):
 ## Options reference {#options}
 
 The modules `CiscoIOS`, `CiscoCAT`, `CiscoASA`, and `CiscoPIX` recognize the following options; nearly every other model reuses the same set (see the per-model matrix below for exactly which apply). The template-driven `generic` model has its own additional options — see [Per-model option tables](#per-model-options).
+
+Two option groups are **model-independent** and documented in their own sections rather than in the matrix below: the SNMP inventory options (`snmp_*`) under [SNMP device inventory](#snmp-inventory), and the credential aliases (`pw:`, usable in any `user=`/`pass=`/`enable=`/`snmp_*` credential slot) under [Credential aliases](#credential-aliases).
 
 | Option | Requirement | Description |
 |---|---|---|
@@ -832,7 +1008,7 @@ The modules `CiscoIOS`, `CiscoCAT`, `CiscoASA`, and `CiscoPIX` recognize the fol
 
 ### Per-model option matrix
 
-Beyond the options above, each model recognizes its own subset of `user` / `pass` / `enable` / `timeout` / `repository` / `keep` / `fetch_timeout` / `changes_only`. `on_fetch_run`, `on_fetch_cat`, `timezone`, `filename_append_suffix`, `to`, `comment`, `site`, the `lock…` options and `debug` are available for every model and are omitted here for space.
+Beyond the options above, each model recognizes its own subset of `user` / `pass` / `enable` / `timeout` / `repository` / `keep` / `fetch_timeout` / `changes_only`. `on_fetch_run`, `on_fetch_cat`, `timezone`, `filename_append_suffix`, `to`, `comment`, `site`, the `lock…` options and `debug` are available for every model and are omitted here for space. The **SNMP inventory options** (`snmp_community`/`snmp_write_community`/`snmp_user`, `snmp_version`, `snmp_port`, `snmp_timeout`, `snmp_retries`, `snmp_max_repetitions`, the v3 `snmp_level`/`snmp_authproto`/`snmp_authpass`/`snmp_privproto`/`snmp_privpass`, and the `snmp_inventory`/`snmp_inventory_level`/`snmp_inventory_history`/`snmp_fatal`/`snmp_inventory_interval` controls) are likewise **model-independent** — any model may carry them to collect a hardware inventory alongside its config backup. They are documented once under [SNMP device inventory](#snmp-inventory) and omitted from the matrix and the per-model tables below. (`procurve-snmp` is the one model where `snmp_community`/`snmp_write_community`/`snmp_timeout`/`snmp_version` are *also* its transport credentials, so they appear in its own table too.)
 
 | Model | user | pass | enable | timeout | repository | keep | fetch_timeout | changes_only |
 |---|---|---|---|---|---|---|---|---|
@@ -863,7 +1039,7 @@ Beyond the options above, each model recognizes its own subset of `user` / `pass
 | `parks`[^6] | &#10003; | &#10003; | — | opt. | &#10003; | &#10003; | opt. | opt. |
 | `planet-ssh`[^7] | &#10003; | &#10003; | opt. | opt. | &#10003; | &#10003; | opt. | opt. |
 | `procurve` | &#10003; | &#10003; | opt. | opt. | &#10003; | &#10003; | opt. | opt. |
-| `procurve-snmp`[^8] | — | — | — | opt. | &#10003; | &#10003; | — | opt. |
+| `procurve-snmp`[^8] | — | — | — | —[^8] | &#10003; | &#10003; | — | opt. |
 | `procurve-ssh` | &#10003; | &#10003; | opt. | opt. | &#10003; | &#10003; | opt. | opt. |
 | `procurve-web-1700`[^9] | — | &#10003; | — | opt. | &#10003; | &#10003; | opt. | opt. |
 | `riverstone` | &#10003; | &#10003; | &#10003; | opt. | &#10003; | &#10003; | opt. | opt. |
@@ -872,7 +1048,7 @@ Beyond the options above, each model recognizes its own subset of `user` / `pass
 | `tplink-web-sg105e`[^10] | &#10003; | &#10003; | — | opt. | &#10003; | &#10003; | opt. | opt. |
 | `zyxel`[^11] | &#10003; | &#10003; | opt. | opt. | &#10003; | &#10003; | opt. | opt. |
 
-`timeout` is shown as optional for every model because it has a built-in default: if it is set neither on the device line nor on the model’s `default:` line, fetchconfig uses **30 seconds** and logs `Using 30s fetch timeout because the timeout was not set for this model` at debug level. Before v9.55 an unset timeout fell through to the underlying library’s own default (10 s for telnet/SSH, 180 s for the web-UI models), so set it explicitly for anything but a lab test.
+`timeout` is shown as optional for every model because it has a built-in default: if it is set neither on the device line nor on the model’s `default:` line, fetchconfig uses **30 seconds** and logs `Using 30s fetch timeout because the timeout was not set for this model` at debug level. Before v9.55 an unset timeout fell through to the underlying library’s own default (10 s for telnet/SSH, 180 s for the web-UI models), so set it explicitly for anything but a lab test. **Exception: `procurve-snmp` (the `—` in its `timeout` cell).** Since 9.80 that model ignores the shared `timeout` entirely and takes its SNMP/TFTP timeout from `snmp_timeout` (default **5 s**); see footnote [^8].
 
 [^1]: `aruba-cx-ssh`: `user` must be an administrator (AOS-CX has no `enable`; an operator’s `>` prompt is an error). Also works for HPE Aruba Networking AOS-8 wireless access points (confirmed on an AP model 515, AOS-8 8.13.2.2). Pager disabled with `no page`; the `Current configuration:` header is dropped. Also recognizes `banner_timeout`, `show_cmd`, `prompt_settle_ms` (idle-wait before matching the prompt, default 150 ms — the prompt token allows spaces and non-ASCII, and the wait keeps a banner line ending in “#” from being taken for the prompt) and `debug` (same debug file layout as `planet-ssh`).
 [^2]: `generic` is the template-driven model: `model=` names the template and is mandatory (it may be set on a `default: generic` line so devices sharing one template need not repeat it, and a device line can still override it), `transport` is `ssh`/`telnet`, and `user`/`pass` are mandatory for SSH. It recognizes many more timing and prompt options (most also settable in the template) — see [Per-model option tables](#per-model-options) for the full list and defaults.
@@ -881,14 +1057,14 @@ Beyond the options above, each model recognizes its own subset of `user` / `pass
 [^5]: `nexus-ssh`: `user` must land on the `#` prompt (NX-OS has no `enable`; a `>` prompt is an error). Pager disabled with `terminal length 0`. The `!Time:` header line of the running-config changes on every run and is ignored by `changes_only`; `!Running configuration last done at:` counts. Also recognizes `banner_timeout`, `show_cmd`, `prompt_settle_ms` (idle-wait before matching the prompt, default 150 ms) and `debug` (`on`/`off`, default off; records to `<repository>/<dev_id>.debug`, mode 0600, the ssh authentication record followed by the raw switch session).
 [^6]: `parks` also recognizes `banner_timeout` (optional) — overrides the timeout used to wait for the initial `login:` prompt, since the Parks 209R can take many seconds to issue it.
 [^7]: `planet-ssh`: `user`/`pass` serve the SSH authentication and, on firmware that shows one, the switch’s own `Username:`/`Password:` dialog that follows it. `enable` is optional and only used if the account lands on the `>` prompt; it defaults to the login password. The `! System Up Time:` header line of the running-config is kept in the backup but ignored by `changes_only`. Also recognizes `banner_timeout`, `show_cmd`, `debug` (to `<repository>/<dev_id>.debug`: first the ssh client’s verbose account of the SSH authentication, then the raw switch session — the SSH login itself is not switch output, so it can only appear as those ssh log lines) and `type_delay` (milliseconds between typed characters, default 100 — the switch does not reliably accept a burst of input right after a prompt, so every line is typed character by character; 0 disables the pauses).
-[^8]: `procurve-snmp` has no `user`/`pass`: the credential is the SNMP read-write `community` (masked in logs). `timeout` defaults to 30 s and covers both the SNMP session and the TFTP transfer; also recognizes `oid` (the copy/TFTP-mode trigger OID; default the one used by the observed chassis), `remote_file` (the TFTP filename to fetch, default `browse`), `snmp_version` (default `snmpv2c`) and `debug` (records the SNMP sets and the TFTP transfer).
+[^8]: `procurve-snmp` has no `user`/`pass`: the credential is the SNMP read-write `snmp_community` (masked in logs; a split-credential site can read with `snmp_community` and arm the export with `snmp_write_community`). As of 9.80 it shares the `snmp_*` namespace (see [SNMP device inventory](#snmp-inventory)): **the shared `timeout` option no longer applies to this model — the timeout is `snmp_timeout`**, the per-request value that covers both the SNMP session and the TFTP transfer. A `timeout=` left on a `procurve-snmp` line is ignored (unread, so no error). **Its default dropped from the old `timeout=30` to `snmp_timeout=5`** — a slow TFTP export may need `snmp_timeout` raised, so set it explicitly on these lines when upgrading. Also recognizes `oid` (the copy/TFTP-mode trigger OID; default the one used by the observed chassis), `remote_file` (the TFTP filename to fetch, default `browse`), `snmp_version` (default `2c`) and `debug` (records the SNMP sets and the TFTP transfer).
 [^9]: `procurve-web-1700` likewise talks HTTP; it has only a manager password, so `user` is ignored. Same `timeout`/`fetch_timeout`/`debug` handling as `tplink-web-sg105e`.
 [^10]: `tplink-web-sg105e` talks HTTP, not telnet: `user`/`pass` are the web UI login, `timeout` applies to each HTTP request, and `fetch_timeout` to the config download request only. Also recognizes `debug` (optional, boolean — records every HTTP request and response of the run, password masked and binary bodies summarized by size, to `<repository>/<dev_id>.debug`).
 [^11]: `zyxel`'s `enable` is optional: one real login sample went straight to the privileged prompt with no separate "enable" step (account already had full privilege), while another needed "enable" plus its own password — both are handled, so this is read defensively rather than assumed either way. `zyxel` also recognizes `show_cmd` (optional, replaces `show running-config`) and `debug` (optional, boolean — records the raw telnet session to `<repository>/<dev_id>.debug` when set to `on`, same convention as `procurve`/`procurve-ssh`).
 
 ### Per-model option tables (detailed) {#per-model-options}
 
-The matrix above is the overview; the tables below are the full per-model reference — the exact options each model accepts and whether each is mandatory or optional. (fetchconfig-web parses these tables to build its device-table editor.) Option meanings are described once in the [common options table](#options) above; model-specific notes follow each table.
+The matrix above is the overview; the tables below are the full per-model reference — the exact options each model accepts and whether each is mandatory or optional. (fetchconfig-web parses these tables to build its device-table editor.) Option meanings are described once in the [common options table](#options) above; model-specific notes follow each table. The model-independent **SNMP inventory options** are not repeated in each table — any model accepts them; they are listed once under [SNMP device inventory](#snmp-inventory).
 
 #### `generic` (template-driven)
 
@@ -1445,11 +1621,12 @@ The procurve-snmp module recognizes the following options: (See above cisco-ios/
 
 | Option | Description |
 |--------|-------------|
-| `community` | Mandatory. The SNMP read-WRITE community. There is no user/pass for this model; the write access is what arms the TFTP export. Masked in logs. |
+| `snmp_community` | Mandatory. The SNMP read-WRITE community. There is no user/pass for this model; the write access is what arms the TFTP export. Masked in logs. (Renamed from `community` in 9.80.) |
+| `snmp_write_community` | Optional. A separate read-WRITE community, so inventory can read with an RO `snmp_community`; falls back to `snmp_community`. Masked. |
 | `repository` | Mandatory. |
 | `keep` | Mandatory. |
-| `timeout` | Optional. Seconds, default 30. Applied to both the SNMP session and the TFTP transfer. |
-| `snmp_version` | Optional. Default snmpv2c. |
+| `snmp_timeout` | Optional. Seconds, default **5** (was `timeout=30` before 9.80). Applied to both the SNMP session and the TFTP transfer; raise it for a slow TFTP export. |
+| `snmp_version` | Optional. Default `2c`. |
 | `oid` | Optional. The "copy/TFTP mode" trigger OID, set to 2 to enable the export and 1 to disable it. Default 1.3.6.1.4.1.11.2.14.11.5.1.7.1.5.6.0 (as used by the observed chassis); override only if a model uses a different sub-OID. |
 | `remote_file` | Optional. The TFTP filename to fetch, default "browse". See [ProCurve SNMP backups](#procurve-snmp). |
 | `changes_only` | Optional. |
@@ -1534,6 +1711,7 @@ backup_changed=changed
 | `backup_duration_sec` | Whole seconds the fetch took — the same value logged for the run and shown in the summary e-mail. |
 | `backup_state` | `success`, `failed`, or `skipped`. |
 | `backup_changed` | `initial` for a device's first-ever backup (no previous config to compare, whatever `changes_only` is); then `unchanged` or `changed` for a `changes_only=1` device; `forced` for a `changes_only=0` device (saved regardless of any comparison); `unknown` when the state is failed or skipped. |
+| `inventory` / `inventory_*` | Present only when [SNMP device inventory](#snmp-inventory) is enabled for the device: `inventory=disabled\|successful\|failed`, plus — on a successful or failed read — the headline keys `inventory_source`, `inventory_vendor`, `inventory_model`, `inventory_serial`, `inventory_os_version`, `inventory_sysname`, `inventory_syslocation`, `inventory_syscontact`, `inventory_member_count`, `inventory_hw_set` (empty values omitted). |
 
 ## Backup file naming {#backup-file-naming} {nav: Backup file naming}
 

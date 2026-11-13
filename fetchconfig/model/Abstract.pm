@@ -719,10 +719,42 @@ sub mask_secrets {
     # line is echoed into the log by the "unrecognized line" errors, and
     # must not carry a credential. A "quoted" value (which may contain
     # commas and spaces) is masked as a whole.
-    (my $masked = $line) =~ s/\b((?:pass|enable|community|secret|key|token)\w*)=("(?:[^"\\]|\\.)*"|[^,\s]*)/$1=***/gi;
+    (my $masked = $line) =~ s/\b((?:pass|enable|community|secret|key|token)\w*|snmp_community|snmp_write_community|snmp_authpass|snmp_privpass)=("(?:[^"\\]|\\.)*"|[^,\s]*)/$1=***/gi;
 
     $masked;
 }
+
+# Credential-bearing options and the pw: alias kind each accepts (engine 9.80).
+# Declared before parse_options so the parser can keep these slots' RAW (quoted)
+# token and the resolver (_expand_pw_alias) can classify it.
+my %PW_SLOT_KIND = (
+    user                 => 'user',
+    snmp_user            => 'user',
+    pass                 => 'pass',
+    enable               => 'pass',
+    snmp_community        => 'pass',
+    snmp_write_community  => 'pass',
+    snmp_authpass        => 'pass',
+    snmp_privpass        => 'pass',
+);
+
+# First-character-only de-escape for an UNQUOTED credential literal (engine 9.80):
+# a leading "\$" -> "$" and a leading "\\" -> "\"; any other first character (and
+# every character after the first) is byte-for-byte verbatim. Lets a literal
+# credential start with $ or \ without being read as an alias, while leaving
+# interior backslashes (DOMAIN\user, C:\\tools) untouched.
+sub _deescape_first {
+    my ($v) = @_;
+    return $v unless defined($v) && length($v) >= 2 && substr($v, 0, 1) eq "\\";
+    my $c = substr($v, 1, 1);
+    return $c . substr($v, 2) if ($c eq '$' || $c eq "\\");
+    return $v;
+}
+
+# Accessors over %PW_SLOT_KIND for the credential-reference linter
+# (Detector::pw_reference_errors, used by --list-credentials).
+sub pw_slots     { return keys %PW_SLOT_KIND; }
+sub pw_slot_kind { return $PW_SLOT_KIND{ $_[0] }; }
 
 sub parse_options {
     my ($self, $label, $file, $line_num, $line, $opt_tab_ref, @options) = @_;
@@ -742,7 +774,10 @@ sub parse_options {
 	foreach (Text::ParseWords::parse_line(',', 1, $_)) {
 	    if (/^([^=]+)=(.*)$/) {
 		my $opt = opt_trim($1);
-		my $val = dequote_value(opt_trim($2));
+		# Credential slots keep the RAW (quoted) token; _expand_pw_alias
+		# classifies it (quoted => literal, $Name => alias, else escape).
+		# Every other option is dequoted here exactly as before.
+		my $val = $PW_SLOT_KIND{$opt} ? opt_trim($2) : dequote_value(opt_trim($2));
 		$opt_tab_ref->{$opt} = $val;
 		next;
 	    }
@@ -818,6 +853,59 @@ sub _expand_dir_alias {
     return ($ok && defined($resolved)) ? $resolved : $value;
 }
 
+# %PW_SLOT_KIND (credential slots + the pw: alias kind each accepts) is declared
+# above parse_options, so both the parser and this resolver can see it.
+
+# Resolve both alias kinds for a read: a directory: $TAG (dir-valued options) and
+# a pw: $Alias (credential options). A value is only ever one or the other.
+sub _resolve_alias {
+    my ($self, $opt_name, $value) = @_;
+    $value = $self->_expand_dir_alias($opt_name, $value);
+    return $self->_expand_pw_alias($opt_name, $value);
+}
+
+# Interpret a credential-slot value (engine 9.80) by the FIRST character of its
+# raw token - the three mutually-exclusive forms of the pw: grammar:
+#   "    -> quoted: dequote (keeps in-quote \" and \\) => VERBATIM literal; never
+#           an alias and no first-char de-escape. This is how you write a literal
+#           that starts with $, or any value containing a comma/space.
+#   $    -> alias reference: the name must match ^\$[A-Za-z_][A-Za-z0-9_]*$ and is
+#           resolved, kind-checked, against the pw: list. An undefined or
+#           wrong-kind alias is an ERROR (undef + logged), never a silent literal,
+#           so a typo like $NetPas never logs in as the literal "$NetPas".
+#   else -> unquoted verbatim with the first-character-only de-escape (\$ -> $,
+#           \\ -> \ at position 0 only; see _deescape_first).
+# Non-credential options (no %PW_SLOT_KIND entry) pass through untouched, as does
+# any value when Detector is not loaded (a model exercised stand-alone in a test).
+sub _expand_pw_alias {
+    my ($self, $opt_name, $value) = @_;
+    return $value unless defined($value);
+    my $want = $PW_SLOT_KIND{$opt_name};
+    return $value unless defined($want);        # credential slots only
+
+    # 1) quoted -> verbatim literal (never an alias)
+    return dequote_value($value) if $value =~ /^".*"$/s;
+
+    # 2) $Name -> alias reference (resolved, kind-checked, or an error)
+    if ($value =~ /^\$[A-Za-z_][A-Za-z0-9_]*$/) {
+        # No Detector (stand-alone model unit test): cannot resolve; pass through.
+        return $value unless fetchconfig::model::Detector->can('pw_alias');
+        my ($kind, $val) = fetchconfig::model::Detector->pw_alias($value);
+        if (!defined($kind)) {
+            $self->log_error("undefined pw: alias '$value' for $opt_name");
+            return undef;
+        }
+        if ($kind ne $want) {
+            $self->log_error("pw: alias '$value' is a '$kind' credential, not '$want' (for $opt_name)");
+            return undef;
+        }
+        return $val;
+    }
+
+    # 3) unquoted verbatim, first-character-only de-escape
+    return _deescape_first($value);
+}
+
 # The EFFECTIVE value of an option (device line first, then this model's
 # default_options), WITHOUT directory-alias expansion. dev_option resolves a
 # directory: $TAG for consumers; the allowlist enforcement needs the raw,
@@ -829,6 +917,18 @@ sub dev_option_raw {
     my $value = $dev_opt_tab->{$opt_name};
     return $value if defined($value);
     return $self->{default_options}->{$opt_name};
+}
+
+# The value of an option taken from this model's default: lines ONLY, never a
+# device line. For options that are meaningful only fleet-wide - e.g.
+# snmp_profile_file, whose parsed vendor file is cached process-wide, so a
+# per-device value could not take effect anyway. Trimmed; undef if unset.
+sub default_option {
+    my ($self, $opt_name) = @_;
+    my $value = $self->{default_options}->{$opt_name};
+    return undef unless defined($value);
+    $value =~ s/^\s+//; $value =~ s/\s+$//;
+    return (length($value) ? $value : undef);
 }
 
 # dev_option returns the option value for CONSUMERS: the effective value with
@@ -853,7 +953,7 @@ sub dev_option {
     }
 
     if (defined($value)) {
-	return $self->_expand_dir_alias($opt_name, $value);
+	return $self->_resolve_alias($opt_name, $value);
     }
 
     $value = $self->{default_options}->{$opt_name};
@@ -864,7 +964,7 @@ sub dev_option {
     }
 
     if (defined($value)) {
-	return $self->_expand_dir_alias($opt_name, $value);
+	return $self->_resolve_alias($opt_name, $value);
     }
 
     # "timeout" always has a value: fall back to the documented default

@@ -246,6 +246,12 @@
   figure.diagram{margin:1.5rem 0;text-align:center;}
   .diagram-svg{display:block;}
   .diagram-svg svg{max-width:100%;height:auto;}
+  /* Railroad (syntax) diagrams are static SVG with black connectors and light
+     green boxes, so they sit on a light panel in BOTH themes (readable either
+     way) and scroll horizontally if a line is wide. */
+  figure.railroad{margin:1.6rem 0;}
+  figure.railroad .diagram-svg{background:#fbfbf7;border:1px solid #d9d9cf;border-radius:8px;padding:16px 14px;overflow-x:auto;text-align:left;}
+  figure.railroad figcaption{font-size:0.85rem;color:var(--text-muted);margin-top:8px;text-align:left;}
   /* keep raw mermaid source hidden until rendered */
   .mermaid:not([data-processed]){display:none;}
   .mermaid[data-processed]{display:block;}
@@ -504,10 +510,13 @@
   }
 
   @media print{
+    /* smaller, print-native type -- match the fetchconfig-web docs on paper */
+    html{font-size:10pt;}
+    body{font-size:10pt;}
     .sidebar,.mobile-bar{display:none !important;}
     .layout{display:block;}
     a{color:inherit;text-decoration:none;}
-    pre{white-space:pre-wrap;}
+    pre{font-size:8.5pt;white-space:pre-wrap;}
   }
 </style>
 
@@ -532,11 +541,12 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.78</span>
+      <span class="pill">v9.80</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
     <nav>
+<div class="nav-group"><a href="#980">9.80</a></div>
 <div class="nav-group"><a href="#978">9.78</a></div>
 <div class="nav-group"><a href="#977">9.77</a></div>
 <div class="nav-group"><a href="#976">9.76</a></div>
@@ -599,8 +609,18 @@
     <div class="content">
 
 
-<section id="978">
+<section id="980">
 <div class="section-kicker">01</div>
+<h2>9.80</h2>
+<p>+ SNMP device inventory: a new, model-independent collector reads make/model/serial/OS (plus the device&#x27;s own sysName/sysLocation/sysContact) and stack members/FRUs over SNMP (ENTITY-MIB) during a backup and writes them to the fetchconfig-web dashboard DB (web schema 2.15), the per-component firmware/ROMMON rev to device_inventory_component.fw_version (web schema 2.16) and sysName/sysLocation/sysContact to device_inventory (web schema 2.17) where the DB has them, and the state + headline to the &lt;dev_id&gt;.status file. Off unless an SNMP credential is set (snmp_community or snmp_write_community for v1/v2c, snmp_user for v3); independent of the config backup and non-fatal unless snmp_fatal=on. An agent that does not answer (wrong community, filtered, or unreachable) fails fast after the first probe instead of timing out on every request. A device that answers SNMP but has no ENTITY-MIB (e.g. Hirschmann classic switches) still gets a one-line headline rather than failing -- vendor/model/OS, optionally read from a vendor private MIB via new &quot;oid&quot; lines in snmp-profiles.conf. An &quot;override&quot; directive in that file can also REPLACE a wrong ENTITY value (e.g. a chipset codename a switch reports as its model, like PLANET&#x27;s &quot;Luton26&quot;) from sysDescr or another OID; PLANET is now a built-in vendor. A device that reports its identity on an ENTITY &quot;stack&quot; entry rather than a chassis (e.g. Zyxel) has that stack entry promoted to a chassis so its model/serial/OS are collected; Zyxel is a built-in vendor too. Aruba WLAN (enterprise 14823: AOS-8 / Instant APs) is a built-in vendor; its model comes from the sysDescr &quot;(MODEL: nnn)&quot; token. The &quot;oid&quot;/&quot;override&quot; rules now also apply on the ENTITY-less headline path, and an &quot;oid&quot;/&quot;override&quot; OID ending in &quot;.<em>&quot; is treated as a table-column base and walked (GETNEXT) to its first row, so a MAC- or slot-indexed value needs no per-device index; the &quot;.</em>&quot; walk is opt-in per rule and affects no other device. A new &quot;members&quot; directive records one chassis member per row of a vendor private-MIB table - e.g. an Aruba virtual controller that lists its member APs in AI-AP-MIB aiAPTable - so each member&#x27;s serial/model/name is inventoried like a stack member. String fields are read as text even when they contain a non-ASCII byte (e.g. an AP name with an umlaut): the SNMP session turns off OCTET STRING hex translation, so such a name is stored as its UTF-8 text rather than a &quot;0x...&quot; hex string. Many new snmp_* options control it (transport, inventory depth, history, a per-device refresh interval -- see README). backup_duration_sec now covers the config fetch plus the SNMP read. The summary e-mail gains an Inventory column (per device: success/failed/N-A/ not-due) and an Inventory count table beside the backup statistics; &quot;not due&quot; marks an snmp_inventory_interval skip.</p>
+<p>+ tools/fc-snmp-inventory.pl: a read-only SNMP inventory probe. It drives the same collector the backup uses, so it reports exactly what the inventory feature would store (vendor/model/serial/OS, the per-member/part list), plus the raw system group and ENTITY-MIB table and -- for onboarding a new device or vendor -- which snmp-profiles.conf directive matched. See README.fc-snmp-inventory.</p>
+<p>+ pw: credential aliases: define a user/pass once (pw: user $U1 name / pw: pass $P1 secret) and reference $U1/$P1 as the whole value of any user=/pass=/enable=/snmp_* credential, like directory: tags; pass values are masked. An unquoted $Name is an alias (an undefined or wrong-kind one is an error, never a silent literal); to use a literal starting with $ or \, escape the first character (\$ecret) or quote it (&quot;$ecret&quot;). A malformed pw: line refuses the run, and new --list-credentials lists and validates the aliases.</p>
+<p>+ procurve-snmp: its SNMP options moved to the snmp_* namespace (community -&gt; snmp_community, timeout -&gt; snmp_timeout); update affected device_table lines.</p>
+<p>+ DB history outbox drain is now concurrency- and crash-safe without a lock, so two fetchconfig runs may share a repository (e.g. overlapping cron jobs). Each spool file is claimed by an atomic rename to &lt;repo&gt;/.db-&lt;pid&gt;-&lt;ts&gt;.draining.&lt;pid&gt; before it is read, so exactly one drainer processes a file (no double-apply, and no duplicate device_inventory_component rows); a failed drain renames the file back and stops in order; a file orphaned by a crashed drainer is reclaimed on a later run (dead-PID detection, with the db_max_outbox_days drop as backstop). No config or schema change.</p>
+<p>+ DEVELOPER-GUIDE: the &quot;Call graph -- core &lt;-&gt; model &lt;-&gt; Abstract&quot; diagram is now a vertical layout that renders at full size (was shrunk to unreadable width).</p>
+</section>
+<section id="978">
+<div class="section-kicker">02</div>
 <h2>9.78</h2>
 <p>+ New --rename-device-id --old X --new Y: renames a device id everywhere it is used -- the device-table line (only field 2 is rewritten; model, host, options, comment and spacing are preserved, via an atomic temp+rename), the on-disk backup tree (every dated leaf directory &lt;repo&gt;/YYYYMM/YYYYMMDD/&lt;id&gt;/ and the &lt;id&gt;.run.* files in it, plus the repository-root &lt;id&gt;.status/&lt;id&gt;.debug), and, when a db: line is set, the backup-history database (UPDATE dev_id across backup_current/backup_runs/backup_versions). The new id is validated against the device-id rules and refused if it is already in use in the table, on disk, or in the DB. The operation holds an exclusive lock on a new &quot;&lt;devices&gt;.lock&quot; sidecar; an interrupted rename leaves a .rename-&lt;old&gt;-to-&lt;new&gt;.inprogress journal in the repository so re-running resumes it. -T previews every change (and the SQL) without writing. Exits 0 done, 1 if the DB change was left queued (DB unreachable), 2 on a validation/collision refusal.</p>
 <p>+ The DB rename is carried on the existing statistics outbox as a new op=rename record, applied by the normal drain (idempotent by WHERE dev_id=old). It needs GRANT UPDATE (dev_id) on the three history tables, added on the fetchconfig-web side; without it the op stays queued and is reported.</p>
@@ -610,7 +630,7 @@
 <p>+ --rename-device-id now preserves the device-table file&#x27;s owner, group and mode across the atomic rewrite (the temp+rename would otherwise leave it owned by the caller, e.g. root under cron, with the default umask mode), so fetchconfig-web can still edit the table. A warning is logged if the owner cannot be restored.</p>
 </section>
 <section id="977">
-<div class="section-kicker">02</div>
+<div class="section-kicker">03</div>
 <h2>9.77</h2>
 <p>+ Per-version line deltas (lines_added/lines_removed on backup_versions): the +added/-removed of the ignore-normalized diff against the previous version, so a same-size edit no longer reads as 0 B. The live writer computes them from the normalized view; --db-backfill fills them too, and UPDATEs existing rows whose deltas are still NULL. The two columns are owned by fetchconfig-web 2.12 - the engine probes for them and writes them only when present, so an older web side keeps working (columns stay unpopulated). Dependency-free line diff; a backfilled generic-template device counts raw lines (its template is not loaded).</p>
 <p>+ Corrected several documentation issues across DEVELOPER-GUIDE, README and the HTML manual (and tidied two older CHANGES entries), found by auditing the docs against the code: the per-device pipeline order, the backup/.status on-disk paths, model registration, directory-allowlist and exit-code details, the per-option mutual-exclusion lists (now including --db-backfill), and a few stale notes. No code change.</p>
@@ -623,12 +643,12 @@
 <p>+ Doc tooling: both doc generators now treat an inline code span as atomic, so a literal asterisk run inside backticks (e.g. the password mask) can no longer be swallowed by the bold/italic passes -- it was rendering &quot;<code>****</code> &rarr; <code>****</code>&quot; as mangled emphasis in HTML and the wrong asterisk count in the text twin. No change to fetchconfig itself.</p>
 </section>
 <section id="976">
-<div class="section-kicker">03</div>
+<div class="section-kicker">04</div>
 <h2>9.76</h2>
 <p>+ New &quot;--db-backfill&quot;: fill the history DB from the backups already on disk -- a backup_versions row (sha1 recomputed from the file, identical to a live save) and a backup_runs row per stored backup, plus backup_current where missing. Idempotent and repeatable; &quot;-T&quot; previews the counts; needs a &quot;db:&quot; line and never overwrites a row a live run wrote. Only saved change-events are added -- the dense run history (unchanged/failed runs) leaves no file to rebuild from.</p>
 </section>
 <section id="975">
-<div class="section-kicker">04</div>
+<div class="section-kicker">05</div>
 <h2>9.75</h2>
 <p>+ Optional backup-history DB writer (engine side), inert without a &quot;db:&quot; line (default: level; DBI/DBD::Pg load only then). Each run records health (one row per run) and change history (one row per saved backup, with sha1) to PostgreSQL 8.2+ via a per-repository write-ahead spool (&lt;repository&gt;/.db-*) drained one transaction per file at end of run: the fetch path never waits on the DB, and an outage is non-fatal (records buffer and replay). &quot;.status&quot; is unchanged; the DB is a separate sink.</p>
 <p>+ Each run logs a &quot;-----[DB writer]-----&quot; section with the result (&quot;all N record(s) written; outbox empty&quot;, or INCOMPLETE with the pending count); the summary mail shows it as a status box in the card (green written / red incomplete / grey when no &quot;db:&quot; is set). db: keys: db_inst, db_user, db_pass, db_host (IPv6-capable), db_connect_timeout (5), db_sslmode (disable), db_max_outbox_days (90).</p>
@@ -636,7 +656,7 @@
 <p>+ Schema, writer role and grants are owned by fetchconfig-web (fetchconfig-web-dbsetup.pl --upgrade); the engine only writes, never DDL. See README (&quot;db:&quot;) and DEVELOPER-GUIDE.</p>
 </section>
 <section id="974">
-<div class="section-kicker">05</div>
+<div class="section-kicker">06</div>
 <h2>9.74</h2>
 <p>Note: Several generic-model templates in ./templates are new - please test them against real hardware and let us know whether they work cleanly. The ones marked &quot;# Note: DRAFT - please verify on real hardware.&quot; especially need confirmation; those marked &quot;# Note: Verified on real hardware.&quot; have already been checked.</p>
 <p>+ Generic template engine: new prompt_settle_ms, type_delay_ms and show_cmd directives (plus &quot;send show_cmd&quot;), so templates reproduce the SSH-settle, slow-typing and show-command options of the Perl models.</p>
@@ -649,13 +669,13 @@
 <p>+ templates/integrity.sha1: a SHA-1 manifest of the shipped templates, generated by tools/integrity.pl during &quot;make doc&quot; (core Digest::SHA, so it works on AIX), so a viewer can tell a stock template from an edited or user-added one. Informational only; it does not affect template use.</p>
 </section>
 <section id="973">
-<div class="section-kicker">06</div>
+<div class="section-kicker">07</div>
 <h2>9.73</h2>
 <p>+ -devices= now finds a relative device-table name in the current directory first, then beside fetchconfig.pl (FindBin); an absolute path is used as given. A table kept with the script is found from any working directory.</p>
 <p>+ Build: &quot;make doc&quot; now launches the Python doc tools through tools/pyrun, which selects the host interpreter (python3 on Linux, python on AIX) instead of assuming an unversioned &quot;python&quot;.</p>
 </section>
 <section id="972">
-<div class="section-kicker">07</div>
+<div class="section-kicker">08</div>
 <h2>9.72</h2>
 <p>+ Security: the planet model no longer writes the login and enable passwords (or the switch&#x27;s echo of them) to the debug session log. slow_print() types credentials one character at a time and never touched the logs, and the switch echoes the password back, so with debug=on both landed in clear text in &lt;repository&gt;/&lt;dev_id&gt;.debug (mode 0600, but readable by anyone allowed to read that file). The passwords and their echoes are now kept out of the log (suspend_logs/restore_logs around each send and the read that consumes its echo); typing speed and the type_delay option are unchanged. Existing debug files from before this fix still contain the passwords - they are overwritten on the next run of that device; delete them and rotate any captured password.</p>
 <p>+ Model-framework code-review fixes:</p>
@@ -671,7 +691,7 @@
 <p>+ Windows portability: fetchconfig again starts and runs on native Windows for telnet, web-UI and procurve-snmp devices. The SSH models no longer load Net::OpenSSH at compile time (Abstract::ssh_open still requires it lazily, only when an SSH device is fetched), so a Windows Perl without Net::OpenSSH/IO::Pty no longer aborts at startup. On native Windows the SSH models are unsupported; backup comparison (-g ... -m) and change-report diffs are disabled with a clear error (they need an external diff); -P is forced to 1 (no fork); and the lock-file O_NOFOLLOW flag is dropped where Fcntl lacks it. Unix/AIX behaviour is unchanged; under Cygwin/WSL fetchconfig behaves as on Linux.</p>
 </section>
 <section id="971">
-<div class="section-kicker">08</div>
+<div class="section-kicker">09</div>
 <h2>9.71</h2>
 <p>+ New DEVELOPER-GUIDE.md / .html: a comprehensive architecture and engineering guide (execution model, the per-device pipeline, parallel fetch, all data structures, the device-table format, the model API, the security mechanisms and deliberate non-mitigations, extension recipes, testing and conventions), with an ASCII fetch-pipeline sequence diagram and an Abstract-API call graph, for engineers extending fetchconfig. The How-To-add-a-model skeleton now sends the password with print_secret() (not a raw print, which would reach the .debug log) and cross-references the developer guide.</p>
 <p>+ debug=on now works for ALL device models. Previously only the SSH, HTTP and SNMP models (and a few telnet models) wrote a &lt;dev_id&gt;.debug session log; the remaining ~19 telnet models (cisco-ios, cisco-cat, cisco-pix, cisco-iosxr, cisco-sg300, dell, junos, fortigate, hirschmann, mikrotik, riverstone, acme, parks, mediant, terayon, coriant-8600, 3com-msr, tellabs-msr, nec-univerge-ix, dmswitch, cisco-asa, mikrotik) ignored it (cisco-asa and mikrotik had the debug attach commented out). A shared open_telnet_debug_file() helper (in model::Abstract, mirroring open_ssh_debug_file) now attaches the telnet dump_log to a 0600 &lt;repository&gt;/&lt;dev_id&gt;.debug for every telnet model. Login and enable passwords stay out of the log because the models already send them with print_secret(), which suspends the log around the send.</p>
@@ -687,7 +707,7 @@
 <p>+ t/42-directory-allowlist.t now skips gracefully (plan skip_all) when model::Detector cannot be loaded because the transport CPAN modules (Net::Telnet, ...) are absent, matching the guard already used in t/45/46/51. Previously it used require_ok and reported a hard failure on a minimal host without the transports; the directory-allowlist logic it tests needs no transport.</p>
 </section>
 <section id="970">
-<div class="section-kicker">09</div>
+<div class="section-kicker">10</div>
 <h2>9.70</h2>
 <p>+ The e-mail&#x27;s text/plain part now carries a plain-text summary - the statistics block and a per-device table (auto-sized columns, no diffs), matching the HTML data - so text-only clients and previews are useful, not just a &quot;view in HTML&quot; notice.</p>
 <p>+ The HTML summary e-mail was restyled to match the fetchconfig-web mail: a grey canvas, a white rounded card with a dark-blue (#1f4e79) header bar carrying a small inline logo and &quot;fetchconfig vX.Y&quot;, and the copyright footer placed below/outside the card. The logo is embedded in the mail as multipart/related image (Content-ID &lt;fcwlogo&gt;) inside a multipart/related{ multipart/alternative{ text/plain; text/html }; image } structure matching the fetchconfig-web mailer exactly - 12-byte random boundaries and folded multipart Content-Type headers. The embedded logo is the complete fetchconfig-web PNG (an earlier build shipped a truncated copy with no IDAT/IEND, which mail clients could not render). The summary card is 820px wide so the full-report link fits on one line on desktop. The full-report link is now a styled button with a &quot;copy this link&quot; text fallback, and the plain-text part carries the report URL too. The embedded mail logo is independent of the report_logo= used in the on-disk HTML report, which is unchanged.</p>
@@ -695,7 +715,7 @@
 <p>+ Documentation and source-comment consistency pass (README, HTML manual, and in-source comments brought into line with the 9.69 code - the -D/-T option descriptions, the same-second backup note now that writes use O_EXCL, and the system-directory/allowlist wording).</p>
 </section>
 <section id="969">
-<div class="section-kicker">10</div>
+<div class="section-kicker">11</div>
 <h2>9.69</h2>
 <p>+ Device locking (lock=on, default off): before backing up a device, fetchconfig takes an exclusive flock on a per-device lock file so two runs cannot back up the same device at once (overlapping cron, or a &quot;Backup Now&quot; over a cron run). On contention it retries lock_retry times (default 5) at lock_retry_time-second intervals (default 10), then records the device as &quot;skipped&quot; - the existing per-device backup state - and continues; the process exit code is NOT changed by a lock-skip. The lock is released automatically when the run ends (even on crash) and the lock file is never unlinked. Options (per-device and default:): lock=on|off, lock_dir=$TAG|/path, lock_retry=N (&gt;=0; 0 = skip on first contention), lock_retry_time=N (&gt;=1 seconds). The lock directory is lock_dir=, else &quot;&lt;dir of fetchconfig.pl&gt;/.lock&quot;, created 0700 if absent; if it cannot be created or used, fetchconfig exits 10 after the run. The lock key is sha256(dev_id). A new &quot;directory: lock $TAG /path&quot; allowlist type restricts lock_dir= when an allowlist is in use. Lock files are opened O_NOFOLLOW and created 0600. Use a LOCAL filesystem - flock over NFS (AIX) is unreliable.</p>
 <p>+ A lock-skipped device is now reported as &quot;skipped&quot; in the e-mail summary (its own statistics row and State column) instead of &quot;failed&quot;, and its per-device status file is written correctly - the skip path now records the repository and timing like the normal paths did. This also covers the system-directory and allowlist skips.</p>
@@ -706,7 +726,7 @@
 <p>+ Fix a permission regression from 9.68: backup files and their directories were being forced to owner-only (0600/0700), which broke an unprivileged reader - fetchconfig-web runs fetchconfig as &quot;nobody&quot; for -l (list), -g (read content) and -g -m (diff), and could no longer traverse the directories or read the files. Repository permissions again follow the process umask, as before 9.68 (a setgid repository root still propagates, e.g. drwxr-sr-x). Only the parallel-fetch worker scratch files, which live in a private temp dir and are never read that way, stay owner-only. Restrict the repository directory yourself if the host is shared.</p>
 </section>
 <section id="968">
-<div class="section-kicker">11</div>
+<div class="section-kicker">12</div>
 <h2>9.68</h2>
 <p>+ on_fetch_run is run without a shell: the value is split into a program plus literal arguments (quoting honoured) and executed directly, so shell syntax like &quot;;&quot;, &quot;|&quot; or &quot;$(...)&quot; is passed as plain text, not interpreted. A start failure, signal or non-zero exit is logged. To run a pipeline, put it in a script and name the script.</p>
 <p>+ repository=, template_dir= and the on_fetch_run program may not be a system directory (/bin, /sbin, /lib<em>, /usr/bin, /usr/sbin, /usr/lib</em>, /usr/share, /usr/include, /etc, /boot, /dev, /proc, /sys, /run, /var/run, /var/lock, the root &quot;/&quot;, or anything under them). A device value is rejected and the device skipped; a directory: allowlist line that declares one is rejected at parse time.</p>
@@ -719,14 +739,14 @@
 <p>+ -z and -Z gained -D and -T, mirroring -o/-e: with -D the zero-byte backups found are deleted (each by one plain unlink on its exact path - only the files, not directories; run -e -D afterwards to prune any emptied day/month dirs), and -T previews them (&quot;would delete: unlink ...&quot;). Without -D the behaviour is unchanged (list only). The exit status is still that of the check (1 if any zero-byte backups were found, 0 otherwise), whether or not they were deleted. -D now accepts -o, -e, -z or -Z; -T still requires -D.</p>
 </section>
 <section id="966">
-<div class="section-kicker">12</div>
+<div class="section-kicker">13</div>
 <h2>9.66</h2>
 <p>+ cisco-asa-ssh and cisco-asa: a rejected enable password no longer hangs the fetch for the whole fetch_timeout. The ASA re-prompts &quot;Password: &quot; when the enable secret is wrong; the models now detect that second prompt and fail immediately with &quot;enable failed: the device rejected the enable password ...&quot; (the message points at a likely cause - a missing device-specific enable= falling back to a default: enable= that does not apply). The successful path (enable accepted, &quot;#&quot; prompt) is unchanged.</p>
 <p>+ Change report: the Devices sidebar is hidden when the report is printed (an @media print rule), so the printed page uses the full width.</p>
 <p>+ New documented device option &quot;site=&quot;: a free-text site/location tag, like comment= (fetchconfig itself does not use it). It is intended for the fetchconfig-web application, which uses it for per-site access control - users see and edit only the devices whose site matches a site assigned in their user record; a device with no site= is visible only to &quot;all sites&quot; (site 0) users. Values should be single-byte characters. (The device-table parser already accepted arbitrary key=value options, so no parser change was needed - this documents site= as an official option.)</p>
 </section>
 <section id="965">
-<div class="section-kicker">13</div>
+<div class="section-kicker">14</div>
 <h2>9.65</h2>
 <p>+ Change report: the &quot;Changes&quot; count per device now counts diff hunks (the number of places that differ) instead of old+new diff lines, which double-counted each changed line (e.g. 2 changed lines showed as 4).</p>
 <p>+ Report masking: added the Hirschmann &quot;users passwd &lt;user&gt; :vN:&lt;hash&gt;:&quot; form - the username is kept and only the hash is masked (the generic passwd rule no longer masks the username on these lines). The :vN:&lt;hash&gt;: token is masked wherever it appears.</p>
@@ -743,7 +763,7 @@
 <p>+ Documentation: reorganised the HTML manual into a clearer flow (front matter, getting started, configuration, supported devices, features, reference), added a Key concepts intro and a Security cross-reference to the allowlist, and documented the template lexical conventions and the stay transition. Silenced two harmless &quot;used only once&quot; compile warnings.</p>
 </section>
 <section id="964">
-<div class="section-kicker">14</div>
+<div class="section-kicker">15</div>
 <h2>9.64</h2>
 <p>+ directory: $TAG aliases are now expanded centrally in dev_option, so ALL commands that read repository=/template_dir=/on_fetch_run= (fetch, -g, -l, -z, -Z, -e, -o, -s, -S, -t, --list-allowed-dirs) resolve a $TAG to its real path - previously only fetch and -t did, so e.g. -l reported &quot;no backups&quot; when the table used repository=$REPO1. -t still shows the configured value (the $TAG) in its template_dir column.</p>
 <p>+ Fix -t/--list-template: a generic device that inherits template_dir from the &quot;default: generic&quot; line was wrongly reported as a &quot;device&quot; entry (duplicating the default directory). It is now correctly counted under the default scope; only a device&#x27;s OWN template_dir= makes a &quot;device&quot; entry.</p>
@@ -766,7 +786,7 @@
 <p>+ Documentation: reworded the SECURITY NOTES in README and the HTML manual to note that config secrets are not always hashed - SNMP communities and some routing/VPN keys are cleartext, and Cisco type-7 passwords are reversible - rather than implying everything is a one-way hash.</p>
 </section>
 <section id="963">
-<div class="section-kicker">15</div>
+<div class="section-kicker">16</div>
 <h2>9.63</h2>
 <p>+ The main README and fetchconfig-documentation.html now include a short overview of the template-driven generic model, pointing to README.generic-model, README.template_engine and README.record-session (the HTML links to the .html versions).</p>
 <p>+ Added a template-driven &quot;generic&quot; model: a device can be backed up from a template file (templates/&lt;name&gt;.tmpl) instead of a hand-written Perl module. The template describes the login, enable, show and logout interaction as a small state machine - expect/send steps with the transport, prompt, timeouts, interrupt screens and ignore-lines as data</p>
@@ -779,7 +799,7 @@
 <p>+ Documentation (README.template_engine, README.generic-model, README.record-session) is now written in Markdown, with the plain-text and HTML versions generated by tools/md2html.py; &quot;md2html.py --all DIR&quot; converts a whole tree.</p>
 </section>
 <section id="962">
-<div class="section-kicker">16</div>
+<div class="section-kicker">17</div>
 <h2>9.62</h2>
 <p>+ Replaced the hand-rolled command-line parser with Getopt::Long. The single-dash option syntax is unchanged, and &quot;-g=value&quot; is now accepted alongside &quot;-g value&quot;.</p>
 <p>+ Added tools/record-session.pl, a standalone helper that records a telnet or SSH session with a device as a byte-accurate hex dump and a readable, VT100-emulated transcript, for developing models and gathering test fixtures. Known secrets and password-prompt input are masked; see README.record-session.</p>
@@ -788,27 +808,27 @@
 <p>+ Fixed the HTML manual&#x27;s sidebar navigation to follow the document&#x27;s reading order.</p>
 </section>
 <section id="961">
-<div class="section-kicker">17</div>
+<div class="section-kicker">18</div>
 <h2>9.61</h2>
 <p>+ Moved the repository maintenance and lookup modes (-g, -l, -z, -Z, -o, -e, -s, -S) out of fetchconfig.pl into a new module, fetchconfig/Tools.pm. Behaviour is unchanged - every mode keeps its arguments and exit codes - and fetchconfig.pl drops from about 1700 to under 600 lines.</p>
 <p>+ Added a test suite under t/, run with &quot;prove -I. t/&quot; or &quot;make test&quot;: pure-function tests (escape stripping, prompt quoting, backup-filename and timezone parsing, option handling) and filesystem tests against temporary repositories (backup writing, latest-backup selection, change comparison, directory maintenance). 178 assertions across eight files; only core Perl is required.</p>
 <p>+ Added Makefile.PL. &quot;make test&quot; runs the suite; &quot;make&quot; and &quot;make install&quot; are placeholders (fetchconfig is installed by hand, see the README).</p>
 </section>
 <section id="960">
-<div class="section-kicker">18</div>
+<div class="section-kicker">19</div>
 <h2>9.60</h2>
 <p>+ Added the mediant-sbc model for AudioCodes Mediant SBCs and gateways with the current Cisco-style CLI, over SSH (default) or telnet. It drives the device&#x27;s pager, enters enable mode, and reads the configuration; an automatic transport fallback never downgrades a credential from SSH to cleartext on an authentication failure.</p>
 <p>+ Added shared wait_for_command_prompt() handling for full-screen and menu-driven CLIs, with a per-model hook for the banners and menus a device interposes before its prompt; ProCurve now uses it.</p>
 <p>+ Added a &quot;How to add a model&quot; manual (Markdown and HTML) and a small, dependency-free generator (tools/md2html.py) that produces the HTML from the Markdown.</p>
 </section>
 <section id="959">
-<div class="section-kicker">19</div>
+<div class="section-kicker">20</div>
 <h2>9.59</h2>
 <p>+ Added a shared SSH transport (ssh_open) used by all SSH models, with a per-model hook for the legacy key-exchange and cipher settings older switches require. Removed the duplicated connection code from the individual models.</p>
 <p>+ Fixed the debug trace for SSH models so that debug=on records the SSH client&#x27;s own diagnostics followed by the session, in a 0600 file.</p>
 </section>
 <section id="958">
-<div class="section-kicker">20</div>
+<div class="section-kicker">21</div>
 <h2>9.58</h2>
 <p>+ Added shared expect_enable_prompt() handling with per-model hooks (prompt prefix and suffix) for device-specific prompts, and migrated the models to it, removing their private copies where no model-specific behaviour was needed. Login and enable-mode behaviour is unchanged.</p>
 <p>+ Added shared ANSI/VT100 escape-sequence stripping and migrated the ProCurve models to it.</p>
@@ -817,14 +837,14 @@
 <ul><li>Fixed a race between parallel workers (-P) and the repository scan.</li></ul>
 </section>
 <section id="957">
-<div class="section-kicker">21</div>
+<div class="section-kicker">22</div>
 <h2>9.57</h2>
 <p>+ Added the nexus-ssh model for Cisco Nexus (NX-OS) over SSH.</p>
 <p>+ Made the per-device repository scan much faster by descending only into the relevant directory instead of walking the whole tree.</p>
 <p>+ Completed the model list in the README.</p>
 </section>
 <section id="956">
-<div class="section-kicker">22</div>
+<div class="section-kicker">23</div>
 <h2>9.56</h2>
 <p>  This entry summarises how the 9.x fork differs from upstream 0.25.   Intermediate fork versions that were later superseded are not listed.</p>
 <p>MODELS AND TRANSPORTS</p>
@@ -859,19 +879,19 @@
 <p>+ Updated the README, model documentation, command-line help and configuration examples for the new models, transports and options.</p>
 </section>
 <section id="025">
-<div class="section-kicker">23</div>
+<div class="section-kicker">24</div>
 <h2>0.25</h2>
 <p>+ CiscoSG300.pm: support for Cisco SG300.</p>
 </section>
 <section id="024">
-<div class="section-kicker">24</div>
+<div class="section-kicker">25</div>
 <h2>0.24</h2>
 <p>+ Coriant8600.pm: support for Coriant 8600.</p>
 <p>+ CiscoIOSXR.pm: support for Cisco IOS XR.</p>
 <p>+ NECUnivergeIX.pm: support for NEC Univerge IX series.</p>
 </section>
 <section id="023">
-<div class="section-kicker">25</div>
+<div class="section-kicker">26</div>
 <h2>0.23</h2>
 <p>+ support for -line=string switch for passing device table lines directly into the command-line.</p>
 <p>+ option on_fetch_cat=1 issues current configuration to stdout.</p>
@@ -879,97 +899,97 @@
 <p>+ Mediant.pm: support for Audiocodes Mediant.</p>
 </section>
 <section id="022">
-<div class="section-kicker">26</div>
+<div class="section-kicker">27</div>
 <h2>0.22</h2>
 <p>+ JunOS.pm: support for Juniper JunOS.</p>
 </section>
 <section id="021">
-<div class="section-kicker">27</div>
+<div class="section-kicker">28</div>
 <h2>0.21</h2>
 <p>+ TellabsMSR.pm: support for Tellabs MSR Routers.</p>
 </section>
 <section id="020">
-<div class="section-kicker">28</div>
+<div class="section-kicker">29</div>
 <h2>0.20</h2>
 <p>+ CiscoPIX.pm: support for Cisco PIX.</p>
 </section>
 <section id="019">
-<div class="section-kicker">29</div>
+<div class="section-kicker">30</div>
 <h2>0.19</h2>
 <p>+ suport for Mikrotik RB800.</p>
 </section>
 <section id="018">
-<div class="section-kicker">30</div>
+<div class="section-kicker">31</div>
 <h2>0.18</h2>
 <p>+ support for 3Com MSR devices.</p>
 </section>
 <section id="017">
-<div class="section-kicker">31</div>
+<div class="section-kicker">32</div>
 <h2>0.17</h2>
 <p>+ bug #25475: Stuart Schneis added compatibility for Dell 6224P, 5324, 5424</p>
 </section>
 <section id="016">
-<div class="section-kicker">32</div>
+<div class="section-kicker">33</div>
 <h2>0.16</h2>
 <p>+ rip@devco.net added CiscoASA.pm sr #106606: Cisco ASA Support</p>
 </section>
 <section id="015">
-<div class="section-kicker">33</div>
+<div class="section-kicker">34</div>
 <h2>0.15</h2>
 <p>+ support equal &#x27;=&#x27; character in values for options.</p>
 </section>
 <section id="014">
-<div class="section-kicker">34</div>
+<div class="section-kicker">35</div>
 <h2>0.14</h2>
 <p>+ option timezone=hide omits timezone name from file name.</p>
 <p>+ added DmSwitch.pm for Datacom DmSwitch devices.</p>
 </section>
 <section id="013">
-<div class="section-kicker">35</div>
+<div class="section-kicker">36</div>
 <h2>0.13</h2>
 <p>+ resort to strftime -%Z for tz name in systems which lack support for strftime %z for tz offset (Solaris 7).</p>
 <p>+ added FETCHCONFIG_DEV_ID and FETCHCONFIG_DEV_HOST environmental variables to external on_fetch_run program.</p>
 </section>
 <section id="012">
-<div class="section-kicker">36</div>
+<div class="section-kicker">37</div>
 <h2>0.12</h2>
 <p>+ option on_fetch_run to call an external program whenever a config backup is fetched.</p>
 <p>+ append timezone offset to backup filename.</p>
 <p>+ Sergey Alexanov added Terayon.pm for Old Terayon 3200/3500 CMTS.</p>
 </section>
 <section id="011">
-<div class="section-kicker">37</div>
+<div class="section-kicker">38</div>
 <h2>0.11</h2>
 <p>+ add retrieval timing info into log.</p>
 </section>
 <section id="010">
-<div class="section-kicker">38</div>
+<div class="section-kicker">39</div>
 <h2>0.10</h2>
 <p>+ bug #21501: Problem if device-specific-options are not specified</p>
 </section>
 <section id="09">
-<div class="section-kicker">39</div>
+<div class="section-kicker">40</div>
 <h2>0.9</h2>
 <p>+ Slightly better device table parser in order to support options with blank spaces. Example: show_cmd=show run</p>
 </section>
 <section id="08">
-<div class="section-kicker">40</div>
+<div class="section-kicker">41</div>
 <h2>0.8</h2>
 <p>+ Julien Louis added Dell.pm for Dell PowerConnect switches.</p>
 </section>
 <section id="07">
-<div class="section-kicker">41</div>
+<div class="section-kicker">42</div>
 <h2>0.7</h2>
 <p>+ added Riverstone.pm for Alcatel Ethernet Routers.</p>
 </section>
 <section id="06">
-<div class="section-kicker">42</div>
+<div class="section-kicker">43</div>
 <h2>0.6</h2>
 <p>+ added Parks.pm.</p>
 <p>+ log program version. (cmd line option: -v)</p>
 </section>
 <section id="05">
-<div class="section-kicker">43</div>
+<div class="section-kicker">44</div>
 <h2>0.5</h2>
 <p>+ added show_cmd option for older routers in CiscoIOS.pm. (Task 6204)</p>
 <p>+ added FortiGate.pm.  (Doug Schaapveld / Task 6205)</p>
@@ -977,23 +997,23 @@
 <p>+ added ProCurve.pm for HP Procurve switches.  (Doug Schaapveld)</p>
 </section>
 <section id="04">
-<div class="section-kicker">44</div>
+<div class="section-kicker">45</div>
 <h2>0.4</h2>
 <p>+ added CiscoCAT.pm contributed by Marcos Sandez.</p>
 </section>
 <section id="03">
-<div class="section-kicker">45</div>
+<div class="section-kicker">46</div>
 <h2>0.3</h2>
 <p>+ ported to Windows.</p>
 </section>
 <section id="02">
-<div class="section-kicker">46</div>
+<div class="section-kicker">47</div>
 <h2>0.2</h2>
 <p>+ new filesystem layout.</p>
 <p>+ FSF address updated.</p>
 </section>
 <section id="01">
-<div class="section-kicker">47</div>
+<div class="section-kicker">48</div>
 <h2>0.1</h2>
 <p>+ notes about the device id.</p>
 <p>+ copyright notice at beginning of source files.</p>

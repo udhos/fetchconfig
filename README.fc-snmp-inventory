@@ -1,0 +1,230 @@
+fetchconfig -- SNMP Inventory Probe (fc-snmp-inventory.pl)
+==========================================================
+
+tools/fc-snmp-inventory.pl is a read-only command-line probe for a device's SNMP
+inventory data. It drives fetchconfig's own collector
+(fetchconfig::SNMPInventory), so the result it prints is exactly what the SNMP
+inventory feature would store for the device  -  the same vendor registry, the same
+model/serial/OS derivation, the same snmp-profiles.conf directives, stack-entity
+promotion and sysName/sysLocation/sysContact. It also prints the raw system
+group and ENTITY-MIB table it reads, so you can compare what is on the wire
+against what the engine makes of it.
+
+Use it when onboarding a device or a new vendor: run it once, read the profile
+section to see which (if any) snmp-profiles.conf directive is driving each value,
+and add a directive if something comes back blank.
+
+What it is for
+==============
+
+The SNMP inventory feature (see the inventory section of the main README) runs
+during a backup and records make / model / serial / OS version, the device's own
+sysName/sysLocation/sysContact, and the physical component (stack member /
+FRU) list into the fetchconfig-web dashboard. Most devices are covered out of the
+box by the ENTITY-MIB; some need a one-line snmp-profiles.conf directive to fill
+or correct a value.
+
+This probe is the tool for working that out. Because it calls the real collector
+rather than re-implementing the logic, its derived output can never drift from
+what fetchconfig actually stores.
+
+    NOTE: Read-only
+    The probe only issues SNMP GET / GET-NEXT / GET-BULK requests. It never writes to
+    the device, and  -  unlike a backup run  -  it never spools to the dashboard database.
+    Secrets (the community string, SNMPv3 passphrases) are never printed.
+
+Requirements
+============
+
+- Net::SNMP (the same module fetchconfig's procurve-snmp model uses).
+- The fetchconfig tree: the probe lives in tools/ and loads the engine modules
+  from the parent directory, so run it from an unpacked fetchconfig distribution.
+
+Usage
+=====
+
+    tools/fc-snmp-inventory.pl [options] HOST
+
+Option                Default  Meaning
+--------------------  -------  ------------------------------------------------------------------------------------------------------
+-c, --community STR   public   SNMPv1/v2c community
+-v, --version VER     2c       SNMP version: 1, 2c or 3
+-p, --port N          161      UDP port
+-t, --timeout SEC     5        per-request timeout
+-r, --retries N       1        retries
+-i, --inventory       off      also list every physical component from the ENTITY-MIB (can be long)
+-b, --brief           off      with -i: only components that carry a model or serial (drops containers / sensors / fans / bare ports)
+-P, --profile FILE    shipped  path to the snmp-profiles.conf to use (default: the one beside fetchconfig.pl)
+-V, --script-version           print the probe and engine versions and exit
+-h, --help                     usage
+
+For SNMPv3 (-v 3):
+
+Option              Default     Meaning
+------------------  ----------  ------------------------------------
+-u, --user NAME                 security name (required)
+-l, --level LEVEL   authNoPriv  noAuthNoPriv / authNoPriv / authPriv
+-a, --authproto P   sha         md5 / sha
+-A, --authpass STR              auth passphrase
+-x, --privproto P   aes         des / aes
+-X, --privpass STR              privacy passphrase
+
+Exit status: 0 ok, 2 usage error, 1 SNMP session error.
+
+Examples
+--------
+
+    # v2c, default community
+    tools/fc-snmp-inventory.pl -v 2c -c public 10.0.0.1
+    
+    # v2c with the full ENTITY component listing
+    tools/fc-snmp-inventory.pl -v 2c -c public -i switch01.example.net
+    
+    # SNMPv3 authPriv
+    tools/fc-snmp-inventory.pl -v 3 -u monitor -l authPriv -a sha -A s3cret \
+                               -x aes -X s3cret2 rtr01.example.net
+
+Output sections
+===============
+
+Output is key = value lines, grouped. The first three sections are the raw
+device view; the last two are the engine view.
+
+- system  -  the SNMPv2-MIB system group as read (sysDescr, sysObjectID
+  with its decoded enterprise number and the vendor name *from the engine
+  registry*, sysUpTime, sysName, sysContact, sysLocation).
+- entity  -  the ENTITY-MIB entPhysicalTable: whether it is implemented, the
+  row count, and a summary of each chassis. With -i (optionally -b) a full
+  per-component listing follows in its own section.
+- profile  -  which snmp-profiles.conf directives match this device's
+  sysObjectID / enterprise: the resolved vendor, any model map, and for each
+  of model / serial / os_version any override or oid directive (noting a
+  .* column walk), plus any members directive and its columns. This is the
+  onboarding view  -  it tells you what config is producing the result, and where a
+  blank means "no directive matched".
+- derived  -  the engine's result: status, manufacturer, model, serial,
+  os_version, sysname / syslocation / syscontact, member_count,
+  member_serials and hw_set. This is exactly what the inventory feature stores.
+- components  -  the per-member / per-part list the engine builds (member index,
+  class, position/name, model, serial, software / firmware / hardware revision, and
+  which one is primary)  -  the same rows the dashboard's Components table shows.
+
+    NOTE: Provenance
+    The derived values are authoritative (straight from the collector); read the
+    profile, entity and (with -i) the component listing above them to see where
+    each value came from.
+
+Worked example  -  an Aruba virtual controller
+--------------------------------------------
+
+An Aruba Instant AP acting as the virtual controller implements no ENTITY-MIB, so
+the raw entity section reports it absent  -  yet the engine still resolves a full
+inventory from the system group and the vendor profile:
+
+    # --- system ---
+    system.sysDescr = AOS-8 (MODEL: 515), Version 8.13.3.1-8.13.3.1 LSR
+    system.sysObjectID = 1.3.6.1.4.1.14823.1.2.71
+    system.sysObjectID.enterprise = 14823
+    system.sysObjectID.vendor = Aruba Networks
+    system.sysName = apgmg10 E3 Stern GF
+    system.sysLocation = Waghaeusel
+    
+    # --- entity (ENTITY-MIB entPhysicalTable) ---
+    entity.available = no (ENTITY-MIB not implemented or not permitted: empty)
+    
+    # --- profile (snmp-profiles.conf directives matching this device) ---
+    profile.vendor = Aruba Networks
+    profile.override.model = source=sysdescr  regex=MODEL:\s*([^)]+)
+    profile.members = serial=...2.1.1.4  model=...2.1.1.6  name=...2.1.1.2  os=-
+    
+    # --- derived (fetchconfig engine result; ...) ---
+    derived.status = successful
+    derived.manufacturer = Aruba Networks
+    derived.model = 515
+    derived.serial = CNT0KD504G
+    derived.os_version = 8.13.3.1-8.13.3.1
+    derived.member_count = 3
+    
+    # --- components (3 stored by fetchconfig) ---
+    component.3.comp_position = apgmg10 E3 Stern GF
+    component.3.model = AP-515
+    component.3.serial = CNT0KD504G
+    component.3.primary = yes
+
+The model came from the override model 14823 sysdescr rule, the OS from the
+built-in sysDescr "Version ..." heuristic, and each member AP from the
+members 14823 ... rule that walks the AI-AP-MIB table  -  one chassis member per
+AP, with the controller's own entry (its name matches sysName) marked primary.
+
+Onboarding a device the inventory does not recognise yet
+========================================================
+
+When a value comes back (unavailable) or unknown, the profile section shows
+whether a directive matched. Add the matching directive to snmp-profiles.conf
+(see its header comments for the full grammar), then re-run the probe to confirm.
+The common cases:
+
+- Vendor is unknown  -  add vendor <enterprise> <name> (the probe prints the
+  enterprise number in the system section).
+- Model / serial / OS is wrong (a device has an ENTITY-MIB but reports a
+  placeholder, e.g. a chipset codename)  -  add
+  override <field> <enterprise> <source> [<regex>] to replace it from sysDescr,
+  another ENTITY field, or a numeric OID.
+- Model / serial / OS is blank on an ENTITY-less device  -  add
+  override <field> <enterprise> sysdescr [<regex>] (value is in sysDescr) or
+  oid <field> <enterprise> <OID> [<regex>] (value is in a vendor private MIB).
+  If the value lives in a table column whose index is per-device (e.g. a
+  MAC-indexed serial), end the OID with .* and the engine walks the column to its
+  first row.
+- The device aggregates others (a controller listing member units, like an
+  Aruba virtual controller or a stack that does not expose ENTITY)  -  add
+  members <enterprise> serial=<col> [model=<col>] [name=<col>] [os=<col>] and each
+  table row becomes a chassis member.
+
+All of these are keyed by enterprise number or sysObjectID, so a directive only
+affects the devices it matches; no other model is touched.
+
+    NOTE: Not everything is exposed
+    Some devices simply do not publish a value over SNMP. For example, Aruba Instant
+    APs expose no per-AP software, firmware or hardware-revision object (only a single
+    cluster-wide aiVirtualControllerVersion), so those columns stay blank for the
+    member APs however the profile is written.
+
+Directive syntax
+================
+
+The five snmp-profiles.conf directives as syntax (railroad) diagrams: follow each path left->right; a branch is an alternative, and an item a line can skip past is optional. See the file's own header for the matching tiers and the lexical rules (comments, whitespace, and the silent-skip of a malformed line).
+
+[syntax diagram: snmp-vendor - see the HTML documentation]
+`vendor`  -  the canonical vendor name for an enterprise number or `sysObjectID`; used when ENTITY `entPhysicalMfgName` is empty.
+
+[syntax diagram: snmp-model - see the HTML documentation]
+`model`  -  a last-resort model name by `sysObjectID`, used only when ENTITY carries neither a model nor a descr.
+
+[syntax diagram: snmp-oid - see the HTML documentation]
+`oid`  -  fill an *empty* headline field from a vendor private-MIB OID on an ENTITY-less device. A trailing `.*` marks a table-column base, walked (GETNEXT) to its first row.
+
+[syntax diagram: snmp-override - see the HTML documentation]
+`override`  -  *replace* a present-but-wrong (or missing) headline field, from `sysDescr`, an ENTITY field, or a numeric OID (a `.*` suffix walks a column). Consulted before the ENTITY value.
+
+[syntax diagram: snmp-members - see the HTML documentation]
+`members`  -  record one chassis member per row of a vendor member table (e.g. an Aruba virtual controller's AP list); the `serial=` column enumerates the members, the others join by the per-row index.
+
+How a field is resolved
+-----------------------
+
+Where each headline field (model / serial / os_version) comes from, and when the profile directives are consulted:
+
+    flowchart TD
+      A["SNMP system group answers?"] -->|no| F["inventory = failed"]
+      A -->|yes| B{"ENTITY-MIB<br/>entPhysicalTable?"}
+      B -->|"chassis present"| C["full derivation"]
+      B -->|"only stack(11) entries"| S["promote stack -> chassis"] --> C
+      B -->|"none"| E["ENTITY-less headline"]
+      C --> C1["field = override * ENTITY value * model-map"]
+      E --> E1["field = override * oid * model-map * sysDescr heuristic<br/>members -> one chassis component per row"]
+      C1 --> G["store headline + components"]
+      E1 --> G
+
+(* = first match wins, left to right. override is always consulted first; a .* OID or a members table is walked only on the ENTITY-less path.)
+

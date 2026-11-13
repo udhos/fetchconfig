@@ -40,6 +40,14 @@ ul, ol { margin: 0 0 1em; padding-left: 2em; }
 li { margin: .2em 0; }
 input[type=checkbox] { margin-right: .4em; }
 footer { color: var(--muted); font-size: .85em; border-top: 1px solid var(--line); margin-top: 3em; padding-top: 1em; }
+@media print {
+  /* smaller, print-native type -- match the fetchconfig-web / render-doc.py docs on paper */
+  html { font-size:10pt; }
+  body { font-size:10pt; }
+  nav.toc { display:none; }
+  a { color:inherit; text-decoration:none; }
+  pre { font-size:8.5pt; white-space:pre-wrap; }
+}
 </style>
 </head>
 <body>

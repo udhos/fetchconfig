@@ -14,6 +14,11 @@ remain authoritative for their topics and are referenced from here:
   engine: grammar and parser internals, execution semantics, writing and
   generating templates, and `tools/record-session.pl` for capturing a device
   session when writing a new model.
+- `README.fc-snmp-inventory` -- the read-only `tools/fc-snmp-inventory.pl` SNMP
+  inventory probe: it drives `SNMPInventory::collect` so its output matches what
+  the inventory feature stores, and shows which `snmp-profiles.conf` directive
+  matched -- the tool for onboarding a device or vendor the inventory does not
+  yet recognise.
 - `DEPENDENCIES` -- the Perl module dependency matrix.
 
 Where this guide found those documents lacking a detail an extender needs,
@@ -58,14 +63,15 @@ Key properties that shape the whole design:
 | File | Role |
 |------|------|
 | `fetchconfig.pl` | Driver: CLI option parsing, device-table loading, dispatch to a maintenance/lookup mode or the fetch phase, the parallel-fetch (`-P`) fork loop, final exit code. |
-| `fetchconfig/model/Detector.pm` | The registry and the per-device pipeline. Holds the in-memory device table, parses `default:`/`email:`/`directory:`/device lines, enforces the directory allowlist, and runs `fetch_device()` per device. |
+| `fetchconfig/model/Detector.pm` | The registry and the per-device pipeline. Holds the in-memory device table, parses `default:`/`email:`/`directory:`/`pw:`/device lines, enforces the directory allowlist, registers the `pw:` credential aliases, and runs `fetch_device()` per device. |
 | `fetchconfig/model/Abstract.pm` | The base class for every model. Provides the shared API: SSH/telnet session helpers, prompt handling, backup write/compare/expire, option accessors, secret handling, the debug-file helpers, locking primitives. |
 | `fetchconfig/model/*.pm` | The device models (34 device models + `AbstractHTTP` base + `GenericTemplate`/`GenericTemplateParser`). Each implements `do_fetch()` for its transport/CLI dialect. |
 | `fetchconfig/Tools.pm` | The maintenance/lookup modes (`-g`, `-l`, `-z/-Z`, `-o`, `-e`, `-s/-S`, `--list-allowed-dirs`, `--clean-lock-dir`, etc.) and their shared filesystem helpers. |
 | `fetchconfig/Rename.pm` | `--rename-device-id` (device table + on-disk backups + history DB) and the `--replay-db-change` outbox flush. |
 | `fetchconfig/Lock.pm` | Advisory `flock` on the `<devices>.lock` sidecar: a shared lock for a run's table parse, an exclusive lock for a rename ([Locking](#locking)). |
-| `fetchconfig/History.pm` | The optional backup-history DB writer: the per-repository outbox spool, the drain/`_apply_op` (`run`/`version`/`current`/`expire`/`rename` ops), `--db-backfill` and the `--replay-db-change` drain ([Backup-history DB writer (optional)](#backup-history-db-writer-optional)). |
-| `fetchconfig/Mailer.pm` | SMTP delivery and the result record: `record_result()`, the per-recipient grouping, the HTML + plain-text summary mail, and the shared notice frame (`build_notice_html`). |
+| `fetchconfig/History.pm` | The optional backup-history DB writer: the per-repository outbox spool, the drain/`_apply_op` (`run`/`version`/`current`/`expire`/`rename` ops, plus the SNMP inventory `inv_current`/`inv_reset`/`inv_component` ops with the `device_inventory*` pre-check gate), `--db-backfill` and the `--replay-db-change` drain ([Backup-history DB writer (optional)](#backup-history-db-writer-optional)). |
+| `fetchconfig/SNMPInventory.pm` | SNMP device inventory (9.80): a model-independent, read-only collector run from `fetch_device()` that reads the ENTITY-MIB + system group over SNMP, derives make/model/serial/OS and a component list, and -- config-driven via `snmp-profiles.conf` -- copes with vendors that report oddly (ENTITY-less headline, stack promotion, `oid`/`override`/`members` directives). Also builds the shared Net::SNMP session for `procurve-snmp`. Detailed below: [The SNMP inventory collector](#snmp-inventory-collector). |
+| `fetchconfig/Mailer.pm` | SMTP delivery and the result record: `record_result()`, `record_inventory()`/`record_inventory_component()` for the SNMP inventory, the per-recipient grouping, the HTML + plain-text summary mail, and the shared notice frame (`build_notice_html`). The summary mail's SNMP-inventory column/count table comes from `inv_state()` (maps a result row to `success`/`failed`/`N/A`/`not due`; `not due` is an `snmp_inventory_interval` skip, flagged by `inv_notdue` on the row) and `build_inv_stats_table_html()`. |
 | `fetchconfig/Report.pm` | The on-disk HTML change report and the config-diff masking (`mask_line`). |
 | `fetchconfig/Constants.pm` | `version()` and a few constants. |
 | `fetchconfig/Logger.pm` | The logger object (prefix, levels: debug/info/error). |
@@ -122,17 +128,39 @@ For each device, `fetch_device()` performs, in order:
 7. **Fetch**: `$mod->fetch(...)` -> the model's `do_fetch()` logs in, runs the
    show-config command, and returns the written backup path (or undef on
    failure). On `debug=on`, the session is captured to `<dev_id>.debug`.
-8. **Compare**: compare the just-written config against the previous latest
+8. **SNMP inventory** (only when enabled for the device -- a community/user, and
+   `snmp_inventory` not off; see [SNMPInventory.pm](#the-module-map)). First the
+   `snmp_inventory_interval` gate: if set and the last successful inventory (read
+   from this device's `.status` via `_status_inventory`, keyed on `inventory_at`)
+   is younger than the interval, the SNMP read is skipped and the prior result is
+   carried forward into this run's `.status` (the DB row is left as-is) -- so a
+   slow-SNMP device need not be read every run. Otherwise, right after
+   the fetch, `fetchconfig::SNMPInventory->collect(...)` opens its own Net::SNMP
+   session and reads the ENTITY-MIB (on v2c/v3: GET-BULK-walk `entPhysicalClass`
+   for all rows, then GET the descriptive columns only for the parts it keeps, so
+   a big stack's ports/sensors are not fully pulled; `snmp_max_repetitions` tunes
+   it; v1 falls back to a full per-column walk). The full result (headline + every
+   component + change history) goes to the DB via
+   `Mailer::record_inventory()` / `record_inventory_component()` and the outbox
+   (`op=inv_*`); the **state + headline are also carried into the `.status` file**
+   -- `fetch_device` stashes the `inv_*` fields and passes them to every
+   `record_result` call, and `write_status_file` writes `inventory=<state>` plus
+   `inventory_<field>` lines. This runs independently of the config outcome and
+   times itself separately (the config-retrieval log line excludes it); on failure
+   with `snmp_fatal=on` the device is flagged so the driver exits `11`.
+9. **Compare**: compare the just-written config against the previous latest
    backup located in step 2 (`config_equal`, ignoring volatile lines) to decide
    changed / unchanged / initial. No file is removed at this point.
-9. **Record**: `Mailer::record_result(...)` logs the per-device outcome and
-   writes the `.status` file.
-10. **on_fetch_run / on_fetch_cat**: if set, run the external program (shell-free;
+10. **Record**: `Mailer::record_result(...)` logs the per-device outcome and
+    writes the `.status` file (including the `inventory*` keys from step 8). Its
+    `elapsed` is `time - $fetch_ts_start` at this point, so `backup_duration_sec`
+    spans the config fetch **plus** the SNMP inventory, not just the fetch.
+11. **on_fetch_run / on_fetch_cat**: if set, run the external program (shell-free;
     [Security mechanisms](#security-mechanisms)) and/or copy the config to stdout. Both run regardless of whether
     the config changed.
-11. **Discard**: only if `changes_only` is set *and* the config was unchanged,
+12. **Discard**: only if `changes_only` is set *and* the config was unchanged,
     delete the just-written file (`config_discard`) so only real changes are kept.
-12. **Expire**: `purge_ancient` deletes the oldest backups beyond `keep=N`; each
+13. **Expire**: `purge_ancient` deletes the oldest backups beyond `keep=N`; each
     backup it rotates out emits a DB expire event ([Backup-history DB writer (optional)](#backup-history-db-writer-optional)).
 
 The lock filehandle is held in a lexical for the whole of `fetch_device`, so
@@ -149,7 +177,7 @@ outcome.
  driver -> Detector::fetch_device -> model.do_fetch -> Mailer/FS
 
  fetch_device(dev_id):
-   read options (dev_option)
+   read options (dev_option; resolves pw: / directory: $aliases)
    find_latest(dev_id) (if needed)    -- scan FS -> (dir,file); before the guards
    system-dir check (always)          -- reject -> record_result(skipped), return
    directory allowlist (if present)   -- off-list -> record_result(skipped), return
@@ -157,9 +185,12 @@ outcome.
    fetch() -> do_fetch():
        login (print_secret), open_*_debug_file, show-config,
        dump_config() -> write backup (O_EXCL)
-     -- fetch failed -> record_result(failed), return
+   SNMP inventory (if an SNMP credential is set): collect over SNMP, spool
+     op=inv_*, merge inventory_* into .status -- runs regardless of the fetch
+     outcome, non-fatal unless snmp_fatal=on
+     -- fetch failed -> record_result(failed, +inventory), return
    config_equal(latest, new) -> changed | unchanged | initial
-   record_result(success, <changed|unchanged|initial>)   -- always; writes .status
+   record_result(success, <changed|unchanged|initial>, +inventory)  -- always; writes .status
    on_fetch_run (shell-free) / on_fetch_cat              -- if set; both run regardless
    if (changes_only and unchanged): config_discard(new)  -- keep only real changes
    purge_ancient(); emit DB expire events                -- rotate beyond keep=N
@@ -173,7 +204,7 @@ sequenceDiagram
     participant M as model do_fetch
     participant S as Mailer and FS
     D->>F: fetch_device(dev_id)
-    F->>F: read options
+    F->>F: read options (resolve pw: / directory: aliases)
     F->>S: find_latest(dev_id) if needed
     Note over F: system-dir check (always)
     F-->>S: on reject, record skipped
@@ -185,7 +216,9 @@ sequenceDiagram
     M->>M: login via print_secret, open debug file, show-config
     M->>S: dump_config writes backup (O_EXCL)
     M-->>F: config path or undef
-    F-->>S: if undef, record failed
+    Note over F: SNMP inventory if an SNMP credential is set (runs regardless of fetch outcome)
+    F->>S: SNMPInventory.collect, spool op=inv_*, write inventory_* to .status
+    F-->>S: if undef, record failed (carries the inventory result)
     F->>F: config_equal(latest, new)
     F->>S: record success (changed, unchanged, or initial) and write .status
     opt on_fetch_run / on_fetch_cat set
@@ -227,6 +260,85 @@ variable -- a package variable set in a worker is lost when the worker exits.
 `Mailer::record_result` already serialises every key you pass it, so new
 result fields propagate automatically if you add them as `record_result`
 arguments.
+
+---
+
+### The SNMP inventory collector (`SNMPInventory.pm`) {#snmp-inventory-collector}
+
+A model-independent, **read-only** collector (new in 9.80) run from
+`fetch_device()` after the config fetch, independent of its outcome. It reads the
+ENTITY-MIB and the system group over SNMP, derives a device headline plus a
+component list, and hands the result back to be written to the DB (via the outbox
+`op=inv_*`) and to the `.status` file (via `record_result`). Nothing here opens a DB
+handle or writes to a device -- it only issues SNMP reads. It also builds the shared
+Net::SNMP session for the `procurve-snmp` model. The user-facing config syntax lives
+in the `snmp-profiles.conf` header and in `README.fc-snmp-inventory`; this section is
+the implementation.
+
+- **Session (`open_snmp_session`).** Builds the Net::SNMP session (v1/v2c/v3,
+  auth/priv, port/timeout/retries) from the `snmp_*` options -- the one place both
+  the collector and `procurve-snmp` use. It turns **off** OCTET STRING hex
+  translation, so a string field with a non-ASCII byte (e.g. an AP name with an
+  umlaut) is read as UTF-8 text rather than Net::SNMP's `0x…` rendering.
+- **ENTITY-MIB walk (`_walk_entity` / `_fetch_cells`).** On v2c/v3 it GET-BULK-walks
+  only `entPhysicalClass` (tuned by `snmp_max_repetitions`), then `_fetch_cells` GETs
+  the descriptive columns for just the parts it keeps -- so a big stack's
+  ports/sensors are never fully pulled. On v1, or after a bulk error, it falls back to
+  a full per-column `get_table` walk.
+- **Headline + fallbacks.** From the kept parts it derives
+  vendor/model/serial/`os_version`, `member_count`, `hw_set` and the component list.
+  Best-effort fallbacks for sparse ENTITY-MIBs: `os_version` from `sysDescr`
+  (`_os_from_sysdescr`), `model` from a `sysObjectID` lookup (`_model_for`), and
+  `member_count` from the chassis count when no chassis carries a serial. The system
+  group also yields `sysname`/`syslocation`/`syscontact` -- a device-level admin
+  headline, read on every device and stored where the 2.17 columns exist
+  (current-state only, never a change trigger).
+- **Stack-entity promotion.** When the table has no `chassis`(3) entry but one or more
+  `stack`(11) entries (e.g. a Zyxel single-unit switch that reports one top-level
+  `stack`), those are **promoted to chassis** so their model/serial/OS are harvested
+  by the full derivation instead of dropping to the headline path. A device with a
+  real chassis ignores its `stack` entry.
+- **ENTITY-less headline.** A device with a live system group but **no**
+  `entPhysicalTable` at all (e.g. Hirschmann classic switches, Aruba WLAN APs) yields
+  a one-device headline instead of a failure: vendor from the `sysObjectID`
+  enterprise, model/serial/OS filled from the vendor profile (below), and a final
+  `sysDescr` parse for the OS.
+
+**Profile directives** (`snmp-profiles.conf`, matched most-specific-first by the
+shared `_spec_for`) -- the config syntax is documented elsewhere; the implementation:
+
+- `vendor` / `model` -- the enterprise→name registry (`_vendor_for`) and a
+  `sysObjectID`→model last-resort map (`_model_for`).
+- `oid` (`_override_oid` / `_apply_override_oids`) -- fill an *empty* headline field
+  from a vendor private-MIB OID on an ENTITY-less device (ENTITY data always wins).
+- `override` (`_override_field` / `_override_value`) -- *replace* a present-but-wrong
+  (or missing) field from `sysdescr`/`entdescr`/`entmodel`/`entserial` or a numeric
+  OID, with an optional capture regex, consulted before the ENTITY value.
+- A numeric `oid`/`override` OID ending in `.*` is a table-**column** base:
+  `_get_instance($session, $oid, $walk)` does one GETNEXT and takes the first row in
+  that column instead of a plain GET -- opt-in per rule (the `.*` marker is a third
+  spec element), so other vendors' instance OIDs keep exact-GET.
+- `members` (`_members_for` / `_collect_members`, via the generic `_walk_column`) --
+  one `chassis` component per row of a vendor member table: it walks the `serial=`
+  column (which enumerates the members) and joins `model=`/`name=`/`os=` by the
+  per-row index, with primary = the row whose name matches `sysName`.
+
+Both `oid` and `override` also run on the ENTITY-less path. Aruba WLAN is the worked
+example: enterprise 14823 "Aruba Networks" (built-in vendor) +
+`override model 14823 sysdescr MODEL:\s*([^)]+)` + a `members 14823 …aiAPTable` line
+for a virtual controller's member APs.
+
+- **Firmware cleaning (`_fw_clean`).** Per-component `fw_version`
+  (`entPhysicalFirmwareRev`) is passed through `_fw_clean`, which drops placeholder
+  values (empty, or the Cisco Catalyst 9000 chassis `0.1`) so a bogus firmware is
+  stored as NULL (on some platforms the real ROMMON is not in SNMP at all -- see the
+  DB schema contract).
+- **Structure / helpers.** `collect()` opens the session, delegates the read-only
+  derivation to **`_collect_session()`** -- the same step `tools/fc-snmp-inventory.pl`
+  drives directly -- and closes. `mode()` is the per-device enable/disable gate;
+  `_load_profiles()` / `_profile_path()` parse and locate `snmp-profiles.conf` (cached
+  for the run); `flag()` is the permissive boolean for the `snmp_*` flags; and
+  `_clean_scalar` / `_trim` / `_opt` / `_norm_version` are the small helpers.
 
 ---
 
@@ -446,14 +558,63 @@ otherwise malformed, is recorded in `@dir_allow_errors` and **aborts the run**
 before any fetch. See `README` -> DIRECTORY ALLOWLIST for the full semantics
 and `--list-allowed-dirs` for the linter.
 
+### `pw:` line (credential aliases)
+
+```
+pw:  user  $Alias  <username>
+pw:  pass  $Alias  <secret>
+```
+
+A `pw:` line registers a named credential alias, the same way a `directory:` line
+registers a `$TAG`. `parse_pw_line` validates the `kind` (`user` or `pass`), the
+alias name (`^\$[A-Za-z_][A-Za-z0-9_]*$` — `$` then a letter or `_`, never a
+leading digit), rejects duplicates and any clash with a `directory:` `$TAG`, and
+dequotes the value through `Abstract::dequote_value`; `pass` values are masked in
+logs.
+
+A credential-slot value is interpreted by the **first character of its raw token**
+(`Abstract::_expand_pw_alias`, reached via `_resolve_alias`): a leading `"` is a
+quoted, fully-verbatim literal (dequoted, **never** an alias); a leading `$`
+matching the name grammar is an **alias reference** (resolved, **kind-checked** —
+`user`/`snmp_user` take `user` aliases; `pass`/`enable`/`snmp_community`/
+`snmp_write_community`/`snmp_authpass`/`snmp_privpass` take `pass` aliases; an
+undefined or wrong-kind alias logs an error and yields `undef`); anything else is a
+verbatim literal with a **first-character-only** de-escape (`_deescape_first`:
+leading `\$`→`$`, leading `\\`→`\`, interior untouched). So the two ways to write a
+`$`-leading literal are `\$value` or `"$value"`. To keep the quoted-ness available
+to the resolver, `parse_options` stores credential slots' **raw token** (quotes
+intact) — it skips `dequote_value` for the `%PW_SLOT_KIND` options and the resolver
+does the dequote.
+
+Malformed `pw:` lines accumulate in `@pw_errors` (accessors `pw_errors` /
+`pw_present` / `pw_alias` / `pw_rows`); like `directory:` errors they abort the run
+(`exit 2`) before any fetch. `--list-credentials` lists the defined aliases (values
+masked) and lints them — malformed lines plus a cross-table check that every
+credential reference resolves to a defined alias of the right kind — exiting `2` on
+any problem, so `fetchconfig-web`'s `validate_table_with_fetchconfig` can gate saves
+on it.
+
 ### Options available for all models
 
 `debug`, `to`, `on_fetch_run`, `on_fetch_cat`, `timezone`,
 `filename_append_suffix`, `comment`, `site`, and the locking options (`lock`,
 `lock_dir`, `lock_retry`, `lock_retry_time`) are available for every model.
+The **SNMP inventory** options (`snmp_community`/`snmp_write_community`/`snmp_user`,
+`snmp_version`, `snmp_port`, `snmp_timeout`, `snmp_retries`, `snmp_max_repetitions`,
+the v3 `snmp_level`/`snmp_authproto`/`snmp_authpass`/`snmp_privproto`/`snmp_privpass`,
+and `snmp_inventory`/`snmp_inventory_level`/`snmp_inventory_history`/`snmp_fatal`/`snmp_inventory_interval`) are
+also model-independent -- the collector reads them through `dev_option` on any model
+(see [SNMPInventory.pm](#the-module-map) and the per-device pipeline). **Exception:**
+`snmp_profile_file` is read through `default_option`, so it is **`default:`-only** --
+the only device-table option restricted to `default:` lines (a device-line value is
+ignored, with a warning), because the parsed vendor/model file is cached process-wide. `procurve-snmp` additionally consumes
+`snmp_community`/`snmp_write_community`/`snmp_timeout`/`snmp_version` as its own
+transport credentials via the shared `open_snmp_session`.
 Model-specific options (`user`, `pass`, `enable`, `timeout`, `repository`,
 `keep`, `fetch_timeout`, `changes_only`, ...) vary by model -- see the per-model
 options tables and the model sections in `README` (the DEVICE OPTIONS section).
+Note `procurve-snmp` no longer reads the shared `timeout` (9.80): its timeout is
+`snmp_timeout`.
 
 ---
 
@@ -502,8 +663,9 @@ read `Abstract.pm` for exact argument lists.
   logging it** (suspends the debug log around the send, writes a masked
   marker). Every model sends credentials through this; a new model MUST too.
 - `mask_secrets($line)` -- redact `pass=`/`enable=`/`community=`/`password=`/
-  `secret=`/`key=`/`token=`-style values before echoing a device-table line
-  to the log.
+  `secret=`/`key=`/`token=`-style values, plus the SNMP secrets
+  `snmp_community=`/`snmp_write_community=`/`snmp_authpass=`/`snmp_privpass=`
+  (9.80), before echoing a device-table line to the log.
 - `stripansi($s)`, `regexp_quote_keep_bytes($s)`, `escape_brackets($s)`,
   `dequote_value($s)` -- text helpers (ANSI stripping, byte-preserving regex
   quoting for learned prompts, etc.).
@@ -543,35 +705,40 @@ from caller to callee.
 ```
 <!--MERMAID
 flowchart TD
-    FD["Detector::fetch_device"] --> AF["Abstract::fetch"]
-    AF --> DO["Model.do_fetch - model implements this"]
-    subgraph H["shared helpers the model calls"]
-        T["ssh_open or Net::Telnet new"]
-        DBG["open_ssh_debug_file or open_telnet_debug_file"]
-        PR["wait_for_command_prompt, expect_enable_prompt"]
-        LOG["chat_banner, chat_show_conf (chat_login is per-model)"]
-        PS["print_secret for every credential"]
-        TX["stripansi, regexp_quote_keep_bytes, escape_brackets"]
-        OPT["dev_option, _flag, _raw, _posint"]
-        DC["dump_config, O_EXCL"]
+    FD["Detector::fetch_device"] --> AF["Abstract::fetch"] --> DO["Model.do_fetch"]
+    DO --> H
+    DO -. "may override" .-> O
+    H --> OUT["returns config path or undef"]
+    OUT --> C
+    subgraph H["shared helpers do_fetch calls"]
+        direction TB
+        T["ssh_open / Net::Telnet->new"]
+        DBG["open_ssh/telnet_debug_file (debug=on)"]
+        PR["wait_for_command_prompt,<br/>expect_enable_prompt"]
+        LOG["chat_banner, chat_show_conf<br/>(chat_login is per-model)"]
+        PS["print_secret (every credential)"]
+        TX["stripansi, regexp_quote_keep_bytes,<br/>escape_brackets"]
+        OPT["dev_option / _flag / _raw / _posint"]
+        DC["dump_config (O_EXCL)"]
+        T ~~~ DBG ~~~ PR ~~~ LOG ~~~ PS ~~~ TX ~~~ OPT ~~~ DC
     end
-    DO --> T & DBG & PR & LOG & PS & TX & OPT & DC
-    DC --> OUT["returns config path or undef"]
-    subgraph C["core-driven, calls Abstract directly"]
-        FL["find_latest"]
-        CE["config_equal"]
+    subgraph C["core calls these on Abstract (not the model)"]
+        direction TB
+        FL["find_latest (before the fetch)"]
+        CE["config_equal /<br/>config_equal_ignoring_lines"]
         CD["config_discard"]
-        PA["purge_ancient"]
-        LK["lock_dir_resolve, device_lock_path, acquire_device_lock"]
+        PA["purge_ancient (keep=N)"]
+        LK["lock_dir_resolve, device_lock_path,<br/>acquire_device_lock"]
+        FL --> CE --> CD --> PA
+        PA ~~~ LK
     end
-    OUT --> CE
-    FL --> CE
-    CE --> CD --> PA
     subgraph O["model hooks it MAY override"]
-        H1["label - required"]
-        H2["do_fetch - required"]
-        H3["prompt_head and prompt_tail defaults"]
-        H4["interrupt_screens and ssh_extra_opts"]
+        direction TB
+        H1["label (required)"]
+        H2["do_fetch (required)"]
+        H3["prompt_head / prompt_tail defaults"]
+        H4["interrupt_screens / ssh_extra_opts"]
+        H1 ~~~ H2 ~~~ H3 ~~~ H4
     end
 MERMAID-->
 
@@ -720,10 +887,11 @@ rename), which is the only case that matters here.
   model uses it.
 - **`mask_secrets`** (Abstract, for device-table lines echoed to the log) redacts
   `pass=`/`enable=`/`community=`/`password=`/`passphrase=`/`secret=`/`key=`/`token=`-prefixed
-  values, quoted values included, so a malformed table line in an error message
+  values and the SNMP secrets `snmp_community=`/`snmp_write_community=`/`snmp_authpass=`/`snmp_privpass=`
+  (9.80), quoted values included, so a malformed table line in an error message
   does not leak a credential. (Detector has its own, narrower masker for the lines
-  *it* logs: it covers only `pass=`/`enable=`/`community=` and not quoted values --
-  not a copy of Abstract's.)
+  *it* logs: it covers `pass=`/`enable=`/`community=` and the four `snmp_*` secrets,
+  but not quoted values -- not a copy of Abstract's.)
 - **`mask_line`** (Report, for config *content* in the HTML report and the
   mailed diffs) redacts `secret N <hash>` / `password N <hash>` forms. It is
   best-effort and biases toward masking (a false positive hides a non-secret
@@ -939,9 +1107,20 @@ Data path (parent only; never in -P workers):
    and writes a per-repository WRITE-AHEAD spool file (`<repo>/.db-<pid>-<ts>`, a
    dotfile, temp+rename).
 3. It then drains every spool file into the DB, oldest first, one transaction per
-   file; a file is unlinked only after COMMIT. On the first failure it stops and
-   leaves that file (and later ones) for the next run. Spool files older than
-   `db_max_outbox_days` are dropped.
+   file. Two runs may share a repository with no lock, so each file is first
+   *claimed* by an atomic rename to `<repo>/.db-<pid>-<ts>.draining.<drainer-pid>`
+   before it is read -- `rename(2)` lets exactly one drainer win a given file, so a
+   file is never applied twice concurrently (which also removes the
+   inventory-component duplication hazard). A file is unlinked only after COMMIT;
+   on the first read/apply/commit failure the drainer rolls back, renames the file
+   back to its claimable name, and stops (that file and later ones wait for the
+   next run). Because files are taken oldest-first, losing a claim means another
+   drainer already holds the oldest-unhandled file, so this drainer stops rather
+   than apply a newer file ahead of it -- preserving order across drainers without
+   a lock. Before each repo is scanned, `_reclaim_orphans` recovers any
+   `.draining.*` file whose owner PID is dead (`kill 0`: ESRCH) by renaming it back
+   to its claimable name, and drops any spool -- claimed or not -- older than
+   `db_max_outbox_days`.
 4. `History::finish` logs its own `-----[DB writer]-----` section (same 92-char
    width as the mail's `-----[email]-----`): the divider first, then any spool or
    drain warnings, then the result line `History::status_line` ("all N record(s)
@@ -969,8 +1148,16 @@ Data path (parent only; never in -P workers):
    the 998-octet SMTP limit corrupts the HTML mid-tag; QP soft-wraps at 76 chars.
 
 Write-ahead means the records hit disk before the DB is touched, so a DB outage
-only defers the drain (the run always completes) and nothing is lost. Idempotent
-keys cover the commit-then-crash window.
+only defers the drain (the run always completes) and nothing is lost. The claim
+rename, the rename-back on failure, and the dead-PID orphan reclaim make the drain
+crash-safe too: a drainer that dies mid-write leaves its DB transaction
+uncommitted (the backend rolls it back when the connection drops) and the spool
+file intact under its `.draining` name, to be reclaimed and retried on a later run.
+Every op is idempotent (`INSERT ... WHERE NOT EXISTS`, keyed UPDATE/upsert), so the
+commit-then-crash re-apply window is a no-op. The PID-liveness reclaim assumes one
+host per repository -- the same assumption the `.db-<pid>-<ts>` naming already
+makes; the `db_max_outbox_days` drop is the final backstop that clears any orphan a
+PID check cannot (e.g. a reused PID, or a host that cannot signal-probe).
 
 `--db-backfill` (`History::backfill`) reconstructs the history from the backups
 already on disk, for first enabling `db:` on an existing install. It writes
@@ -1006,7 +1193,37 @@ any other, and the next run's drain -- or an explicit `--replay-db-change`
 (`History::replay` over every loaded device's repository, no fetch) -- applies it.
 A live pre-check (`row_count_for_dev`) refuses a rename into an id that already has
 rows; if the DB is unreachable at rename time the apply-time transaction is the
-backstop.
+backstop. When the inventory tables are present the rename also updates
+`device_inventory`, `device_inventory_component` and `device_inventory_history`
+(six UPDATEs rather than three).
+
+SNMP device inventory (9.80, three tables owned by fetchconfig-web:
+`device_inventory`, `device_inventory_component`, `device_inventory_history`).
+These ride the same outbox as the backup history. `Mailer::record_inventory` /
+`record_inventory_component` (parent, or replayed from the `-P` sink) collect the
+per-device result; `History::finish` turns it into ops and `_apply_op` handles the
+new kinds: **`op=inv_current`** upserts the `device_inventory` row (capturing the
+prior `hw_set`/`os_version` first), **`op=inv_reset`** clears the device's
+components (a snapshot replace), and **`op=inv_component`** inserts each component
+(`is_primary` as `'t'`/`'f'`), including its firmware/ROMMON rev in `fw_version`
+(web schema 2.16); `op=inv_current` likewise carries the device's own
+`sysname`/`syslocation`/`syscontact` (web schema 2.17). `_probe_inv_tables` checks,
+once, whether each added column exists (via `pg_attribute`/`pg_class`, which can't
+poison a transaction): the component INSERT omits `fw_version` when
+`device_inventory_component.fw_version` is absent, and the `inv_current` upsert omits
+the three sys* columns when `device_inventory.sysname` is absent, so the engine runs
+against a 2.15, 2.16 or 2.17 DB without a `42703` (the sys* fields are current-state
+only -- never part of change detection). The current-row logic is tri-state: a `disabled`
+status is UPDATE-only (never inserts), a `failed` attempt keeps the existing data
+(only the status/timestamps move), and a `successful` attempt upserts everything,
+conditionally advances `changed_at`, and -- derived during the drain, not stored on
+the result -- inserts a `device_inventory_history` row (`INSERT ... WHERE NOT
+EXISTS`, note = `initial`/`members`/`os`/`both`) only when `hw_set` or `os_version`
+actually changed. Every inventory op is gated behind a one-time pre-check
+(`_probe_inv_tables`, a `pg_class` lookup -- no `to_regclass`, which is 9.4+): when
+the tables are absent `_apply_op` returns success without touching them, so an
+engine pointed at a web side not yet upgraded is a no-op. All DML is
+8.2-safe and uses DBI placeholders, exactly like the backup-history ops.
 
 Per-version line deltas (`lines_added`/`lines_removed`, web 2.12). These are the
 +added/-removed of `Abstract::line_delta` (a dependency-free diff: trim the common

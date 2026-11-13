@@ -19,6 +19,31 @@
 # $Id: device_table.example,v 1.19 2013/10/16 03:29:11 evertonm Exp $
 #
 
+# Optional credential aliases (9.80). A "pw:" line names a username or a
+# secret once, then referred to by its $Alias on any "default:" or device
+# line - the same way a "directory:" line names a $TAG. Keeps repeated
+# credentials out of every device line and groups them at the top.
+#   pw:  user  $Alias  <username>     (a "user"-kind alias)
+#   pw:  pass  $Alias  <secret>       (a "pass"-kind alias)
+# The alias name is $ + a letter/underscore then letters/digits/underscore.
+# A "user"-kind alias resolves only user-slot options (user, snmp_user);
+# a "pass"-kind alias only pass-slot options (pass, enable, snmp_community,
+# snmp_write_community, snmp_authpass, snmp_privpass). Username and secret
+# obey the normal device_table value rules (quote a value with "," or "=").
+#pw:	user	$NetUser	backup
+#pw:	pass	$NetPass	"s3cr,et=1"
+#pw:	pass	$RoCommunity	public
+# then, e.g.:   default: cisco-ios user=$NetUser,pass=$NetPass
+#               <model>  sw01  1.1.1.1  snmp_community=$RoCommunity
+# A credential value is read as an alias ONLY when it is an unquoted $Name of
+# that form; an undefined or wrong-kind $Name is an error, never a literal login.
+# To use a LITERAL credential that starts with "$" or "\", escape the first
+# character (pass=\$ecret  ->  $ecret; only the first character is de-escaped, so
+# DOMAIN\user and C:\tools are untouched) or quote it (pass="$ecret"). A value
+# that needs quotes for a "," or space is literal at the same time.
+# Review a table's aliases and check every reference resolves with:
+#   fetchconfig.pl -devices=FILE --list-credentials
+
 # DEFAULT OPTIONS SECTION
 #
 #		model		options
@@ -98,6 +123,58 @@
 #                       files older than this are dropped on a later run.
 #db:		db_inst=fetchconfig,db_user=fetchconfig_dashboard,db_pass=secret,db_host=localhost
 #db:		db_inst=fetchconfig,db_user=fetchconfig_dashboard,db_pass="a,b=c",db_host=[2001:db8::1]:5432,db_sslmode=require,db_max_outbox_days=120
+
+# Optional: SNMP device inventory (9.80). Model-independent - add the
+# "snmp_" options to ANY model's "default:" block or to a device line and,
+# in addition to the config backup, fetchconfig collects hardware inventory
+# over SNMP (vendor, model, serial, OS version and the per-component serial
+# numbers, incl. stack members) and writes it to the PostgreSQL database
+# (needs a "db:" line; the three device_inventory* tables are created by
+# "fetchconfig-web-dbsetup.pl --upgrade"). The ".status" file is unchanged.
+# Opt-in and OFF by default: inventory runs for a device only when SNMP
+# credentials are configured for it - snmp_community (v1/v2c) or snmp_user
+# (v3). With no snmp_ option at all the device is simply "not inventoried".
+# snmp_inventory itself defaults ON, so setting the community is enough;
+# snmp_inventory=off disables a device that would otherwise inherit one.
+# Options (defaults in brackets):
+#   snmp_community        read community (v1/v2c); its presence enables inventory
+#   snmp_write_community  read-WRITE community: arms procurve-snmp's TFTP
+#                         trigger, and also enables/serves inventory when
+#                         snmp_community is unset (falls back to snmp_community)
+#   snmp_version          1 | 2c | 3                               [2c]
+#   snmp_port             UDP port                                 [161]
+#   snmp_timeout          per-request timeout, seconds             [5]
+#   snmp_retries          retries per request                      [1]
+#   snmp_max_repetitions  GET-BULK max-repetitions, v2c/v3 (fewer
+#                         round-trips on a big stack; lower if an
+#                         agent rejects a large bulk reply)         [25]
+#   snmp_user             SNMPv3 user; its presence enables inventory (v3)
+#   snmp_level            SNMPv3 noAuthNoPriv|authNoPriv|authPriv   [derived]
+#   snmp_authproto        SNMPv3 auth protocol (md5|sha|...)        [sha]
+#   snmp_authpass         SNMPv3 auth passphrase
+#   snmp_privproto        SNMPv3 priv protocol (des|aes|...)        [aes]
+#   snmp_privpass         SNMPv3 priv passphrase
+#   snmp_inventory        on|off (or 1|0) - master switch          [on]
+#   snmp_inventory_level  1 = chassis+modules+PSUs; 2 also optics   [1]
+#   snmp_inventory_history on|off (or 1|0) - row on a HW/OS change  [on]
+#   snmp_fatal            on|off (or 1|0) - a collection failure
+#                         fails the device (exit 11) vs. warning    [off]
+#   snmp_inventory_interval  seconds; 0=every run. >0 skips the SNMP
+#                         read when the last success is younger than
+#                         this and reuses it (keeps backups fast on a
+#                         slow-SNMP device, e.g. 86400 = once a day)   [0]
+#   snmp_profile_file     override the vendor/model profile file;
+#                         DEFAULT:-ONLY - ignored on a device line   [shipped]
+# All snmp_* options above may be set on a default: or a device line EXCEPT
+# snmp_profile_file, which is valid ONLY on a default: line (a device-line
+# value is ignored, with a warning) - it is the one default:-only option.
+# The v3 level, if snmp_level is unset, is derived: authpass+privpass =
+# authPriv, authpass only = authNoPriv, neither = noAuthNoPriv.
+#
+# Minimal (v2c) - just the community, applied to a whole model:
+#default:	nexus-ssh	snmp_community=public
+# Per-device v3, overriding the model default:
+#nexus-ssh	nx-sw09	1.1.1.1	snmp_version=3,snmp_user=netmon,snmp_authproto=sha,snmp_authpass=$AuthPass,snmp_privproto=aes,snmp_privpass=$PrivPass
 
 default:	cisco-ios	user=backup,pass=fran,enable=jose
 default:	cisco-ios	timeout=10,keep=5,changes_only=0
@@ -249,11 +326,13 @@ default:	mediant-sbc	repository=/var/fetchconfig/save
 default:	mediant-sbc	transport=ssh,debug=off
 
 # procurve-snmp: ProCurve ProVision (incl. 4000M/8000M) over SNMP+TFTP.
-# community is the SNMP read-WRITE community (no user/pass). remote_file
+# snmp_community is the SNMP read-WRITE community (no user/pass). remote_file
 # defaults to "browse" (readable report); later models also support
-# "running-config". timeout defaults to 30s.
-default:	procurve-snmp	community=private
-default:	procurve-snmp	timeout=30,keep=5,changes_only=0
+# "running-config". snmp_timeout defaults to 5s.
+# NOTE (9.80): the old shared "community"/"timeout" options were renamed to
+# the "snmp_"-prefixed names shared with the SNMP device inventory below.
+default:	procurve-snmp	snmp_community=private
+default:	procurve-snmp	snmp_timeout=30,keep=5,changes_only=0
 default:	procurve-snmp	remote_file=browse
 default:	procurve-snmp	repository=/var/fetchconfig/save
 default:	procurve-snmp	debug=off
@@ -308,95 +387,95 @@ default:	generic		debug=off
 #
 # model		dev-unique-id	hostname	device-specific-options
 #
-cisco-ios	inet-gw		10.0.0.1
-cisco-ios	vpn-gw		192.168.0.1	keep=10,changes_only=1
-cisco-ios	ancient-ios	192.168.0.3	show_cmd=wrterm
+cisco-ios	inet-gw		1.1.1.2
+cisco-ios	vpn-gw		1.1.1.3	keep=10,changes_only=1
+cisco-ios	ancient-ios	1.1.1.4	show_cmd=wrterm
 
-cisco-cat	sales-sw	172.16.0.10
-cisco-cat	eng-sw		172.16.0.11	keep=10,changes_only=1
+cisco-cat	sales-sw	1.1.1.5
+cisco-cat	eng-sw		1.1.1.6	keep=10,changes_only=1
 
-parks           lab209r		10.30.0.6
+parks           lab209r		1.1.1.7
 
-riverstone      lab3100         10.1.30.2
+riverstone      lab3100         1.1.1.8
 
-hirschmann	rail-sw01	172.29.200.162
+hirschmann	rail-sw01	1.1.1.9
 
-zyxel		zyxel-sw01	172.29.200.145
+zyxel		zyxel-sw01	1.1.1.10
 
-planet-ssh	planet-sw01	172.29.200.110
+planet-ssh	planet-sw01	1.1.1.11
 
-aruba-cx-ssh	cx-sw01		172.29.200.150
+aruba-cx-ssh	cx-sw01		1.1.1.12
 
-nexus-ssh	nx-sw01		172.29.200.160
+nexus-ssh	nx-sw01		1.1.1.13
 
-mediant-sbc	sbc01		172.29.200.170
-mediant-sbc	sbc01-full	172.29.200.170	show_cmd="show running-config full"
+mediant-sbc	sbc01		1.1.1.14
+mediant-sbc	sbc01-full	1.1.1.14	show_cmd="show running-config full"
 
-procurve-snmp	hp4000-sw01	153.3.231.23
+procurve-snmp	hp4000-sw01	1.1.1.15
 
-tplink-web-sg105e	tpl-sw01	172.29.200.120
+tplink-web-sg105e	tpl-sw01	1.1.1.16
 
-procurve-web-1700	hp1700-sw01	172.29.200.130
+procurve-web-1700	hp1700-sw01	1.1.1.17
 
 # generic (template-driven). model=<name> is MANDATORY and selects
 # templates/<name>.tmpl. transport picks ssh or telnet (from the option
 # here, else the template's first-listed transport). A device-table
 # option overrides the same-named template value (e.g. banner_timeout).
-generic		gen-rtr01	10.6.0.1	model=cisco-ios,transport=telnet
-generic		gen-rtr02	10.6.0.2	model=cisco-ios,transport=ssh,user=svc,pass=secret
+generic		gen-rtr01	1.1.1.18	model=cisco-ios,transport=telnet
+generic		gen-rtr02	1.1.1.19	model=cisco-ios,transport=ssh,user=svc,pass=secret
 # (model=procurve shown for illustration; only templates/cisco-ios.tmpl
 #  ships in 9.63 - a fetch with a missing template fails with a clear error)
-generic		gen-sw01	10.6.0.3	model=procurve,transport=ssh,banner_timeout=60
+generic		gen-sw01	1.1.1.20	model=procurve,transport=ssh,banner_timeout=60
 
-terayon-os	cmts-1		10.10.1.1
-terayon-os	cmts-2		10.10.1.2
+terayon-os	cmts-1		1.1.1.21
+terayon-os	cmts-2		1.1.1.22
 
-dmswitch        lab3224F2       10.1.59.130
+dmswitch        lab3224F2       1.1.1.23
 
-cisco-asa	fw1-1		10.1.1.1	user=fwadmin,pass=fwpass,enable=fwpass
+cisco-asa	fw1-1		1.1.1.24	user=fwadmin,pass=fwpass,enable=fwpass
 
-3com-msr        lab20-11        10.0.0.147
+3com-msr        lab20-11        1.1.1.25
 
-mikrotik        lab-rb800       10.0.0.147
+mikrotik        lab-rb800       1.1.1.25
 
-cisco-pix	lab-pix		10.0.0.1	user=pixadmin,pass=pixpass,enable=pixenable
+cisco-pix	lab-pix		1.1.1.2	user=pixadmin,pass=pixpass,enable=pixenable
 
-tellabs-msr     8800-lab        1.1.1.1
+tellabs-msr     8800-lab        1.1.1.26
 
-junos		ex4200-1	10.1.0.100
+junos		ex4200-1	1.1.1.27
 
-acme		sbc1		10.2.2.2
+acme		sbc1		1.1.1.28
 
-mediant		gateway1	11.0.0.2
+mediant		gateway1	1.1.1.29
 
-cisco-iosxr     asr9010-edge    127.0.0.1
+cisco-iosxr     asr9010-edge    1.1.1.30
 
-nec-univerge-ix ix-01           10.22.1.5
+nec-univerge-ix ix-01           1.1.1.31
 
-coriant-8600	8605		10.0.0.1
+coriant-8600	8605		1.1.1.2
 
 # "debug=off" from the default: block above suppresses the
 # <dev_id>.debug session log; override it per-device (e.g. while
 # troubleshooting a login/prompt problem) with debug=on.
-procurve	sw-lab1		10.5.0.10
+procurve	sw-lab1		1.1.1.32
 
-procurve-ssh	sw-lab2		10.5.0.11	debug=on
+procurve-ssh	sw-lab2		1.1.1.33	debug=on
 
 # "to=" overrides, for this device only, who receives the backup
 # summary e-mail (see the "email:" line in the DEFAULT OPTIONS
 # SECTION above). lab209r's backup summary goes to lab-owner@acme.com
 # instead of the globally configured recipient (who still gets the
 # status of every device, including this one).
-parks           lab209r-2	10.30.0.7	to=lab-owner@acme.com
+parks           lab209r-2	1.1.1.34	to=lab-owner@acme.com
 
 # "comment=" is a free-text note, purely for whoever reads this file
 # (not used anywhere else). Quoting is only needed here because the
 # comment itself contains a comma; without quotes, that comma would
 # be read as the start of a new option.
-riverstone	lab3101		10.1.30.3	comment="Building 3, Floor 2"
+riverstone	lab3101		1.1.1.35	comment="Building 3, Floor 2"
 
 # "site=" is a free-text site/location tag, like comment= (fetchconfig does
 # not use it). fetchconfig-web uses it for per-site access control; a device
 # with no site= is visible only to "all sites" (site 0) users. Single-byte
 # characters; quote the value if it contains a comma.
-riverstone	lab3102		10.1.30.4	site="Plant 3, Hall A",comment="core switch"
+riverstone	lab3102		1.1.1.36	site="Plant 3, Hall A",comment="core switch"

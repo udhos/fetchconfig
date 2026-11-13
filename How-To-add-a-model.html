@@ -246,6 +246,12 @@
   figure.diagram{margin:1.5rem 0;text-align:center;}
   .diagram-svg{display:block;}
   .diagram-svg svg{max-width:100%;height:auto;}
+  /* Railroad (syntax) diagrams are static SVG with black connectors and light
+     green boxes, so they sit on a light panel in BOTH themes (readable either
+     way) and scroll horizontally if a line is wide. */
+  figure.railroad{margin:1.6rem 0;}
+  figure.railroad .diagram-svg{background:#fbfbf7;border:1px solid #d9d9cf;border-radius:8px;padding:16px 14px;overflow-x:auto;text-align:left;}
+  figure.railroad figcaption{font-size:0.85rem;color:var(--text-muted);margin-top:8px;text-align:left;}
   /* keep raw mermaid source hidden until rendered */
   .mermaid:not([data-processed]){display:none;}
   .mermaid[data-processed]{display:block;}
@@ -504,10 +510,13 @@
   }
 
   @media print{
+    /* smaller, print-native type -- match the fetchconfig-web docs on paper */
+    html{font-size:10pt;}
+    body{font-size:10pt;}
     .sidebar,.mobile-bar{display:none !important;}
     .layout{display:block;}
     a{color:inherit;text-decoration:none;}
-    pre{white-space:pre-wrap;}
+    pre{font-size:8.5pt;white-space:pre-wrap;}
   }
 </style>
 
@@ -532,7 +541,7 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.78</span>
+      <span class="pill">v9.80</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
@@ -593,7 +602,7 @@
 <section id="5-skeletons">
 <div class="section-kicker">05</div>
 <h2>5. Skeletons</h2>
-<p>Both skeletons are complete, compile against 9.60, and follow the conventions of section 9. Replace the parts marked <code>&lt;&lt;...&gt;&gt;</code>.</p>
+<p>Both skeletons are complete, compile cleanly against the current release, and follow the conventions of section 9. Replace the parts marked <code>&lt;&lt;...&gt;&gt;</code>.</p>
 <h3 id="51-telnet-model">5.1 Telnet model</h3>
 <span class="file-label">perl</span>
 <pre><code>package fetchconfig::model::Acme;   # fetchconfig/model/Acme.pm
@@ -804,7 +813,7 @@ sub ssh_extra_opts {
 <section id="7-integration-checklist">
 <div class="section-kicker">07</div>
 <h2>7. Integration Checklist</h2>
-<ul><li>[ ] <code>fetchconfig/model/&lt;Name&gt;.pm</code> -- header comment states the device family, firmware observed, transport, the session dialogue, and every option (mandatory/optional).</li><li>[ ] <code>fetchconfig/model/Detector.pm</code> -- <code>use</code> line and <code>register</code> line.</li><li>[ ] <code>README</code> -- device list entry (transport, what was observed), options block (&quot;The <code>&lt;label&gt;</code> module recognizes the following options:&quot;), intro sentence if it lists device families.</li><li>[ ] <code>device_table.example</code> -- a <code>default:</code> block with every option and a sample device line.</li><li>[ ] <code>README</code> -- device-support and DEVICE OPTIONS coverage is complete. (<code>debug=</code> support is global and documented once, so do not add a per-model &quot;supports debug&quot; entry; add a note only to describe transport-specific <code>.debug</code> content, as the SSH/SNMP/web models do.)</li><li>[ ] <code>CHANGES</code> -- what, why, how verified (mock, live), and any one-time effect on existing backups.</li><li>[ ] <code>fetchconfig/Constants.pm</code> -- version bump.</li><li>[ ] <code>perl -I. -c</code> on every changed file; the whole tree compiles.</li><li>[ ] The mock replay and both live runs of section 6 pass.</li></ul>
+<ul><li>[ ] <code>fetchconfig/model/&lt;Name&gt;.pm</code> -- header comment states the device family, firmware observed, transport, the session dialogue, and every option (mandatory/optional).</li><li>[ ] <code>fetchconfig/model/Detector.pm</code> -- <code>use</code> line and <code>register</code> line.</li><li>[ ] <code>README</code> -- device list entry (transport, what was observed), options block (&quot;The <code>&lt;label&gt;</code> module recognizes the following options:&quot;), intro sentence if it lists device families.</li><li>[ ] <code>device_table.example</code> -- a <code>default:</code> block with every option and a sample device line.</li><li>[ ] <code>README</code> -- device-support and DEVICE OPTIONS coverage is complete. (<code>debug=</code> support is global and documented once, so do not add a per-model &quot;supports debug&quot; entry; add a note only to describe transport-specific <code>.debug</code> content, as the SSH/SNMP/web models do.)</li><li>[ ] SNMP inventory needs <strong>nothing</strong> in a new model: the <code>snmp_*</code> inventory options and the collector are model-independent (<code>SNMPInventory::collect</code> runs from <code>Detector::fetch_device</code> for every model, gated only by the <code>snmp_*</code> options), so a new model gets inventory for free. Do not re-document the <code>snmp_*</code> options per model -- they are documented once under README&#x27;s SNMP device inventory section. (Only <code>procurve-snmp</code>, whose <em>transport</em> is SNMP, lists <code>snmp_community</code>/<code>snmp_timeout</code>/... in its own table.)</li><li>[ ] <code>CHANGES</code> -- what, why, how verified (mock, live), and any one-time effect on existing backups.</li><li>[ ] <code>fetchconfig/Constants.pm</code> -- version bump.</li><li>[ ] <code>perl -I. -c</code> on every changed file; the whole tree compiles.</li><li>[ ] The mock replay and both live runs of section 6 pass.</li></ul>
 </section>
 <section id="8-shared-api-reference">
 <div class="section-kicker">08</div>
@@ -815,7 +824,7 @@ sub ssh_extra_opts {
 <p><strong><code>dev_option_flag($dev_opt_tab, $opt_name, $default)</code></strong> -- method. Boolean option: <code>1</code> if the value is <code>on</code> (case-insensitive), <code>0</code> otherwise; <code>$default</code> (truthy -&gt; 1) when unset. Use for <code>debug</code>, <code>changes_only</code>-style switches.</p>
 <p><strong><code>opt_trim($opt)</code></strong> -- function. Trims surrounding whitespace.</p>
 <p><strong><code>dequote_value($val)</code></strong> -- function. Removes one pair of surrounding double quotes.</p>
-<p><strong><code>mask_secrets($line)</code></strong> -- function. Returns the device-table line with <code>pass=</code>, <code>enable=</code>, <code>community=</code>, <code>password=</code> values replaced by <code>***</code>. Use it before logging any table line.</p>
+<p><strong><code>mask_secrets($line)</code></strong> -- function. Returns the device-table line with <code>pass=</code>, <code>enable=</code>, <code>community=</code>, <code>password=</code>, <code>secret=</code>, <code>key=</code>, <code>token=</code> and the SNMP secrets <code>snmp_community=</code>/<code>snmp_write_community=</code>/<code>snmp_authpass=</code>/<code>snmp_privpass=</code> values replaced by <code>***</code>. Use it before logging any table line.</p>
 <h3 id="82-logging">8.2 Logging</h3>
 <p><strong><code>log_debug($msg)</code>, <code>log_info($msg)</code>, <code>log_error($msg)</code></strong> -- methods. Emit <code>&lt;label&gt;: &lt;msg&gt;</code> at the given level through the run&#x27;s logger, with the per-device prefix that <code>fetch()</code> installed. Conventions: <code>debug</code> for every chat step (<code>trying</code>, <code>connected</code>, <code>found command prompt: [...]</code>, <code>cmd: [...]</code>, <code>found end of configuration: [...]</code>, <code>fetched: N lines</code>, <code>logged out</code>, <code>disconnected</code>); <code>info</code> for operator-relevant decisions (a transport fallback); <code>error</code> once per failure, with the device&#x27;s own text where available (<code>enable rejected by the device: [Access denied]</code>). There is no warning level; use <code>info</code> with a <code>warning:</code> prefix.</p>
 <p>The logger itself (<code>$self-&gt;{log}</code>) has <code>prefix([$new])</code>, <code>info</code>, <code>debug</code>, <code>error</code>.</p>
@@ -864,6 +873,7 @@ sub config_equal {
 <p>A backup tool reads. It must not enter configuration mode, change a setting, or save anything on the device -- not even to make its own job easier (the AudioCodes pager could have been disabled with a configuration change; the model drives the pager instead). If a device offers a <strong>session-only</strong> command for a terminal setting at the exec level (<code>terminal length 0</code>), that is acceptable; anything under a <code>configure</code> mode is not.</p>
 <h3 id="93-credentials">9.3 Credentials</h3>
 <p>Never log a password or community string; log the device-table line only through <code>mask_secrets</code>. Any file that records a session (<code>dump_log</code>, HTTP trace, SSH debug) gets <code>secure_debug_file</code> (0600) at creation. Never retry a password over a second, weaker channel after an authentication failure (see <code>MediantSBC.pm</code>&#x27;s <code>transport=auto</code> rule: fall back to telnet only when no SSH service answered).</p>
+<p>Credential options you read with <code>dev_option</code> (<code>pass</code>, <code>enable</code>, <code>user</code>, the <code>snmp_*</code> secrets) come back <strong>fully resolved</strong>: any <code>pw:</code> <code>$alias</code> is already expanded and any leading <code>\$</code>/<code>\\</code> escape or <code>&quot;&#8230;&quot;</code> quoting already applied. Use the returned value as-is with <code>print_secret</code> &#8212; never interpret <code>$</code> or <code>\</code> yourself.</p>
 <h3 id="94-volatile-lines-and-changes_only">9.4 Volatile lines and <code>changes_only</code></h3>
 <p>If the device rewrites a line on every read -- a save timestamp (<code>!!: Written by ...</code>), an uptime, <code>!Time:</code>, a re-salted password hash -- <code>changes_only</code> will never discard a backup for that model. Expose a tight regex for exactly that line as <code>config_ignore_re</code> and have <code>config_equal</code> use it (see 9.4 above); defining it there (rather than an inline regex in <code>config_equal</code>) also keeps the per-version line-delta counts (<code>lines_added</code>/<code>lines_removed</code>) ignore-aware for that model. The line is still <strong>stored</strong>; it is only ignored for the comparison and the counts. Weigh what you ignore: the maintainer chose <em>not</em> to ignore Hirschmann&#x27;s re-rendered password hashes because that would also hide a real password change.</p>
 <h3 id="95-bytes-not-characters">9.5 Bytes, not characters</h3>

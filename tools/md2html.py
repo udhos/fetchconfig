@@ -332,6 +332,14 @@ ul, ol { margin: 0 0 1em; padding-left: 2em; }
 li { margin: .2em 0; }
 input[type=checkbox] { margin-right: .4em; }
 footer { color: var(--muted); font-size: .85em; border-top: 1px solid var(--line); margin-top: 3em; padding-top: 1em; }
+@media print {
+  /* smaller, print-native type -- match the fetchconfig-web / render-doc.py docs on paper */
+  html { font-size:10pt; }
+  body { font-size:10pt; }
+  nav.toc { display:none; }
+  a { color:inherit; text-decoration:none; }
+  pre { font-size:8.5pt; white-space:pre-wrap; }
+}
 """
 
 
@@ -508,8 +516,23 @@ def to_text(md, wrap_width=None):
     while i < n:
         raw = lines[i]
         line = raw
-        # fenced code blocks: keep verbatim, indented, drop the fences
-        m = re.match(r'^\s*```', line)
+        # fenced code blocks: keep verbatim, indented, drop the fences. A
+        # ```railroad fence is an SVG-only syntax diagram -- drop its body (the SVG
+        # name + caption) and leave a short placeholder for the plain-text render.
+        m = re.match(r'^\s*```(.*)$', line)
+        if m and not in_code and m.group(1).strip().lower() == 'railroad':
+            i += 1
+            body = []
+            while i < n and not re.match(r'^\s*```', lines[i]):
+                body.append(lines[i]); i += 1
+            i += 1  # closing fence
+            name = body[0].strip() if body else ''
+            caption = ' '.join(b.strip() for b in body[1:] if b.strip())
+            out.append('[syntax diagram: %s - see the HTML documentation]' % name
+                       if name else '[syntax diagram]')
+            if caption:
+                out.append(caption)
+            continue
         if m:
             in_code = not in_code
             i += 1

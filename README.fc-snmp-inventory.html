@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fetchconfig &mdash; SNMP Inventory Probe (`fc-snmp-inventory.pl`)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbfbf9;
+    --surface:#f1f4f4;
+    --surface-2:#e9edee;
+    --border:#dde3e3;
+    --text:#141a1f;
+    --text-muted:#5b6770;
+    --text-faint:#8a949b;
+    --accent:#0e7c8c;
+    --accent-bright:#22aabb;
+    --accent-soft:#e3f3f5;
+    --danger:#c4432b;
+    --danger-soft:#fbeae6;
+    --success:#1c8a5b;
+    --success-soft:#e8f5ee;
+    --changed:#2451c4;
+    --changed-soft:#e8edfb;
+    --code-bg:#10171c;
+    --code-text:#dce8ec;
+    --code-accent:#7fe0cc;
+    --code-muted:#7f929b;
+    --radius:6px;
+    --font-sans:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace;
+    --sidebar-w:280px;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    font-family:var(--font-sans);
+    color:var(--text);
+    background:var(--bg);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  a{color:var(--accent);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{
+    outline:2px solid var(--accent-bright);
+    outline-offset:2px;
+  }
+
+  code, kbd{
+    font-family:var(--font-mono);
+    font-size:0.88em;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:0.1em 0.4em;
+    color:var(--text);
+    white-space:nowrap;
+  }
+
+  pre{
+    font-family:var(--font-mono);
+    background:var(--code-bg);
+    color:var(--code-text);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    overflow-x:auto;
+    font-size:0.86rem;
+    line-height:1.65;
+    margin:16px 0;
+    border:1px solid #05090c;
+  }
+  pre code{
+    background:none;
+    border:none;
+    padding:0;
+    white-space:pre;
+    color:inherit;
+    font-size:1em;
+  }
+  pre .c{color:var(--code-muted);} /* comment */
+  pre .s{color:var(--code-accent);} /* string / value */
+  pre .k{color:#e8b95f;} /* keyword / flag */
+
+  h1,h2,h3,h4{
+    font-family:var(--font-sans);
+    font-weight:600;
+    line-height:1.25;
+    color:var(--text);
+    letter-spacing:-0.01em;
+  }
+
+  /* ---------- Layout ---------- */
+  .layout{
+    display:flex;
+    align-items:flex-start;
+    max-width:1600px;
+    margin:0 auto;
+  }
+
+  .sidebar{
+    position:sticky;
+    top:0;
+    height:100vh;
+    width:var(--sidebar-w);
+    flex:0 0 var(--sidebar-w);
+    overflow-y:auto;
+    padding:28px 22px 40px;
+    border-right:1px solid var(--border);
+    background:var(--surface);
+  }
+
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:4px;
+  }
+  .brand-mark{
+    width:30px;height:30px;border-radius:7px;
+    background:linear-gradient(155deg,var(--accent-bright),var(--accent));
+    display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;
+  }
+  .brand-mark svg{width:17px;height:17px;}
+  .brand-name{font-weight:700;font-size:1.05rem;letter-spacing:-0.01em;}
+
+  .brand-meta{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-muted);
+    margin:6px 0 22px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .pill{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:99px;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text-muted);
+  }
+
+  .nav-group{margin-bottom:4px;}
+  .nav-group-label{
+    font-size:0.68rem;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--text-faint);
+    margin:20px 0 6px;
+    font-weight:600;
+  }
+  .nav-group:first-of-type .nav-group-label{margin-top:0;}
+
+  .sidebar nav a{
+    display:block;
+    color:var(--text-muted);
+    font-size:0.885rem;
+    padding:6px 10px;
+    border-radius:5px;
+    text-decoration:none;
+    border-left:2px solid transparent;
+    transition:background 0.12s ease, color 0.12s ease;
+  }
+  .sidebar nav a:hover{background:var(--surface-2);color:var(--text);}
+  .sidebar nav a.active{
+    color:var(--accent);
+    background:var(--accent-soft);
+    border-left-color:var(--accent-bright);
+    font-weight:500;
+  }
+
+  .main-col{
+    flex:1 1 auto;
+    min-width:0;
+    padding:0 0 120px;
+  }
+
+  .content{
+    max-width:1200px;
+    margin:0 auto;
+    padding:0 48px;
+  }
+  /* Keep flowing prose at a comfortable reading measure, but let wide
+     elements (tables, code blocks, diagrams) use the full content width so
+     they don't need a horizontal scrollbar on a wide screen. */
+  .content > p,
+  .content > ul,
+  .content > ol,
+  .content > h2,
+  .content > h3,
+  .content > h4,
+  .content > blockquote{
+    max-width:820px;
+  }
+  .content > .table-wrap,
+  .content > pre,
+  .content > .callout{
+    max-width:100%;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding:64px 48px 48px;
+    max-width:1200px;
+    margin:0 auto;
+    border-bottom:1px solid var(--border);
+  }
+  .hero-eyebrow{
+    font-family:var(--font-mono);
+    font-size:0.78rem;
+    color:var(--accent);
+    margin-bottom:14px;
+  }
+  .hero h1{
+    font-size:2.6rem;
+    margin:0 0 14px;
+    letter-spacing:-0.02em;
+    color:var(--accent);
+  }
+  .mermaid{
+    /* A mermaid block is a <pre>, so it would otherwise inherit the dark code
+       background/border/padding. Render the diagram on the page background. */
+    margin:1.5rem 0;
+    text-align:center;
+    background:transparent;
+    color:inherit;
+    border:0;
+    padding:0;
+    overflow-x:auto;
+  }
+  /* Until mermaid.js has rendered a block (it stamps data-processed on success),
+     keep the raw diagram source hidden so it is never shown as a wall of text --
+     during the CDN load, or if the runtime is blocked/unavailable. mermaid still
+     measures and renders normally while it is hidden; the element reveals itself
+     the moment it is processed. */
+  figure.diagram{margin:1.5rem 0;text-align:center;}
+  .diagram-svg{display:block;}
+  .diagram-svg svg{max-width:100%;height:auto;}
+  /* Railroad (syntax) diagrams are static SVG with black connectors and light
+     green boxes, so they sit on a light panel in BOTH themes (readable either
+     way) and scroll horizontally if a line is wide. */
+  figure.railroad{margin:1.6rem 0;}
+  figure.railroad .diagram-svg{background:#fbfbf7;border:1px solid #d9d9cf;border-radius:8px;padding:16px 14px;overflow-x:auto;text-align:left;}
+  figure.railroad figcaption{font-size:0.85rem;color:var(--text-muted);margin-top:8px;text-align:left;}
+  /* keep raw mermaid source hidden until rendered */
+  .mermaid:not([data-processed]){display:none;}
+  .mermaid[data-processed]{display:block;}
+  /* once live mermaid has rendered, hide the embedded SVG fallback */
+  .mermaid[data-processed] + .diagram-svg{display:none;}
+  .hero p.lede{
+    font-size:1.13rem;
+    color:var(--text-muted);
+    max-width:640px;
+    margin:0 0 28px;
+    line-height:1.6;
+  }
+  .hero-stats{
+    display:flex;
+    gap:36px;
+    flex-wrap:wrap;
+    margin-top:8px;
+  }
+  .hero-stat .num{
+    font-family:var(--font-mono);
+    font-size:1.6rem;
+    font-weight:600;
+    color:var(--text);
+    display:block;
+  }
+  .hero-stat .label{
+    font-size:0.8rem;
+    color:var(--text-muted);
+  }
+
+  /* ---------- Sections ---------- */
+  section{
+    padding:56px 0 8px;
+    border-bottom:1px solid var(--border);
+  }
+  section:last-of-type{border-bottom:none;}
+
+  .section-kicker{
+    font-family:var(--font-mono);
+    font-size:0.75rem;
+    color:var(--text-faint);
+    margin-bottom:8px;
+  }
+  h2{
+    font-size:1.65rem;
+    margin:0 0 18px;
+    scroll-margin-top:24px;
+  }
+  h3{
+    font-size:1.18rem;
+    margin:34px 0 12px;
+    scroll-margin-top:24px;
+  }
+  h4{
+    font-size:0.98rem;
+    margin:22px 0 8px;
+    color:var(--text);
+    scroll-margin-top:24px;
+  }
+  p{margin:0 0 14px;color:var(--text);}
+  section p, section li{color:var(--text);}
+  ul,ol{padding-left:1.3em;margin:0 0 16px;}
+  li{margin-bottom:6px;}
+  .prose-muted{color:var(--text-muted);}
+
+  .file-label{
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:var(--text-faint);
+    margin:18px 0 -8px;
+    display:block;
+  }
+
+  /* ---------- Callouts ---------- */
+  .callout{
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:18px 0;
+    border:1px solid var(--border);
+    background:var(--surface);
+    font-size:0.93rem;
+  }
+  .callout-title{
+    font-weight:600;
+    font-size:0.82rem;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    margin-bottom:6px;
+    display:flex;
+    align-items:center;
+    gap:7px;
+  }
+  .callout.warn{background:var(--danger-soft);border-color:#f0c9bd;}
+  .callout.warn .callout-title{color:var(--danger);}
+  .callout.note{background:var(--accent-soft);border-color:#bfe4e9;}
+  .callout.note .callout-title{color:var(--accent);}
+  .callout p:last-child{margin-bottom:0;}
+
+  /* ---------- Tables ---------- */
+  .table-wrap{overflow-x:auto;margin:18px 0 26px;border:1px solid var(--border);border-radius:var(--radius);}
+  table{
+    border-collapse:collapse;
+    width:100%;
+    font-size:0.87rem;
+  }
+  caption{
+    text-align:left;
+    font-size:0.78rem;
+    color:var(--text-muted);
+    padding:8px 14px;
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+    caption-side:top;
+  }
+  th,td{
+    text-align:left;
+    padding:9px 14px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+  }
+  thead th{
+    background:var(--surface);
+    font-weight:600;
+    font-size:0.76rem;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--text-muted);
+    white-space:nowrap;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--surface);}
+  td code, th code{white-space:nowrap;}
+  .req-yes{color:var(--danger);font-weight:600;font-size:0.82rem;}
+  .req-opt{color:var(--text-faint);font-size:0.82rem;}
+  .req-dash{color:var(--border);}
+  .matrix th, .matrix td{text-align:center;}
+  .matrix td:first-child, .matrix th:first-child{text-align:left;}
+  .matrix{font-size:0.8rem;}
+  .matrix code{white-space:nowrap;}
+
+  /* ---------- Flag reference ---------- */
+  .flag-card{
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    margin:14px 0;
+    background:var(--bg);
+  }
+  .flag-card + .flag-card{margin-top:10px;}
+  .flag-head{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:8px;
+  }
+  .flag-tag{
+    font-family:var(--font-mono);
+    font-weight:600;
+    background:var(--code-bg);
+    color:var(--code-accent);
+    border-radius:4px;
+    padding:3px 9px;
+    font-size:0.86rem;
+  }
+  .flag-req{
+    font-size:0.72rem;
+    font-family:var(--font-mono);
+    color:var(--text-faint);
+  }
+  .flag-card p{margin-bottom:8px;font-size:0.92rem;color:var(--text-muted);}
+  .flag-card p:last-child{margin-bottom:0;}
+  .exit-list{list-style:none;padding:0;margin:8px 0 0;font-family:var(--font-mono);font-size:0.82rem;}
+  .exit-list li{display:flex;gap:10px;margin-bottom:3px;}
+  .exit-list .code{color:var(--text);font-weight:600;min-width:1.6em;}
+
+  /* ---------- Footnotes ---------- */
+  sup.fnref{font-size:0.68em;line-height:0;vertical-align:super;}
+  sup.fnref a{color:var(--accent);text-decoration:none;font-weight:600;padding:0 1px;}
+  sup.fnref a:hover{text-decoration:underline;}
+  .footnotes{margin-top:1.4rem;padding-top:0.9rem;border-top:1px solid var(--border);
+             font-size:0.9rem;color:var(--text-muted);}
+  .footnote{margin:0 0 0.55rem 0;padding-left:1.9em;text-indent:-1.9em;line-height:1.5;}
+  .footnote:last-child{margin-bottom:0;}
+  .footnote .fnnum{display:inline-block;min-width:1.5em;text-indent:0;
+                   font-weight:600;color:var(--text);font-family:var(--font-mono);}
+
+  /* ---------- Color swatches (email notif) ---------- */
+  .swatches{display:flex;gap:14px;flex-wrap:wrap;margin:18px 0 22px;}
+  .swatch{
+    display:flex;align-items:center;gap:9px;
+    border:1px solid var(--border);border-radius:99px;
+    padding:5px 12px 5px 6px;font-size:0.82rem;background:var(--surface);
+  }
+  .swatch .dot{width:16px;height:16px;border-radius:50%;flex:0 0 auto;border:1px solid rgba(0,0,0,0.12);}
+
+  /* ---------- Toggle tabs (Installation) ---------- */
+  .tabs{margin:18px 0;}
+  input.tab-input{position:absolute;opacity:0;pointer-events:none;}
+  .tab-labels{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+  .tab-labels label{
+    font-size:0.88rem;font-weight:500;color:var(--text-muted);
+    padding:9px 16px;cursor:pointer;border-bottom:2px solid transparent;
+    margin-bottom:-1px;
+  }
+  .tab-panel{display:none;}
+  #tab-unix:checked ~ .tab-labels label[for="tab-unix"],
+  #tab-win:checked ~ .tab-labels label[for="tab-win"]{
+    color:var(--accent);border-bottom-color:var(--accent-bright);
+  }
+  #tab-unix:checked ~ .tab-panels #panel-unix,
+  #tab-win:checked ~ .tab-panels #panel-win{display:block;}
+
+  /* ---------- Device support grid ---------- */
+  .device-grid td:first-child code{font-weight:600;}
+
+  /* ---------- Footer ---------- */
+  .page-footer{
+    max-width:1200px;margin:0 auto;padding:40px 48px 60px;
+    color:var(--text-faint);font-size:0.82rem;
+  }
+  .page-footer a{color:var(--text-muted);}
+
+  /* ---------- Mobile nav ---------- */
+  .nav-toggle{display:none;}
+  .mobile-bar{display:none;}
+
+  @media (max-width: 900px){
+    .sidebar{
+      position:fixed;
+      inset:0 auto 0 0;
+      z-index:40;
+      transform:translateX(-100%);
+      transition:transform 0.2s ease;
+      box-shadow:2px 0 24px rgba(0,0,0,0.15);
+    }
+    .nav-toggle:checked ~ .layout .sidebar{transform:translateX(0);}
+    .mobile-bar{
+      display:flex;align-items:center;justify-content:space-between;
+      position:sticky;top:0;z-index:30;
+      background:var(--bg);border-bottom:1px solid var(--border);
+      padding:14px 20px;
+    }
+    .mobile-bar .brand{margin:0;}
+    .mobile-bar label{
+      font-family:var(--font-mono);font-size:0.8rem;
+      border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;
+    }
+    .content{padding:0 22px;}
+    .hero{padding:36px 22px 32px;}
+    .hero h1{font-size:2rem;}
+    .page-footer{padding:32px 22px 48px;}
+  }
+  @media (min-width:901px){
+    .mobile-bar{display:none !important;}
+  }
+
+  @media print{
+    /* smaller, print-native type -- match the fetchconfig-web docs on paper */
+    html{font-size:10pt;}
+    body{font-size:10pt;}
+    .sidebar,.mobile-bar{display:none !important;}
+    .layout{display:block;}
+    a{color:inherit;text-decoration:none;}
+    pre{font-size:8.5pt;white-space:pre-wrap;}
+  }
+</style>
+
+</head>
+<body>
+
+<input type="checkbox" id="nav-toggle" class="nav-toggle">
+
+<div class="mobile-bar">
+  <div class="brand">
+    <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+    <span class="brand-name">fetchconfig</span>
+  </div>
+  <label for="nav-toggle">Menu</label>
+</div>
+
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 6h10M4 18h7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="brand-name">fetchconfig</span>
+    </div>
+    <div class="brand-meta">
+      <span class="pill">v9.80</span>
+      <span class="pill">GPL&#8209;2.0+</span>
+    </div>
+
+    <nav>
+<div class="nav-group"><div class="nav-group-label">Overview</div><a href="#what-it-is-for">What it is for</a><a href="#requirements">Requirements</a></div>
+<div class="nav-group"><div class="nav-group-label">Usage</div><a href="#usage">Usage</a></div>
+<div class="nav-group"><div class="nav-group-label">Output</div><a href="#output-sections">Output sections</a></div>
+<div class="nav-group"><div class="nav-group-label">Onboarding</div><a href="#onboarding-a-device-the-inventory-does-not-recognise-yet">Onboarding a device the inventory does not recognise yet</a></div>
+<div class="nav-group"><div class="nav-group-label">Syntax</div><a href="#directive-syntax">Directive syntax</a></div>
+    </nav>
+  </aside>
+
+  <div class="main-col">
+
+    <div class="hero">
+      <h1 class="hero-title">fetchconfig &#8212; SNMP Inventory Probe (`fc-snmp-inventory.pl`)</h1>
+      <p class="lede"><code>tools/fc-snmp-inventory.pl</code> is a read-only command-line probe for a device&#x27;s SNMP inventory data. It drives fetchconfig&#x27;s <strong>own</strong> collector (<code>fetchconfig::SNMPInventory</code>), so the result it prints is exactly what the SNMP inventory feature would store for the device &#8212; the same vendor registry, the same model/serial/OS derivation, the same <code>snmp-profiles.conf</code> directives, stack-entity promotion and <code>sysName</code>/<code>sysLocation</code>/<code>sysContact</code>. It also prints the raw system group and ENTITY-MIB table it reads, so you can compare <em>what is on the wire</em> against <em>what the engine makes of it</em>.</p>
+      
+      
+    </div>
+
+    <div class="content">
+
+<p>Use it when onboarding a device or a new vendor: run it once, read the <code>profile</code> section to see which (if any) <code>snmp-profiles.conf</code> directive is driving each value, and add a directive if something comes back blank.</p>
+<section id="what-it-is-for">
+<div class="section-kicker">01</div>
+<h2>What it is for</h2>
+<p>The SNMP inventory feature (see the inventory section of the main <code>README</code>) runs during a backup and records make / model / serial / OS version, the device&#x27;s own <code>sysName</code>/<code>sysLocation</code>/<code>sysContact</code>, and the physical component (stack member / FRU) list into the fetchconfig-web dashboard. Most devices are covered out of the box by the ENTITY-MIB; some need a one-line <code>snmp-profiles.conf</code> directive to fill or correct a value.</p>
+<p>This probe is the tool for working that out. Because it calls the real collector rather than re-implementing the logic, its <code>derived</code> output can never drift from what fetchconfig actually stores.</p>
+<div class="callout note"><div class="callout-title">Read-only</div><p>The probe only issues SNMP GET / GET-NEXT / GET-BULK requests. It never writes to the device, and &#8212; unlike a backup run &#8212; it never spools to the dashboard database. Secrets (the community string, SNMPv3 passphrases) are never printed.</p></div>
+</section>
+<section id="requirements">
+<div class="section-kicker">02</div>
+<h2>Requirements</h2>
+<ul><li><code>Net::SNMP</code> (the same module fetchconfig&#x27;s <code>procurve-snmp</code> model uses).</li><li>The fetchconfig tree: the probe lives in <code>tools/</code> and loads the engine modules from the parent directory, so run it from an unpacked fetchconfig distribution.</li></ul>
+</section>
+<section id="usage">
+<div class="section-kicker">03</div>
+<h2>Usage</h2>
+<pre><code>tools/fc-snmp-inventory.pl [options] HOST</code></pre>
+<div class="table-wrap"><table><thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td><code>-c, --community STR</code></td><td><code>public</code></td><td>SNMPv1/v2c community</td></tr><tr><td><code>-v, --version VER</code></td><td><code>2c</code></td><td>SNMP version: <code>1</code>, <code>2c</code> or <code>3</code></td></tr><tr><td><code>-p, --port N</code></td><td><code>161</code></td><td>UDP port</td></tr><tr><td><code>-t, --timeout SEC</code></td><td><code>5</code></td><td>per-request timeout</td></tr><tr><td><code>-r, --retries N</code></td><td><code>1</code></td><td>retries</td></tr><tr><td><code>-i, --inventory</code></td><td>off</td><td>also list every physical component from the ENTITY-MIB (can be long)</td></tr><tr><td><code>-b, --brief</code></td><td>off</td><td>with <code>-i</code>: only components that carry a model or serial (drops containers / sensors / fans / bare ports)</td></tr><tr><td><code>-P, --profile FILE</code></td><td>shipped</td><td>path to the <code>snmp-profiles.conf</code> to use (default: the one beside <code>fetchconfig.pl</code>)</td></tr><tr><td><code>-V, --script-version</code></td><td></td><td>print the probe and engine versions and exit</td></tr><tr><td><code>-h, --help</code></td><td></td><td>usage</td></tr></tbody></table></div>
+<p>For SNMPv3 (<code>-v 3</code>):</p>
+<div class="table-wrap"><table><thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td><code>-u, --user NAME</code></td><td></td><td>security name (required)</td></tr><tr><td><code>-l, --level LEVEL</code></td><td><code>authNoPriv</code></td><td><code>noAuthNoPriv</code> / <code>authNoPriv</code> / <code>authPriv</code></td></tr><tr><td><code>-a, --authproto P</code></td><td><code>sha</code></td><td><code>md5</code> / <code>sha</code></td></tr><tr><td><code>-A, --authpass STR</code></td><td></td><td>auth passphrase</td></tr><tr><td><code>-x, --privproto P</code></td><td><code>aes</code></td><td><code>des</code> / <code>aes</code></td></tr><tr><td><code>-X, --privpass STR</code></td><td></td><td>privacy passphrase</td></tr></tbody></table></div>
+<p>Exit status: <code>0</code> ok, <code>2</code> usage error, <code>1</code> SNMP session error.</p>
+<h3 id="examples">Examples</h3>
+<pre><code><span class="c"># v2c, default community</span>
+tools/fc-snmp-inventory.pl -v 2c -c public 10.0.0.1
+
+<span class="c"># v2c with the full ENTITY component listing</span>
+tools/fc-snmp-inventory.pl -v 2c -c public -i switch01.example.net
+
+<span class="c"># SNMPv3 authPriv</span>
+tools/fc-snmp-inventory.pl -v 3 -u monitor -l authPriv -a sha -A s3cret \
+                           -x aes -X s3cret2 rtr01.example.net</code></pre>
+</section>
+<section id="output-sections">
+<div class="section-kicker">04</div>
+<h2>Output sections</h2>
+<p>Output is <code>key = value</code> lines, grouped. The first three sections are the <strong>raw</strong> device view; the last two are the <strong>engine</strong> view.</p>
+<ul><li><strong><code>system</code></strong> &#8212; the SNMPv2-MIB system group as read (<code>sysDescr</code>, <code>sysObjectID</code> with its decoded enterprise number and the vendor name <em>from the engine registry</em>, <code>sysUpTime</code>, <code>sysName</code>, <code>sysContact</code>, <code>sysLocation</code>).</li><li><strong><code>entity</code></strong> &#8212; the ENTITY-MIB <code>entPhysicalTable</code>: whether it is implemented, the row count, and a summary of each chassis. With <code>-i</code> (optionally <code>-b</code>) a full per-component listing follows in its own section.</li><li><strong><code>profile</code></strong> &#8212; which <code>snmp-profiles.conf</code> directives match this device&#x27;s <code>sysObjectID</code> / enterprise: the resolved <code>vendor</code>, any <code>model</code> map, and for each of <code>model</code> / <code>serial</code> / <code>os_version</code> any <code>override</code> or <code>oid</code> directive (noting a <code>.*</code> column walk), plus any <code>members</code> directive and its columns. This is the onboarding view &#8212; it tells you what config is producing the result, and where a blank means &quot;no directive matched&quot;.</li><li><strong><code>derived</code></strong> &#8212; the engine&#x27;s result: <code>status</code>, <code>manufacturer</code>, <code>model</code>, <code>serial</code>, <code>os_version</code>, <code>sysname</code> / <code>syslocation</code> / <code>syscontact</code>, <code>member_count</code>, <code>member_serials</code> and <code>hw_set</code>. This is exactly what the inventory feature stores.</li><li><strong><code>components</code></strong> &#8212; the per-member / per-part list the engine builds (member index, class, position/name, model, serial, software / firmware / hardware revision, and which one is primary) &#8212; the same rows the dashboard&#x27;s <em>Components</em> table shows.</li></ul>
+<div class="callout note"><div class="callout-title">Provenance</div><p>The <code>derived</code> values are authoritative (straight from the collector); read the <code>profile</code>, <code>entity</code> and (with <code>-i</code>) the component listing above them to see where each value came from.</p></div>
+<h3 id="worked-example--an-aruba-virtual-controller">Worked example &#8212; an Aruba virtual controller</h3>
+<p>An Aruba Instant AP acting as the virtual controller implements no ENTITY-MIB, so the raw <code>entity</code> section reports it absent &#8212; yet the engine still resolves a full inventory from the system group and the vendor profile:</p>
+<pre><code><span class="c"># --- system ---</span>
+system.sysDescr = AOS-8 (MODEL: 515), Version 8.13.3.1-8.13.3.1 LSR
+system.sysObjectID = 1.3.6.1.4.1.14823.1.2.71
+system.sysObjectID.enterprise = 14823
+system.sysObjectID.vendor = Aruba Networks
+system.sysName = apgmg10 E3 Stern GF
+system.sysLocation = Waghaeusel
+
+<span class="c"># --- entity (ENTITY-MIB entPhysicalTable) ---</span>
+entity.available = no (ENTITY-MIB not implemented or not permitted: empty)
+
+<span class="c"># --- profile (snmp-profiles.conf directives matching this device) ---</span>
+profile.vendor = Aruba Networks
+profile.override.model = source=sysdescr  regex=MODEL:\s*([^)]+)
+profile.members = serial=...2.1.1.4  model=...2.1.1.6  name=...2.1.1.2  os=-
+
+<span class="c"># --- derived (fetchconfig engine result; ...) ---</span>
+derived.status = successful
+derived.manufacturer = Aruba Networks
+derived.model = 515
+derived.serial = CNT0KD504G
+derived.os_version = 8.13.3.1-8.13.3.1
+derived.member_count = 3
+
+<span class="c"># --- components (3 stored by fetchconfig) ---</span>
+component.3.comp_position = apgmg10 E3 Stern GF
+component.3.model = AP-515
+component.3.serial = CNT0KD504G
+component.3.primary = yes</code></pre>
+<p>The model came from the <code>override model 14823 sysdescr</code> rule, the OS from the built-in <code>sysDescr</code> &quot;Version ...&quot; heuristic, and each member AP from the <code>members 14823 ...</code> rule that walks the <code>AI-AP-MIB</code> table &#8212; one chassis member per AP, with the controller&#x27;s own entry (its name matches <code>sysName</code>) marked primary.</p>
+</section>
+<section id="onboarding-a-device-the-inventory-does-not-recognise-yet">
+<div class="section-kicker">05</div>
+<h2>Onboarding a device the inventory does not recognise yet</h2>
+<p>When a value comes back <code>(unavailable)</code> or <code>unknown</code>, the <code>profile</code> section shows whether a directive matched. Add the matching directive to <code>snmp-profiles.conf</code> (see its header comments for the full grammar), then re-run the probe to confirm. The common cases:</p>
+<ul><li><strong>Vendor is <code>unknown</code></strong> &#8212; add <code>vendor &lt;enterprise&gt; &lt;name&gt;</code> (the probe prints the enterprise number in the <code>system</code> section).</li><li><strong>Model / serial / OS is wrong</strong> (a device has an ENTITY-MIB but reports a placeholder, e.g. a chipset codename) &#8212; add <code>override &lt;field&gt; &lt;enterprise&gt; &lt;source&gt; [&lt;regex&gt;]</code> to replace it from <code>sysDescr</code>, another ENTITY field, or a numeric OID.</li><li><strong>Model / serial / OS is blank on an ENTITY-less device</strong> &#8212; add <code>override &lt;field&gt; &lt;enterprise&gt; sysdescr [&lt;regex&gt;]</code> (value is in <code>sysDescr</code>) or <code>oid &lt;field&gt; &lt;enterprise&gt; &lt;OID&gt; [&lt;regex&gt;]</code> (value is in a vendor private MIB). If the value lives in a table column whose index is per-device (e.g. a MAC-indexed serial), end the OID with <code>.*</code> and the engine walks the column to its first row.</li><li><strong>The device aggregates others</strong> (a controller listing member units, like an Aruba virtual controller or a stack that does not expose ENTITY) &#8212; add <code>members &lt;enterprise&gt; serial=&lt;col&gt; [model=&lt;col&gt;] [name=&lt;col&gt;] [os=&lt;col&gt;]</code> and each table row becomes a chassis member.</li></ul>
+<p>All of these are keyed by enterprise number or <code>sysObjectID</code>, so a directive only affects the devices it matches; no other model is touched.</p>
+<div class="callout note"><div class="callout-title">Not everything is exposed</div><p>Some devices simply do not publish a value over SNMP. For example, Aruba Instant APs expose no per-AP software, firmware or hardware-revision object (only a single cluster-wide <code>aiVirtualControllerVersion</code>), so those columns stay blank for the member APs however the profile is written.</p></div>
+</section>
+<section id="directive-syntax">
+<div class="section-kicker">06</div>
+<h2>Directive syntax</h2>
+<p>The five <code>snmp-profiles.conf</code> directives as syntax (railroad) diagrams: follow each path left&#8594;right; a branch is an alternative, and an item a line can skip past is optional. See the file&#x27;s own header for the matching tiers and the lexical rules (comments, whitespace, and the silent-skip of a malformed line).</p>
+<figure class="diagram railroad"><div class="diagram-svg"><svg class="railroad-diagram" height="122" viewBox="0 0 543.0 122" width="543.0" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g transform="translate(.5 .5)">
+<g>
+<path d="M20 21v20m10 -20v20m-10 -10h20" /></g><path d="M40 31h10" /><g class="terminal ">
+<path d="M50 31h0.0" /><path d="M121.0 31h0.0" /><rect height="22" rx="10" ry="10" width="71" x="50" y="20"></rect><text x="85.5" y="35">vendor</text></g><path d="M121.0 31h10" /><g>
+<path d="M131.0 31h0.0" /><path d="M344.0 31h0.0" /><path d="M131.0 31h20" /><g class="non-terminal ">
+<path d="M151.0 31h4.25" /><path d="M319.75 31h4.25" /><rect height="22" width="164.5" x="155.25" y="20"></rect><text x="237.5" y="35">enterprise number</text></g><path d="M324.0 31h20" /><path d="M131.0 31a10 10 0 0 1 10 10v10a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M151.0 61h29.75" /><path d="M294.25 61h29.75" /><rect height="22" width="113.5" x="180.75" y="50"></rect><text x="237.5" y="65">sysObjectID</text></g><path d="M324.0 61a10 10 0 0 0 10 -10v-10a10 10 0 0 1 10 -10" /><path d="M131.0 31a10 10 0 0 1 10 10v40a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M151.0 91h0.0" /><path d="M324.0 91h0.0" /><rect height="22" width="173" x="151" y="80"></rect><text x="237.5" y="95">sysObjectID prefix</text></g><path d="M324.0 91a10 10 0 0 0 10 -10v-40a10 10 0 0 1 10 -10" /></g><path d="M344.0 31h10" /><g class="non-terminal ">
+<path d="M354.0 31h0.0" /><path d="M493.0 31h0.0" /><rect height="22" width="139" x="354" y="20"></rect><text x="423.5" y="35">canonical name</text></g><path d="M493.0 31h10" /><path d="M 503.0 31 h 20 m -10 -10 v 20 m 10 -20 v 20"></path></g><style>/* <![CDATA[ */
+	svg.railroad-diagram {
+		background-color:hsl(30,20%,95%);
+	}
+	svg.railroad-diagram path {
+		stroke-width:3;
+		stroke:black;
+		fill:rgba(0,0,0,0);
+	}
+	svg.railroad-diagram text {
+		font:bold 14px monospace;
+		text-anchor:middle;
+	}
+	svg.railroad-diagram text.label{
+		text-anchor:start;
+	}
+	svg.railroad-diagram text.comment{
+		font:italic 12px monospace;
+	}
+	svg.railroad-diagram rect{
+		stroke-width:3;
+		stroke:black;
+		fill:hsl(120,100%,90%);
+	}
+	svg.railroad-diagram rect.group-box {
+		stroke: gray;
+		stroke-dasharray: 10 5;
+		fill: none;
+	}
+
+/* ]]> */
+</style></svg></div><figcaption><code>vendor</code> &#8212; the canonical vendor name for an enterprise number or <code>sysObjectID</code>; used when ENTITY <code>entPhysicalMfgName</code> is empty.</figcaption></figure>
+<figure class="diagram railroad"><div class="diagram-svg"><svg class="railroad-diagram" height="92" viewBox="0 0 500.5 92" width="500.5" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g transform="translate(.5 .5)">
+<g>
+<path d="M20 21v20m10 -20v20m-10 -10h20" /></g><path d="M40 31h10" /><g class="terminal ">
+<path d="M50 31h0.0" /><path d="M112.5 31h0.0" /><rect height="22" rx="10" ry="10" width="62.5" x="50" y="20"></rect><text x="81.25" y="35">model</text></g><path d="M112.5 31h10" /><g>
+<path d="M122.5 31h0.0" /><path d="M335.5 31h0.0" /><path d="M122.5 31h20" /><g class="non-terminal ">
+<path d="M142.5 31h29.75" /><path d="M285.75 31h29.75" /><rect height="22" width="113.5" x="172.25" y="20"></rect><text x="229" y="35">sysObjectID</text></g><path d="M315.5 31h20" /><path d="M122.5 31a10 10 0 0 1 10 10v10a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M142.5 61h0.0" /><path d="M315.5 61h0.0" /><rect height="22" width="173" x="142.5" y="50"></rect><text x="229" y="65">sysObjectID prefix</text></g><path d="M315.5 61a10 10 0 0 0 10 -10v-10a10 10 0 0 1 10 -10" /></g><path d="M335.5 31h10" /><g class="non-terminal ">
+<path d="M345.5 31h0.0" /><path d="M450.5 31h0.0" /><rect height="22" width="105" x="345.5" y="20"></rect><text x="398" y="35">model name</text></g><path d="M450.5 31h10" /><path d="M 460.5 31 h 20 m -10 -10 v 20 m 10 -20 v 20"></path></g><style>/* <![CDATA[ */
+	svg.railroad-diagram {
+		background-color:hsl(30,20%,95%);
+	}
+	svg.railroad-diagram path {
+		stroke-width:3;
+		stroke:black;
+		fill:rgba(0,0,0,0);
+	}
+	svg.railroad-diagram text {
+		font:bold 14px monospace;
+		text-anchor:middle;
+	}
+	svg.railroad-diagram text.label{
+		text-anchor:start;
+	}
+	svg.railroad-diagram text.comment{
+		font:italic 12px monospace;
+	}
+	svg.railroad-diagram rect{
+		stroke-width:3;
+		stroke:black;
+		fill:hsl(120,100%,90%);
+	}
+	svg.railroad-diagram rect.group-box {
+		stroke: gray;
+		stroke-dasharray: 10 5;
+		fill: none;
+	}
+
+/* ]]> */
+</style></svg></div><figcaption><code>model</code> &#8212; a last-resort model name by <code>sysObjectID</code>, used only when ENTITY carries neither a model nor a descr.</figcaption></figure>
+<figure class="diagram railroad"><div class="diagram-svg"><svg class="railroad-diagram" height="122" viewBox="0 0 894.5 122" width="894.5" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g transform="translate(.5 .5)">
+<g>
+<path d="M20 21v20m10 -20v20m-10 -10h20" /></g><path d="M40 31h10" /><g class="terminal ">
+<path d="M50 31h0.0" /><path d="M95.5 31h0.0" /><rect height="22" rx="10" ry="10" width="45.5" x="50" y="20"></rect><text x="72.75" y="35">oid</text></g><path d="M95.5 31h10" /><g>
+<path d="M105.5 31h0.0" /><path d="M250.5 31h0.0" /><path d="M105.5 31h20" /><g class="terminal ">
+<path d="M125.5 31h21.25" /><path d="M209.25 31h21.25" /><rect height="22" rx="10" ry="10" width="62.5" x="146.75" y="20"></rect><text x="178" y="35">model</text></g><path d="M230.5 31h20" /><path d="M105.5 31a10 10 0 0 1 10 10v10a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M125.5 61h17.0" /><path d="M213.5 61h17.0" /><rect height="22" rx="10" ry="10" width="71" x="142.5" y="50"></rect><text x="178" y="65">serial</text></g><path d="M230.5 61a10 10 0 0 0 10 -10v-10a10 10 0 0 1 10 -10" /><path d="M105.5 31a10 10 0 0 1 10 10v40a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M125.5 91h0.0" /><path d="M230.5 91h0.0" /><rect height="22" rx="10" ry="10" width="105" x="125.5" y="80"></rect><text x="178" y="95">os_version</text></g><path d="M230.5 91a10 10 0 0 0 10 -10v-40a10 10 0 0 1 10 -10" /></g><g>
+<path d="M250.5 31h0.0" /><path d="M463.5 31h0.0" /><path d="M250.5 31h20" /><g class="non-terminal ">
+<path d="M270.5 31h4.25" /><path d="M439.25 31h4.25" /><rect height="22" width="164.5" x="274.75" y="20"></rect><text x="357" y="35">enterprise number</text></g><path d="M443.5 31h20" /><path d="M250.5 31a10 10 0 0 1 10 10v10a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M270.5 61h29.75" /><path d="M413.75 61h29.75" /><rect height="22" width="113.5" x="300.25" y="50"></rect><text x="357" y="65">sysObjectID</text></g><path d="M443.5 61a10 10 0 0 0 10 -10v-10a10 10 0 0 1 10 -10" /><path d="M250.5 31a10 10 0 0 1 10 10v40a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M270.5 91h0.0" /><path d="M443.5 91h0.0" /><rect height="22" width="173" x="270.5" y="80"></rect><text x="357" y="95">sysObjectID prefix</text></g><path d="M443.5 91a10 10 0 0 0 10 -10v-40a10 10 0 0 1 10 -10" /></g><path d="M463.5 31h10" /><g>
+<path d="M473.5 31h0.0" /><path d="M674.0 31h0.0" /><g class="non-terminal ">
+<path d="M473.5 31h0.0" /><path d="M587.0 31h0.0" /><rect height="22" width="113.5" x="473.5" y="20"></rect><text x="530.25" y="35">numeric OID</text></g><path d="M587.0 31h10" /><g>
+<path d="M597.0 31h0.0" /><path d="M674.0 31h0.0" /><path d="M597.0 31h20" /><g>
+<path d="M617.0 31h37.0" /></g><path d="M654.0 31h20" /><path d="M597.0 31a10 10 0 0 1 10 10v0a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M617.0 51h0.0" /><path d="M654.0 51h0.0" /><rect height="22" rx="10" ry="10" width="37" x="617" y="40"></rect><text x="635.5" y="55">.*</text></g><path d="M654.0 51a10 10 0 0 0 10 -10v0a10 10 0 0 1 10 -10" /></g></g><path d="M674.0 31h10" /><g>
+<path d="M684.0 31h0.0" /><path d="M854.5 31h0.0" /><path d="M684.0 31h20" /><g>
+<path d="M704.0 31h130.5" /></g><path d="M834.5 31h20" /><path d="M684.0 31a10 10 0 0 1 10 10v0a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M704.0 51h0.0" /><path d="M834.5 51h0.0" /><rect height="22" width="130.5" x="704" y="40"></rect><text x="769.25" y="55">extract regex</text></g><path d="M834.5 51a10 10 0 0 0 10 -10v0a10 10 0 0 1 10 -10" /></g><path d="M 854.5 31 h 20 m -10 -10 v 20 m 10 -20 v 20"></path></g><style>/* <![CDATA[ */
+	svg.railroad-diagram {
+		background-color:hsl(30,20%,95%);
+	}
+	svg.railroad-diagram path {
+		stroke-width:3;
+		stroke:black;
+		fill:rgba(0,0,0,0);
+	}
+	svg.railroad-diagram text {
+		font:bold 14px monospace;
+		text-anchor:middle;
+	}
+	svg.railroad-diagram text.label{
+		text-anchor:start;
+	}
+	svg.railroad-diagram text.comment{
+		font:italic 12px monospace;
+	}
+	svg.railroad-diagram rect{
+		stroke-width:3;
+		stroke:black;
+		fill:hsl(120,100%,90%);
+	}
+	svg.railroad-diagram rect.group-box {
+		stroke: gray;
+		stroke-dasharray: 10 5;
+		fill: none;
+	}
+
+/* ]]> */
+</style></svg></div><figcaption><code>oid</code> &#8212; fill an <em>empty</em> headline field from a vendor private-MIB OID on an ENTITY-less device. A trailing <code>.*</code> marks a table-column base, walked (GETNEXT) to its first row.</figcaption></figure>
+<figure class="diagram railroad"><div class="diagram-svg"><svg class="railroad-diagram" height="202" viewBox="0 0 957.0 202" width="957.0" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g transform="translate(.5 .5)">
+<g>
+<path d="M20 21v20m10 -20v20m-10 -10h20" /></g><path d="M40 31h10" /><g class="terminal ">
+<path d="M50 31h0.0" /><path d="M138.0 31h0.0" /><rect height="22" rx="10" ry="10" width="88" x="50" y="20"></rect><text x="94" y="35">override</text></g><path d="M138.0 31h10" /><g>
+<path d="M148.0 31h0.0" /><path d="M293.0 31h0.0" /><path d="M148.0 31h20" /><g class="terminal ">
+<path d="M168.0 31h21.25" /><path d="M251.75 31h21.25" /><rect height="22" rx="10" ry="10" width="62.5" x="189.25" y="20"></rect><text x="220.5" y="35">model</text></g><path d="M273.0 31h20" /><path d="M148.0 31a10 10 0 0 1 10 10v10a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M168.0 61h17.0" /><path d="M256.0 61h17.0" /><rect height="22" rx="10" ry="10" width="71" x="185" y="50"></rect><text x="220.5" y="65">serial</text></g><path d="M273.0 61a10 10 0 0 0 10 -10v-10a10 10 0 0 1 10 -10" /><path d="M148.0 31a10 10 0 0 1 10 10v40a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M168.0 91h0.0" /><path d="M273.0 91h0.0" /><rect height="22" rx="10" ry="10" width="105" x="168" y="80"></rect><text x="220.5" y="95">os_version</text></g><path d="M273.0 91a10 10 0 0 0 10 -10v-40a10 10 0 0 1 10 -10" /></g><g>
+<path d="M293.0 31h0.0" /><path d="M506.0 31h0.0" /><path d="M293.0 31h20" /><g class="non-terminal ">
+<path d="M313.0 31h4.25" /><path d="M481.75 31h4.25" /><rect height="22" width="164.5" x="317.25" y="20"></rect><text x="399.5" y="35">enterprise number</text></g><path d="M486.0 31h20" /><path d="M293.0 31a10 10 0 0 1 10 10v10a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M313.0 61h29.75" /><path d="M456.25 61h29.75" /><rect height="22" width="113.5" x="342.75" y="50"></rect><text x="399.5" y="65">sysObjectID</text></g><path d="M486.0 61a10 10 0 0 0 10 -10v-10a10 10 0 0 1 10 -10" /><path d="M293.0 31a10 10 0 0 1 10 10v40a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M313.0 91h0.0" /><path d="M486.0 91h0.0" /><rect height="22" width="173" x="313" y="80"></rect><text x="399.5" y="95">sysObjectID prefix</text></g><path d="M486.0 91a10 10 0 0 0 10 -10v-40a10 10 0 0 1 10 -10" /></g><g>
+<path d="M506.0 31h0.0" /><path d="M746.5 31h0.0" /><path d="M506.0 31h20" /><g class="terminal ">
+<path d="M526.0 31h56.25" /><path d="M670.25 31h56.25" /><rect height="22" rx="10" ry="10" width="88" x="582.25" y="20"></rect><text x="626.25" y="35">sysdescr</text></g><path d="M726.5 31h20" /><path d="M506.0 31a10 10 0 0 1 10 10v10a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M526.0 61h56.25" /><path d="M670.25 61h56.25" /><rect height="22" rx="10" ry="10" width="88" x="582.25" y="50"></rect><text x="626.25" y="65">entdescr</text></g><path d="M726.5 61a10 10 0 0 0 10 -10v-10a10 10 0 0 1 10 -10" /><path d="M506.0 31a10 10 0 0 1 10 10v40a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M526.0 91h56.25" /><path d="M670.25 91h56.25" /><rect height="22" rx="10" ry="10" width="88" x="582.25" y="80"></rect><text x="626.25" y="95">entmodel</text></g><path d="M726.5 91a10 10 0 0 0 10 -10v-40a10 10 0 0 1 10 -10" /><path d="M506.0 31a10 10 0 0 1 10 10v70a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M526.0 121h52.0" /><path d="M674.5 121h52.0" /><rect height="22" rx="10" ry="10" width="96.5" x="578" y="110"></rect><text x="626.25" y="125">entserial</text></g><path d="M726.5 121a10 10 0 0 0 10 -10v-70a10 10 0 0 1 10 -10" /><path d="M506.0 31a10 10 0 0 1 10 10v100a10 10 0 0 0 10 10" /><g>
+<path d="M526.0 151h0.0" /><path d="M726.5 151h0.0" /><g class="non-terminal ">
+<path d="M526.0 151h0.0" /><path d="M639.5 151h0.0" /><rect height="22" width="113.5" x="526" y="140"></rect><text x="582.75" y="155">numeric OID</text></g><path d="M639.5 151h10" /><g>
+<path d="M649.5 151h0.0" /><path d="M726.5 151h0.0" /><path d="M649.5 151h20" /><g>
+<path d="M669.5 151h37.0" /></g><path d="M706.5 151h20" /><path d="M649.5 151a10 10 0 0 1 10 10v0a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M669.5 171h0.0" /><path d="M706.5 171h0.0" /><rect height="22" rx="10" ry="10" width="37" x="669.5" y="160"></rect><text x="688" y="175">.*</text></g><path d="M706.5 171a10 10 0 0 0 10 -10v0a10 10 0 0 1 10 -10" /></g></g><path d="M726.5 151a10 10 0 0 0 10 -10v-100a10 10 0 0 1 10 -10" /></g><g>
+<path d="M746.5 31h0.0" /><path d="M917.0 31h0.0" /><path d="M746.5 31h20" /><g>
+<path d="M766.5 31h130.5" /></g><path d="M897.0 31h20" /><path d="M746.5 31a10 10 0 0 1 10 10v0a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M766.5 51h0.0" /><path d="M897.0 51h0.0" /><rect height="22" width="130.5" x="766.5" y="40"></rect><text x="831.75" y="55">extract regex</text></g><path d="M897.0 51a10 10 0 0 0 10 -10v0a10 10 0 0 1 10 -10" /></g><path d="M 917.0 31 h 20 m -10 -10 v 20 m 10 -20 v 20"></path></g><style>/* <![CDATA[ */
+	svg.railroad-diagram {
+		background-color:hsl(30,20%,95%);
+	}
+	svg.railroad-diagram path {
+		stroke-width:3;
+		stroke:black;
+		fill:rgba(0,0,0,0);
+	}
+	svg.railroad-diagram text {
+		font:bold 14px monospace;
+		text-anchor:middle;
+	}
+	svg.railroad-diagram text.label{
+		text-anchor:start;
+	}
+	svg.railroad-diagram text.comment{
+		font:italic 12px monospace;
+	}
+	svg.railroad-diagram rect{
+		stroke-width:3;
+		stroke:black;
+		fill:hsl(120,100%,90%);
+	}
+	svg.railroad-diagram rect.group-box {
+		stroke: gray;
+		stroke-dasharray: 10 5;
+		fill: none;
+	}
+
+/* ]]> */
+</style></svg></div><figcaption><code>override</code> &#8212; <em>replace</em> a present-but-wrong (or missing) headline field, from <code>sysDescr</code>, an ENTITY field, or a numeric OID (a <code>.*</code> suffix walks a column). Consulted before the ENTITY value.</figcaption></figure>
+<figure class="diagram railroad"><div class="diagram-svg"><svg class="railroad-diagram" height="122" viewBox="0 0 1291.0 122" width="1291.0" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g transform="translate(.5 .5)">
+<g>
+<path d="M20 21v20m10 -20v20m-10 -10h20" /></g><path d="M40 31h10" /><g class="terminal ">
+<path d="M50 31h0.0" /><path d="M129.5 31h0.0" /><rect height="22" rx="10" ry="10" width="79.5" x="50" y="20"></rect><text x="89.75" y="35">members</text></g><path d="M129.5 31h10" /><g>
+<path d="M139.5 31h0.0" /><path d="M352.5 31h0.0" /><path d="M139.5 31h20" /><g class="non-terminal ">
+<path d="M159.5 31h4.25" /><path d="M328.25 31h4.25" /><rect height="22" width="164.5" x="163.75" y="20"></rect><text x="246" y="35">enterprise number</text></g><path d="M332.5 31h20" /><path d="M139.5 31a10 10 0 0 1 10 10v10a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M159.5 61h29.75" /><path d="M302.75 61h29.75" /><rect height="22" width="113.5" x="189.25" y="50"></rect><text x="246" y="65">sysObjectID</text></g><path d="M332.5 61a10 10 0 0 0 10 -10v-10a10 10 0 0 1 10 -10" /><path d="M139.5 31a10 10 0 0 1 10 10v40a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M159.5 91h0.0" /><path d="M332.5 91h0.0" /><rect height="22" width="173" x="159.5" y="80"></rect><text x="246" y="95">sysObjectID prefix</text></g><path d="M332.5 91a10 10 0 0 0 10 -10v-40a10 10 0 0 1 10 -10" /></g><path d="M352.5 31h10" /><g>
+<path d="M362.5 31h0.0" /><path d="M567.0 31h0.0" /><g class="terminal ">
+<path d="M362.5 31h0.0" /><path d="M442.0 31h0.0" /><rect height="22" rx="10" ry="10" width="79.5" x="362.5" y="20"></rect><text x="402.25" y="35">serial=</text></g><path d="M442.0 31h10" /><path d="M452.0 31h10" /><g class="non-terminal ">
+<path d="M462.0 31h0.0" /><path d="M567.0 31h0.0" /><rect height="22" width="105" x="462" y="20"></rect><text x="514.5" y="35">column OID</text></g></g><path d="M567.0 31h10" /><g>
+<path d="M577.0 31h0.0" /><path d="M813.0 31h0.0" /><path d="M577.0 31h20" /><g>
+<path d="M597.0 31h196.0" /></g><path d="M793.0 31h20" /><path d="M577.0 31a10 10 0 0 1 10 10v0a10 10 0 0 0 10 10" /><g>
+<path d="M597.0 51h0.0" /><path d="M793.0 51h0.0" /><g class="terminal ">
+<path d="M597.0 51h0.0" /><path d="M668.0 51h0.0" /><rect height="22" rx="10" ry="10" width="71" x="597" y="40"></rect><text x="632.5" y="55">model=</text></g><path d="M668.0 51h10" /><path d="M678.0 51h10" /><g class="non-terminal ">
+<path d="M688.0 51h0.0" /><path d="M793.0 51h0.0" /><rect height="22" width="105" x="688" y="40"></rect><text x="740.5" y="55">column OID</text></g></g><path d="M793.0 51a10 10 0 0 0 10 -10v0a10 10 0 0 1 10 -10" /></g><g>
+<path d="M813.0 31h0.0" /><path d="M1040.5 31h0.0" /><path d="M813.0 31h20" /><g>
+<path d="M833.0 31h187.5" /></g><path d="M1020.5 31h20" /><path d="M813.0 31a10 10 0 0 1 10 10v0a10 10 0 0 0 10 10" /><g>
+<path d="M833.0 51h0.0" /><path d="M1020.5 51h0.0" /><g class="terminal ">
+<path d="M833.0 51h0.0" /><path d="M895.5 51h0.0" /><rect height="22" rx="10" ry="10" width="62.5" x="833" y="40"></rect><text x="864.25" y="55">name=</text></g><path d="M895.5 51h10" /><path d="M905.5 51h10" /><g class="non-terminal ">
+<path d="M915.5 51h0.0" /><path d="M1020.5 51h0.0" /><rect height="22" width="105" x="915.5" y="40"></rect><text x="968" y="55">column OID</text></g></g><path d="M1020.5 51a10 10 0 0 0 10 -10v0a10 10 0 0 1 10 -10" /></g><g>
+<path d="M1040.5 31h0.0" /><path d="M1251.0 31h0.0" /><path d="M1040.5 31h20" /><g>
+<path d="M1060.5 31h170.5" /></g><path d="M1231.0 31h20" /><path d="M1040.5 31a10 10 0 0 1 10 10v0a10 10 0 0 0 10 10" /><g>
+<path d="M1060.5 51h0.0" /><path d="M1231.0 51h0.0" /><g class="terminal ">
+<path d="M1060.5 51h0.0" /><path d="M1106.0 51h0.0" /><rect height="22" rx="10" ry="10" width="45.5" x="1060.5" y="40"></rect><text x="1083.25" y="55">os=</text></g><path d="M1106.0 51h10" /><path d="M1116.0 51h10" /><g class="non-terminal ">
+<path d="M1126.0 51h0.0" /><path d="M1231.0 51h0.0" /><rect height="22" width="105" x="1126" y="40"></rect><text x="1178.5" y="55">column OID</text></g></g><path d="M1231.0 51a10 10 0 0 0 10 -10v0a10 10 0 0 1 10 -10" /></g><path d="M 1251.0 31 h 20 m -10 -10 v 20 m 10 -20 v 20"></path></g><style>/* <![CDATA[ */
+	svg.railroad-diagram {
+		background-color:hsl(30,20%,95%);
+	}
+	svg.railroad-diagram path {
+		stroke-width:3;
+		stroke:black;
+		fill:rgba(0,0,0,0);
+	}
+	svg.railroad-diagram text {
+		font:bold 14px monospace;
+		text-anchor:middle;
+	}
+	svg.railroad-diagram text.label{
+		text-anchor:start;
+	}
+	svg.railroad-diagram text.comment{
+		font:italic 12px monospace;
+	}
+	svg.railroad-diagram rect{
+		stroke-width:3;
+		stroke:black;
+		fill:hsl(120,100%,90%);
+	}
+	svg.railroad-diagram rect.group-box {
+		stroke: gray;
+		stroke-dasharray: 10 5;
+		fill: none;
+	}
+
+/* ]]> */
+</style></svg></div><figcaption><code>members</code> &#8212; record one chassis member per row of a vendor member table (e.g. an Aruba virtual controller&#x27;s AP list); the <code>serial=</code> column enumerates the members, the others join by the per-row index.</figcaption></figure>
+<h3 id="how-a-field-is-resolved">How a field is resolved</h3>
+<p>Where each headline field (<code>model</code> / <code>serial</code> / <code>os_version</code>) comes from, and when the profile directives are consulted:</p>
+<figure class="diagram"><pre class="mermaid">flowchart TD
+  A[&quot;SNMP system group answers?&quot;] --&gt;|no| F[&quot;inventory = failed&quot;]
+  A --&gt;|yes| B{&quot;ENTITY-MIB&lt;br/&gt;entPhysicalTable?&quot;}
+  B --&gt;|&quot;chassis present&quot;| C[&quot;full derivation&quot;]
+  B --&gt;|&quot;only stack(11) entries&quot;| S[&quot;promote stack &#8594; chassis&quot;] --&gt; C
+  B --&gt;|&quot;none&quot;| E[&quot;ENTITY-less headline&quot;]
+  C --&gt; C1[&quot;field = override &#183; ENTITY value &#183; model-map&quot;]
+  E --&gt; E1[&quot;field = override &#183; oid &#183; model-map &#183; sysDescr heuristic&lt;br/&gt;members &#8594; one chassis component per row&quot;]
+  C1 --&gt; G[&quot;store headline + components&quot;]
+  E1 --&gt; G</pre><div class="diagram-svg"><svg id="my-svg" width="100%" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" class="flowchart" style="max-width: 634.879px; background-color: transparent;" viewBox="0 0 634.87890625 838.21875" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#my-svg{font-family:IBM Plex Sans,ui-sans-serif,sans-serif;font-size:14px;fill:#000000;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#my-svg .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#my-svg .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#my-svg .error-icon{fill:#552222;}#my-svg .error-text{fill:#552222;stroke:#552222;}#my-svg .edge-thickness-normal{stroke-width:1px;}#my-svg .edge-thickness-thick{stroke-width:3.5px;}#my-svg .edge-pattern-solid{stroke-dasharray:0;}#my-svg .edge-thickness-invisible{stroke-width:0;fill:none;}#my-svg .edge-pattern-dashed{stroke-dasharray:3;}#my-svg .edge-pattern-dotted{stroke-dasharray:2;}#my-svg .marker{fill:#666;stroke:#666;}#my-svg .marker.cross{stroke:#666;}#my-svg svg{font-family:IBM Plex Sans,ui-sans-serif,sans-serif;font-size:14px;}#my-svg p{margin:0;}#my-svg .label{font-family:IBM Plex Sans,ui-sans-serif,sans-serif;color:#000000;}#my-svg .cluster-label text{fill:#333;}#my-svg .cluster-label span{color:#333;}#my-svg .cluster-label span p{background-color:transparent;}#my-svg .label text,#my-svg span{fill:#000000;color:#000000;}#my-svg .node rect,#my-svg .node circle,#my-svg .node ellipse,#my-svg .node polygon,#my-svg .node path{fill:#eee;stroke:#999;stroke-width:1px;}#my-svg .rough-node .label text,#my-svg .node .label text,#my-svg .image-shape .label,#my-svg .icon-shape .label{text-anchor:middle;}#my-svg .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#my-svg .rough-node .label,#my-svg .node .label,#my-svg .image-shape .label,#my-svg .icon-shape .label{text-align:center;}#my-svg .node.clickable{cursor:pointer;}#my-svg .root .anchor path{fill:#666!important;stroke-width:0;stroke:#666;}#my-svg .arrowheadPath{fill:#333333;}#my-svg .edgePath .path{stroke:#666;stroke-width:1px;}#my-svg .flowchart-link{stroke:#666;fill:none;}#my-svg .edgeLabel{background-color:white;text-align:center;}#my-svg .edgeLabel p{background-color:white;}#my-svg .edgeLabel rect{opacity:0.5;background-color:white;fill:white;}#my-svg .labelBkg{background-color:rgba(255, 255, 255, 0.5);}#my-svg .cluster rect{fill:hsl(0, 0%, 98.9215686275%);stroke:#707070;stroke-width:1px;}#my-svg .cluster text{fill:#333;}#my-svg .cluster span{color:#333;}#my-svg div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:IBM Plex Sans,ui-sans-serif,sans-serif;font-size:12px;background:hsl(-160, 0%, 93.3333333333%);border:1px solid #707070;border-radius:2px;pointer-events:none;z-index:100;}#my-svg .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#000000;}#my-svg rect.text{fill:none;stroke-width:0;}#my-svg .icon-shape,#my-svg .image-shape{background-color:white;text-align:center;}#my-svg .icon-shape p,#my-svg .image-shape p{background-color:white;padding:2px;}#my-svg .icon-shape .label rect,#my-svg .image-shape .label rect{opacity:0.5;background-color:white;fill:white;}#my-svg .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#my-svg .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#my-svg .node .neo-node{stroke:#999;}#my-svg [data-look="neo"].node rect,#my-svg [data-look="neo"].cluster rect,#my-svg [data-look="neo"].node polygon{stroke:url(#my-svg-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#my-svg [data-look="neo"].swimlane.cluster rect{filter:none;}#my-svg [data-look="neo"].node path{stroke:url(#my-svg-gradient);stroke-width:1px;}#my-svg [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#my-svg [data-look="neo"].node .neo-line path{stroke:#999;filter:none;}#my-svg [data-look="neo"].node circle{stroke:url(#my-svg-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#my-svg [data-look="neo"].node circle .state-start{fill:#000000;}#my-svg [data-look="neo"].icon-shape .icon{fill:url(#my-svg-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#my-svg [data-look="neo"].icon-shape .icon-neo path{stroke:url(#my-svg-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#my-svg :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}</style><g><marker id="my-svg_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="my-svg_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="my-svg_flowchart-v2-pointEnd-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="11.5" refY="7" markerUnits="userSpaceOnUse" markerWidth="10.5" markerHeight="14" orient="auto"><path d="M 0 0 L 11.5 7 L 0 14 z" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="my-svg_flowchart-v2-pointStart-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="1" refY="7" markerUnits="userSpaceOnUse" markerWidth="11.5" markerHeight="14" orient="auto"><polygon points="0,7 11.5,14 11.5,0" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="my-svg_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="my-svg_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"/></marker><marker id="my-svg_flowchart-v2-circleEnd-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refY="5" refX="12.25" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="my-svg_flowchart-v2-circleStart-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-2" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"/></marker><marker id="my-svg_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"/></marker><marker id="my-svg_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"/></marker><marker id="my-svg_flowchart-v2-crossEnd-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="17.7" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5;"/></marker><marker id="my-svg_flowchart-v2-crossStart-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="-3.5" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5; stroke-dasharray: 1, 0;"/></marker><g class="root"><g class="clusters"/><g class="edgePaths"><path d="M121.019,80L117.394,85.917C113.769,91.833,106.519,103.667,102.894,126.518C99.27,149.37,99.27,183.24,99.27,200.174L99.27,217.109" id="my-svg-L_A_F_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_A_F_0" data-points="W3sieCI6MTIxLjAxODcxMTc1Njk5MzAxLCJ5Ijo4MH0seyJ4Ijo5OS4yNjk1MzEyNSwieSI6MTE1LjV9LHsieCI6OTkuMjY5NTMxMjUsInkiOjIyMS4xMDkzNzV9XQ==" data-look="classic" marker-end="url(#my-svg_flowchart-v2-pointEnd)"/><path d="M238.432,80L254.104,85.917C269.776,91.833,301.12,103.667,316.793,114.833C332.465,126,332.465,136.5,332.465,141.75L332.465,147" id="my-svg-L_A_B_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_A_B_0" data-points="W3sieCI6MjM4LjQzMTczNjIzMjUxNzUsInkiOjgwfSx7IngiOjMzMi40NjQ4NDM3NSwieSI6MTE1LjV9LHsieCI6MzMyLjQ2NDg0Mzc1LCJ5IjoxNTF9XQ==" data-look="classic" marker-end="url(#my-svg_flowchart-v2-pointEnd)"/><path d="M267.909,277.663L233.242,294.339C198.575,311.015,129.24,344.367,94.573,371.209C59.906,398.052,59.906,418.385,59.906,436.969C59.906,455.552,59.906,472.385,69.763,484.722C79.62,497.059,99.334,504.9,109.19,508.82L119.047,512.74" id="my-svg-L_B_C_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_B_C_0" data-points="W3sieCI6MjY3LjkwODkyNDQ4NzkxMTEsInkiOjI3Ny42NjI4MzA3Mzc5MTExfSx7IngiOjU5LjkwNjI1LCJ5IjozNzcuNzE4NzV9LHsieCI6NTkuOTA2MjUsInkiOjQzOC43MTg3NX0seyJ4Ijo1OS45MDYyNSwieSI6NDg5LjIxODc1fSx7IngiOjEyMi43NjQwMDA2MTg4MTE4OCwieSI6NTE0LjIxODc1fV0=" data-look="classic" marker-end="url(#my-svg_flowchart-v2-pointEnd)"/><path d="M298.332,308.086L291.889,319.692C285.446,331.297,272.559,354.508,266.115,371.363C259.672,388.219,259.672,398.719,259.672,403.969L259.672,409.219" id="my-svg-L_B_S_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_B_S_0" data-points="W3sieCI6Mjk4LjMzMjM3NTYzNTE4OTM1LCJ5IjozMDguMDg2MjgxODg1MTg5MzV9LHsieCI6MjU5LjY3MTg3NSwieSI6Mzc3LjcxODc1fSx7IngiOjI1OS42NzE4NzUsInkiOjQxMy4yMTg3NX1d" data-look="classic" marker-end="url(#my-svg_flowchart-v2-pointEnd)"/><path d="M259.672,464.219L259.672,468.385C259.672,472.552,259.672,480.885,254.214,488.839C248.755,496.792,237.839,504.365,232.381,508.152L226.922,511.939" id="my-svg-L_S_C_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S_C_0" data-points="W3sieCI6MjU5LjY3MTg3NSwieSI6NDY0LjIxODc1fSx7IngiOjI1OS42NzE4NzUsInkiOjQ4OS4yMTg3NX0seyJ4IjoyMjMuNjM1NzUxODU2NDM1NjYsInkiOjUxNC4yMTg3NX1d" data-look="classic" marker-end="url(#my-svg_flowchart-v2-pointEnd)"/><path d="M385.657,289.027L404.194,303.809C422.731,318.591,459.805,348.155,478.342,373.103C496.879,398.052,496.879,418.385,496.879,436.969C496.879,455.552,496.879,472.385,496.879,484.302C496.879,496.219,496.879,503.219,496.879,506.719L496.879,510.219" id="my-svg-L_B_E_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_B_E_0" data-points="W3sieCI6Mzg1LjY1Njk4OTQ4OTE1NDU3LCJ5IjoyODkuMDI2NjA0MjYwODQ1NDN9LHsieCI6NDk2Ljg3ODkwNjI1LCJ5IjozNzcuNzE4NzV9LHsieCI6NDk2Ljg3ODkwNjI1LCJ5Ijo0MzguNzE4NzV9LHsieCI6NDk2Ljg3ODkwNjI1LCJ5Ijo0ODkuMjE4NzV9LHsieCI6NDk2Ljg3ODkwNjI1LCJ5Ijo1MTQuMjE4NzV9XQ==" data-look="classic" marker-end="url(#my-svg_flowchart-v2-pointEnd)"/><path d="M186.879,565.219L186.879,569.385C186.879,573.552,186.879,581.885,186.879,593.052C186.879,604.219,186.879,618.219,186.879,625.219L186.879,632.219" id="my-svg-L_C_C1_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_C_C1_0" data-points="W3sieCI6MTg2Ljg3ODkwNjI1LCJ5Ijo1NjUuMjE4NzV9LHsieCI6MTg2Ljg3ODkwNjI1LCJ5Ijo1OTAuMjE4NzV9LHsieCI6MTg2Ljg3ODkwNjI1LCJ5Ijo2MzYuMjE4NzV9XQ==" data-look="classic" marker-end="url(#my-svg_flowchart-v2-pointEnd)"/><path d="M496.879,565.219L496.879,569.385C496.879,573.552,496.879,581.885,496.879,589.552C496.879,597.219,496.879,604.219,496.879,607.719L496.879,611.219" id="my-svg-L_E_E1_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_E_E1_0" data-points="W3sieCI6NDk2Ljg3ODkwNjI1LCJ5Ijo1NjUuMjE4NzV9LHsieCI6NDk2Ljg3ODkwNjI1LCJ5Ijo1OTAuMjE4NzV9LHsieCI6NDk2Ljg3ODkwNjI1LCJ5Ijo2MTUuMjE4NzV9XQ==" data-look="classic" marker-end="url(#my-svg_flowchart-v2-pointEnd)"/><path d="M186.879,708.219L186.879,715.885C186.879,723.552,186.879,738.885,205.023,750.574C223.167,762.263,259.455,770.308,277.599,774.331L295.743,778.353" id="my-svg-L_C1_G_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_C1_G_0" data-points="W3sieCI6MTg2Ljg3ODkwNjI1LCJ5Ijo3MDguMjE4NzV9LHsieCI6MTg2Ljg3ODkwNjI1LCJ5Ijo3NTQuMjE4NzV9LHsieCI6Mjk5LjY0NzcwMjY2MDg5MTA3LCJ5Ijo3NzkuMjE4NzV9XQ==" data-look="classic" marker-end="url(#my-svg_flowchart-v2-pointEnd)"/><path d="M496.879,729.219L496.879,733.385C496.879,737.552,496.879,745.885,490.664,753.87C484.449,761.854,472.02,769.49,465.805,773.307L459.591,777.125" id="my-svg-L_E1_G_0" class="edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_E1_G_0" data-points="W3sieCI6NDk2Ljg3ODkwNjI1LCJ5Ijo3MjkuMjE4NzV9LHsieCI6NDk2Ljg3ODkwNjI1LCJ5Ijo3NTQuMjE4NzV9LHsieCI6NDU2LjE4MjM1NjEyNjIzNzYsInkiOjc3OS4yMTg3NX1d" data-look="classic" marker-end="url(#my-svg_flowchart-v2-pointEnd)"/></g><g class="edgeLabels"><g class="edgeLabel" transform="translate(99.26953125, 115.5)"><g class="label" data-id="L_A_F_0" transform="translate(-8.3359375, -10.5)"><foreignObject width="16.671875" height="21"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>no</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(332.46484375, 115.5)"><g class="label" data-id="L_A_B_0" transform="translate(-11.578125, -10.5)"><foreignObject width="23.15625" height="21"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>yes</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(59.90625, 438.71875)"><g class="label" data-id="L_B_C_0" transform="translate(-51.90625, -10.5)"><foreignObject width="103.8125" height="21"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>chassis present</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(259.671875, 377.71875)"><g class="label" data-id="L_B_S_0" transform="translate(-69.25, -10.5)"><foreignObject width="138.5" height="21"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>only stack(11) entries</p></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_S_C_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(496.87890625, 438.71875)"><g class="label" data-id="L_B_E_0" transform="translate(-16.5546875, -10.5)"><foreignObject width="33.109375" height="21"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"><p>none</p></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_C_C1_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_E_E1_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_C1_G_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_E1_G_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel"></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default" id="my-svg-flowchart-A-0" data-look="classic" transform="translate(143.07421875, 44)"><rect class="basic label-container" style="" x="-130" y="-36" width="260" height="72"/><g class="label" style="" transform="translate(-100, -21)"><rect/><foreignObject width="200" height="42"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel"><p>SNMP system group answers?</p></span></div></foreignObject></g></g><g class="node default" id="my-svg-flowchart-F-1" data-look="classic" transform="translate(99.26953125, 246.609375)"><rect class="basic label-container" style="" x="-87.5859375" y="-25.5" width="175.171875" height="51"/><g class="label" style="" transform="translate(-57.5859375, -10.5)"><rect/><foreignObject width="115.171875" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>inventory = failed</p></span></div></foreignObject></g></g><g class="node default" id="my-svg-flowchart-B-3" data-look="classic" transform="translate(332.46484375, 246.609375)"><polygon points="95.609375,0 191.21875,-95.609375 95.609375,-191.21875 0,-95.609375" class="label-container" transform="translate(-95.109375, 95.609375)"/><g class="label" style="" transform="translate(-59.609375, -21)"><rect/><foreignObject width="119.21875" height="42"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>ENTITY-MIB<br />entPhysicalTable?</p></span></div></foreignObject></g></g><g class="node default" id="my-svg-flowchart-C-5" data-look="classic" transform="translate(186.87890625, 539.71875)"><rect class="basic label-container" style="" x="-75.046875" y="-25.5" width="150.09375" height="51"/><g class="label" style="" transform="translate(-45.046875, -10.5)"><rect/><foreignObject width="90.09375" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>full derivation</p></span></div></foreignObject></g></g><g class="node default" id="my-svg-flowchart-S-7" data-look="classic" transform="translate(259.671875, 438.71875)"><rect class="basic label-container" style="" x="-112.859375" y="-25.5" width="225.71875" height="51"/><g class="label" style="" transform="translate(-82.859375, -10.5)"><rect/><foreignObject width="165.71875" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>promote stack &#8594; chassis</p></span></div></foreignObject></g></g><g class="node default" id="my-svg-flowchart-E-10" data-look="classic" transform="translate(496.87890625, 539.71875)"><rect class="basic label-container" style="" x="-101.203125" y="-25.5" width="202.40625" height="51"/><g class="label" style="" transform="translate(-71.203125, -10.5)"><rect/><foreignObject width="142.40625" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>ENTITY-less headline</p></span></div></foreignObject></g></g><g class="node default" id="my-svg-flowchart-C1-12" data-look="classic" transform="translate(186.87890625, 672.21875)"><rect class="basic label-container" style="" x="-130" y="-36" width="260" height="72"/><g class="label" style="" transform="translate(-100, -21)"><rect/><foreignObject width="200" height="42"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel"><p>field = override &#183; ENTITY value &#183; model-map</p></span></div></foreignObject></g></g><g class="node default" id="my-svg-flowchart-E1-14" data-look="classic" transform="translate(496.87890625, 672.21875)"><rect class="basic label-container" style="" x="-130" y="-57" width="260" height="114"/><g class="label" style="" transform="translate(-100, -42)"><rect/><foreignObject width="200" height="84"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel"><p>field = override &#183; oid &#183; model-map &#183; sysDescr heuristic<br />members &#8594; one chassis component per row</p></span></div></foreignObject></g></g><g class="node default" id="my-svg-flowchart-G-16" data-look="classic" transform="translate(414.671875, 804.71875)"><rect class="basic label-container" style="" x="-126.4453125" y="-25.5" width="252.890625" height="51"/><g class="label" style="" transform="translate(-96.4453125, -10.5)"><rect/><foreignObject width="192.890625" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel"><p>store headline + components</p></span></div></foreignObject></g></g></g></g></g><defs><filter id="my-svg-drop-shadow" height="130%" width="130%"><feDropShadow dx="4" dy="4" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"/></filter></defs><defs><filter id="my-svg-drop-shadow-small" height="150%" width="150%"><feDropShadow dx="2" dy="2" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"/></filter></defs><linearGradient id="my-svg-gradient" gradientUnits="objectBoundingBox" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="hsl(0, 0%, 83.3333333333%)" stop-opacity="1"/><stop offset="100%" stop-color="hsl(0, 0%, 88.9215686275%)" stop-opacity="1"/></linearGradient><style>/* Injected into every Mermaid SVG by gen-mermaid-svg.py (mmdc --cssFile) so the
+   measuring font (mmdc) and the display font are identical everywhere: the SVG
+   is self-contained and renders the same offline (AIX) and on any device, with
+   no font substitution and no clipped labels. Subset: IBM Plex Sans 400, ASCII.
+   Regenerate the base64 with: pyftsubset ibm-plex-sans-latin-400-normal.woff2
+   --unicodes=U+0020-007E --flavor=woff2  then base64 -w0. */
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:400;font-display:swap;src:url(data:font/woff2;base64,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) format('woff2');}
+</style></svg></div></figure>
+<p>(<code>&#183;</code> = first match wins, left to right. <code>override</code> is always consulted first; a <code>.*</code> OID or a <code>members</code> table is walked only on the ENTITY-less path.)</p>
+</section>
+
+    </div>
+
+    <div class="page-footer">
+      Generated from the fetchconfig README &middot; Rainer Tammer &middot; GPL&#8209;2.0-or-later
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // Scroll-spy: highlight the sidebar link matching the section in view.
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar nav a'));
+    // Resolve by id, not by CSS selector: section ids can start with a digit
+    // (version numbers in CHANGES, numbered sections in DEVELOPER), which is a
+    // valid HTML id but an invalid CSS id selector, so passing the href to
+    // querySelector would throw. getElementById has no such restriction.
+    var sections = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); }).filter(Boolean);
+    if (!('IntersectionObserver' in window) || !sections.length) return;
+    var current = null;
+    function setActive(id){
+      if (id === current) return;
+      current = id;
+      links.forEach(function(a){ a.classList.toggle('active', a.getAttribute('href') === '#' + id); });
+    }
+    var observer = new IntersectionObserver(function(entries){
+      var visible = entries.filter(function(e){ return e.isIntersecting; });
+      if (visible.length){
+        visible.sort(function(a,b){ return a.boundingClientRect.top - b.boundingClientRect.top; });
+        setActive(visible[0].target.id);
+      }
+    }, { rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+    sections.forEach(function(s){ observer.observe(s); });
+    setActive(sections[0].id);
+    var toggle = document.getElementById('nav-toggle');
+    links.forEach(function(a){ a.addEventListener('click', function(){ if (toggle) toggle.checked = false; }); });
+  })();
+</script>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", themeVariables: { fontFamily: "'IBM Plex Sans', ui-sans-serif, sans-serif", fontSize: "14px" } });
+</script>
+</body>
+</html>

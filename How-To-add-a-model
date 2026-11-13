@@ -72,7 +72,7 @@ Everything else -- options, repository I/O, comparison, expiry, logging, SSH tra
 5. Skeletons
 ============
 
-Both skeletons are complete, compile against 9.60, and follow the conventions of section 9. Replace the parts marked <<...>>.
+Both skeletons are complete, compile cleanly against the current release, and follow the conventions of section 9. Replace the parts marked <<...>>.
 
 5.1 Telnet model
 ----------------
@@ -323,6 +323,7 @@ Keep the .debug file of a successful run with the model's source: it is the only
 - [ ] README -- device list entry (transport, what was observed), options block ("The <label> module recognizes the following options:"), intro sentence if it lists device families.
 - [ ] device_table.example -- a default: block with every option and a sample device line.
 - [ ] README -- device-support and DEVICE OPTIONS coverage is complete. (debug= support is global and documented once, so do not add a per-model "supports debug" entry; add a note only to describe transport-specific .debug content, as the SSH/SNMP/web models do.)
+- [ ] SNMP inventory needs nothing in a new model: the snmp_* inventory options and the collector are model-independent (SNMPInventory::collect runs from Detector::fetch_device for every model, gated only by the snmp_* options), so a new model gets inventory for free. Do not re-document the snmp_* options per model -- they are documented once under README's SNMP device inventory section. (Only procurve-snmp, whose transport is SNMP, lists snmp_community/snmp_timeout/... in its own table.)
 - [ ] CHANGES -- what, why, how verified (mock, live), and any one-time effect on existing backups.
 - [ ] fetchconfig/Constants.pm -- version bump.
 - [ ] perl -I. -c on every changed file; the whole tree compiles.
@@ -344,7 +345,7 @@ opt_trim($opt) -- function. Trims surrounding whitespace.
 
 dequote_value($val) -- function. Removes one pair of surrounding double quotes.
 
-mask_secrets($line) -- function. Returns the device-table line with pass=, enable=, community=, password= values replaced by ***. Use it before logging any table line.
+mask_secrets($line) -- function. Returns the device-table line with pass=, enable=, community=, password=, secret=, key=, token= and the SNMP secrets snmp_community=/snmp_write_community=/snmp_authpass=/snmp_privpass= values replaced by ***. Use it before logging any table line.
 
 8.2 Logging
 -----------
@@ -438,6 +439,8 @@ A backup tool reads. It must not enter configuration mode, change a setting, or 
 ---------------
 
 Never log a password or community string; log the device-table line only through mask_secrets. Any file that records a session (dump_log, HTTP trace, SSH debug) gets secure_debug_file (0600) at creation. Never retry a password over a second, weaker channel after an authentication failure (see MediantSBC.pm's transport=auto rule: fall back to telnet only when no SSH service answered).
+
+Credential options you read with dev_option (pass, enable, user, the snmp_* secrets) come back fully resolved: any pw: $alias is already expanded and any leading \$/\\ escape or "..." quoting already applied. Use the returned value as-is with print_secret  -  never interpret $ or \ yourself.
 
 9.4 Volatile lines and changes_only
 -----------------------------------

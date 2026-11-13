@@ -98,21 +98,25 @@ Loaded only when a "db:" line is set in the device table (default: level). With 
 An old `DBD::Pg` talks to an old server fine; the writer targets PostgreSQL 8.2+.
 The schema and the writer role are created by fetchconfig-web, not the engine.
 
-### SNMP+TFTP model (procurve-snmp)
+### SNMP (procurve-snmp model + SNMP device inventory)
 
 | Module | 5.26 | 5.28 | 5.40 | Used for |
 |--------|------|------|------|----------|
-| `Net::SNMP` | CPAN | CPAN | CPAN | SNMP (arm the TFTP export) |
-| `Net::TFTP` | CPAN | CPAN | CPAN | fetch the exported file |
+| `Net::SNMP` | CPAN | CPAN | CPAN | SNMP: the `procurve-snmp` TFTP trigger **and** the SNMP device inventory (9.80), which any model can use |
+| `Net::TFTP` | CPAN | CPAN | CPAN | fetch the exported file (`procurve-snmp` only) |
 
+As of 9.80 `Net::SNMP` is needed whenever SNMP device inventory is enabled on
+**any** model (not just `procurve-snmp`); `Net::TFTP` remains `procurve-snmp`-only.
 Net::SNMP's own prerequisites: Carp, Errno, Exporter, IO::Socket,
 Math::BigInt, Digest::MD5 are core. SNMPv3 is loaded at runtime only:
 `Crypt::DES` (DES privacy) and `Digest::HMAC` (HMAC auth) are CPAN; AES
-privacy additionally needs `Crypt::Rijndael` (CPAN). SNMP v1/v2c load none
-of them. Net::SNMP 6.x uses core `Digest::SHA` for SNMPv3 SHA auth, so the
-old `Digest::SHA1` module is not required (and is no longer packaged on
-Debian/Ubuntu). `Crypt::DES`/`Crypt::Rijndael` are loaded by name --
-CryptX does not provide those namespaces and cannot substitute for them.
+privacy additionally needs `Crypt::Rijndael` (CPAN). These are required for a
+SNMPv3 device -- whether that is a `procurve-snmp` device or any model doing
+SNMPv3 inventory. SNMP v1/v2c load none of them. Net::SNMP 6.x uses core
+`Digest::SHA` for SNMPv3 SHA auth, so the old `Digest::SHA1` module is not
+required (and is no longer packaged on Debian/Ubuntu). `Crypt::DES`/`Crypt::Rijndael`
+are loaded by name -- CryptX does not provide those namespaces and cannot
+substitute for them.
 
 
 ## OS packages by feature (RHEL 9 / SLES 15 / Ubuntu 24.04 LTS)
@@ -194,11 +198,11 @@ below need installing (same set as the Linux matrix):
 | `LWP::Protocol::https` | pure-Perl | web models (HTTPS) |
 | `IO::Socket::SSL` | pure-Perl | web HTTPS, SMTP TLS |
 | `Net::SSLeay` | XS | web HTTPS, SMTP TLS |
-| `Net::SNMP` | pure-Perl | procurve-snmp |
+| `Net::SNMP` | pure-Perl | procurve-snmp + SNMP inventory (any model) |
 | `Net::TFTP` | pure-Perl | procurve-snmp |
-| `Digest::HMAC` | pure-Perl | procurve-snmp (SNMPv3 auth) |
-| `Crypt::DES` | XS | procurve-snmp (SNMPv3 DES) |
-| `Crypt::Rijndael` | XS | procurve-snmp (SNMPv3 AES) |
+| `Digest::HMAC` | pure-Perl | SNMPv3 auth (procurve-snmp or SNMP inventory) |
+| `Crypt::DES` | XS | SNMPv3 DES (procurve-snmp or SNMP inventory) |
+| `Crypt::Rijndael` | XS | SNMPv3 AES (procurve-snmp or SNMP inventory) |
 
 XS modules must be compiled; pure-Perl modules install without a compiler.
 Net::SMTP (libnet) and Digest::SHA are core in both Perls, so the e-mail
@@ -221,7 +225,8 @@ cpan install Net::Telnet
 cpan install Net::OpenSSH IO::Tty
 # + web-UI models (HTTPS)
 cpan install LWP::UserAgent LWP::Protocol::https IO::Socket::SSL Net::SSLeay
-# + procurve-snmp (SNMPv3 crypto as needed)
+# + procurve-snmp OR SNMP inventory on any model (Net::TFTP is procurve-snmp
+#   only; the SNMPv3 crypto only if a device uses SNMPv3)
 cpan install Net::SNMP Net::TFTP Digest::HMAC Crypt::DES Crypt::Rijndael
 # + SMTP over TLS: IO::Socket::SSL + Net::SSLeay (as above)
 ```
@@ -247,7 +252,8 @@ cpan install Net::Telnet
 cpan install Net::OpenSSH IO::Tty
 # + web-UI models (HTTPS)
 cpan install LWP::UserAgent LWP::Protocol::https
-# + procurve-snmp (SNMPv3 crypto as needed)
+# + procurve-snmp OR SNMP inventory on any model (Net::TFTP is procurve-snmp
+#   only; the SNMPv3 crypto only if a device uses SNMPv3)
 cpan install Net::SNMP Net::TFTP Digest::HMAC Crypt::DES Crypt::Rijndael
 ```
 
@@ -340,6 +346,8 @@ telnet-only site     Net::Telnet
 + web models HTTPS   LWP::Protocol::https, IO::Socket::SSL, Net::SSLeay
 + procurve-snmp      Net::SNMP, Net::TFTP           (+ Crypt::DES, Digest::HMAC,
                                                      Crypt::Rijndael for SNMPv3)
++ SNMP inventory     Net::SNMP                      (any model; + the SNMPv3
+                                                     crypto above if SNMPv3)
 + SMTP over TLS      IO::Socket::SSL, Net::SSLeay
 + DB history (db:)   DBI, DBD::Pg
 ```

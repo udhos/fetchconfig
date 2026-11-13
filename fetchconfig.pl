@@ -95,6 +95,7 @@ my $check_template;     # set by --check-template FILE: structural check of one 
 my $template_syntax;    # set by --template-syntax FILE: print the template's '# syntax_style:' value, then exit
 my $list_template;      # set by -t/--list-template: list available templates from all template_dir=
 my $list_allowed_dirs;  # set by --list-allowed-dirs: list the directory: allowlist
+my $list_credentials;   # set by --list-credentials: list/validate the pw: credential aliases
 my $clean_lock_dir;     # set by --clean-lock-dir N: remove lock files older than N days, then exit
 my $db_backfill;        # set by --db-backfill: reconstruct the history DB from on-disk backups, then exit
 my $rename_device_id;   # set by --rename-device-id: rename a device id (table + backups + DB), then exit
@@ -146,6 +147,7 @@ my $got = GetOptions(
     'template-syntax=s' => \$template_syntax,
     't|list-template'  => \$list_template,
     'list-allowed-dirs' => \$list_allowed_dirs,
+    'list-credentials' => \$list_credentials,
     'clean-lock-dir:i'  => \$clean_lock_dir,   # N days; :i => value optional (default 30)
     'db-backfill'       => \$db_backfill,
     'rename-device-id'  => \$rename_device_id,
@@ -311,7 +313,7 @@ $default_lock_dir .= '/.lock';
 fetchconfig::model::Detector->init($log, $default_lock_dir);
 fetchconfig::Report->init($log);
 
-my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs) || defined($template_syntax) || defined($clean_lock_dir) || defined($db_backfill) || defined($rename_device_id) || defined($replay_db_change);
+my $lookup_only = defined($retrieve_dev_id) || defined($list_dev_id) || defined($zero_check_dev_id) || defined($zero_check_all) || defined($orphan_check) || defined($empty_check) || defined($suffix_check_dev_id) || defined($suffix_check_all) || defined($list_template) || defined($list_allowed_dirs) || defined($list_credentials) || defined($template_syntax) || defined($clean_lock_dir) || defined($db_backfill) || defined($rename_device_id) || defined($replay_db_change);
 if ($parallel > 1 && $lookup_only) {
     $log->error("-P applies to fetching only and cannot be combined with -g/-l/-z/-Z/-o/-e/-s/-S");
     &usage;
@@ -335,14 +337,25 @@ fetchconfig::Tools->init(log => $log, me => $me);
 # continue with a silently reduced allowlist: the whole point of an
 # allowlist is to restrict, and running with a partial one would defeat
 # that. The individual errors were already logged at parse time; abort
-# here, before any fetch or lookup. --list-allowed-dirs is exempt - it
-# exists precisely to report these errors (it exits 2 itself).
-unless (defined($list_allowed_dirs)) {
+# here, before any fetch or lookup. --list-allowed-dirs and --list-credentials
+# are exempt - they exist precisely to report these errors (each exits 2 itself).
+unless (defined($list_allowed_dirs) || defined($list_credentials)) {
     my @allow_err = fetchconfig::model::Detector->dir_allowlist_errors;
     if (@allow_err) {
         $log->error("refusing to run: the directory: allowlist has "
             . scalar(@allow_err) . " error(s) (see above); fix the device table"
             . " or run --list-allowed-dirs to review");
+        exit 2;
+    }
+    # Malformed pw: credential-alias lines (bad kind, malformed alias name,
+    # duplicate, directory:-tag clash, empty value) are recorded at parse time;
+    # like a bad directory: line they must stop the run rather than silently drop
+    # the alias (a later reference to it would fail per-device anyway). This also
+    # surfaces them to fetchconfig-web's validate_table_with_fetchconfig.
+    my @pw_err = fetchconfig::model::Detector->pw_errors;
+    if (@pw_err) {
+        $log->error("refusing to run: the pw: credential aliases have "
+            . scalar(@pw_err) . " error(s) (see above); fix the device table");
         exit 2;
     }
 }
@@ -440,6 +453,11 @@ if (defined($list_allowed_dirs)) {
     exit;
 }
 
+if (defined($list_credentials)) {
+    fetchconfig::Tools::list_credentials($retrieve_out_file);
+    exit;
+}
+
 # --clean-lock-dir [N]: remove *.lock files older than N days (default 30,
 # minimum 1) from the lock directory, then exit. A lock file is only
 # removed if it is NOT currently held (flock succeeds first), so an
@@ -470,6 +488,11 @@ $log->info("done");
 # not be created or used. The backups that did run are still recorded;
 # this signals the misconfiguration to the caller.
 exit 10 if fetchconfig::model::Detector->lock_dir_failed;
+
+# Exit 11 if a device with snmp_fatal=on had its SNMP inventory collection fail.
+# The config backups are unaffected and still recorded; this only signals the
+# inventory failure to the caller.
+exit 11 if fetchconfig::model::Detector->snmp_fatal_failed;
 
 exit;
 
@@ -614,6 +637,12 @@ sub usage_text {
     $t .= "                      its path exists on disk), 1 if no section, 2 if an entry is invalid.\n";
     $t .= "                      A directory: section must cover all three types (repository, template,\n";
     $t .= "                      fetch_run); use \"directory: fetch_run none\" to forbid on_fetch_run.\n";
+    $t .= "                      Honours -f.\n";
+    $t .= "       --list-credentials    list the pw: credential aliases from the device table, one\n";
+    $t .= "                      TAB-separated row per alias: id, kind, name (secret values are never\n";
+    $t .= "                      shown). Also lints: exits 0 if every alias is well-formed and every\n";
+    $t .= "                      credential reference resolves to a defined alias of the right kind,\n";
+    $t .= "                      1 if none configured, 2 if a pw: line or a reference is invalid.\n";
     $t .= "                      Honours -f.\n";
     $t .= "       --clean-lock-dir [N]  remove device lock files older than N days (default 30, min 1)\n";
     $t .= "                             from the lock directory, then exit; with -T only show what would\n";

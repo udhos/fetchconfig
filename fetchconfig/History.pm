@@ -43,6 +43,7 @@ use warnings;
 use Text::ParseWords ();
 use Time::Local qw(timelocal timegm);
 use Digest::SHA ();   # core; only used by the --db-backfill path
+use Errno ();         # ties %! so _pid_alive can tell EPERM (alive) from ESRCH (dead)
 
 # A true-UTC instant -> the "local wall-clock epoch" convention the DB uses
 # (local date/time encoded as seconds, as if UTC; see
@@ -63,6 +64,17 @@ my $log;           # logger (fetchconfig::Logger)
 my %summary;       # drain result for the status mail
 my $delta_cols;    # 1/0 after probing: does backup_versions have lines_added/_removed?
                    # (undef = not probed -> treated as absent; keeps unit tests 8.2-neutral)
+my $inv_tables;    # 1/0 after probing: do the device_inventory* tables exist (web
+                   # schema 2.15)? Gates every inventory op so a missing table never
+                   # poisons the shared per-file transaction (fetchconfig-9.80 CR).
+my $inv_comp_fw;   # 1/0 after probing: does device_inventory_component.fw_version
+                   # exist (web schema 2.16)? When absent, the inv_component INSERT
+                   # omits fw_version, so an engine against a pre-2.16 DB does not
+                   # hit a 42703 that would poison the transaction.
+my $inv_sys;       # 1/0 after probing: does device_inventory.sysname exist (web
+                   # schema 2.17, with syslocation/syscontact)? When absent, the
+                   # inv_current upsert omits the three sys* columns, so an engine
+                   # against a pre-2.17 DB does not hit a 42703.
 
 my $DEFAULT_PORT          = 5432;
 my $DEFAULT_CONNECT_TMO   = 5;
@@ -172,6 +184,7 @@ sub finish {
     my @expires = fetchconfig::Mailer->expires;
 
     my %by_repo = _ops_by_repo(\@results, \@expires);
+    _add_inv_ops(\%by_repo);   # SNMP inventory op=inv_* (engine 9.80)
 
     # Write this run's spool file into each repository that produced ops.
     for my $repo (sort keys %by_repo) {
@@ -667,6 +680,19 @@ sub _write_spool {
 # per file, oldest first; stop on the first failure (that file and all later
 # ones stay for the next run); delete only after COMMIT. Prune spool files older
 # than db_max_outbox_days before draining.
+#
+# Concurrency- and crash-safe without a lock (two fetchconfig runs may share a
+# repository). Each file is claimed by an atomic rename to a private in-progress
+# name (<path>.draining.<pid>) before it is read; rename() lets exactly one
+# drainer win a file, so a file is never processed twice at once (which also
+# removes the inventory-component duplication hazard). A failed drain renames the
+# file back to its claimable name; a crash between claim and COMMIT leaves an
+# orphaned .draining file that _reclaim_orphans recovers on a later run (the DB
+# rolled the uncommitted transaction back, so no partial state, and every op is
+# idempotent, so a re-apply is safe). Because files are taken oldest-first, losing
+# a claim means another drainer is already working the oldest-unhandled file, so
+# this drainer stops rather than apply a newer file ahead of it -- preserving
+# order across drainers.
 sub _drain {
     my ($repos) = @_;
 
@@ -703,6 +729,10 @@ sub _drain {
     my $stopped = 0;
 
     REPO: for my $repo (sort keys %$repos) {
+        # Recover any in-progress files a crashed drainer left behind, so they
+        # re-enter the queue (in order) before we scan.
+        _reclaim_orphans($repo, $max_age);
+
         my @files = _spool_files($repo);
         for my $f (@files) {
             # prune the very old (whole file dropped).
@@ -719,9 +749,25 @@ sub _drain {
                 next;
             }
 
-            my ($ops, $read_ok) = _read_spool($f->{path});
+            # Claim the file (atomic rename). Losing the claim means another drainer
+            # is already handling this (oldest-unhandled) file, so stop here rather
+            # than apply a newer file ahead of it; it -- or the next run -- finishes
+            # the rest in order. A real rename error stops for the same reason.
+            my ($work, $why, $cerr) = _claim($f->{path});
+            if (!defined $work) {
+                _warn("cannot claim DB spool $f->{path} (left for next run): $cerr")
+                    if $why eq 'error';
+                $stopped = 1;
+                $pending++;
+                $oldest = $f->{stamp} if !defined($oldest) || $f->{stamp} lt $oldest;
+                next;
+            }
+
+            my ($ops, $read_ok) = _read_spool($work);
             if (!$read_ok) {
-                # unreadable/corrupt - leave it, stop (manual attention).
+                # unreadable/corrupt - put it back under its claimable name, stop
+                # (manual attention).
+                rename($work, $f->{path});
                 $stopped = 1;
                 $pending++;
                 $oldest = $f->{stamp} if !defined($oldest) || $f->{stamp} lt $oldest;
@@ -731,6 +777,7 @@ sub _drain {
             my $applied = _apply_file($dbh, $ops);
             if ($applied < 0) {
                 $dbh->rollback;
+                rename($work, $f->{path});   # un-claim; retry next run
                 $stopped = 1;
                 $pending++;
                 $oldest = $f->{stamp} if !defined($oldest) || $f->{stamp} lt $oldest;
@@ -739,13 +786,14 @@ sub _drain {
             }
             if (!$dbh->commit) {
                 $dbh->rollback;
+                rename($work, $f->{path});   # un-claim; retry next run
                 $stopped = 1;
                 $pending++;
                 $oldest = $f->{stamp} if !defined($oldest) || $f->{stamp} lt $oldest;
                 _warn("DB commit failed on $f->{path} (left for next run): " . ($dbh->errstr // 'unknown'));
                 next;
             }
-            unlink $f->{path};
+            unlink $work;
             $delivered += $applied;
         }
     }
@@ -848,16 +896,60 @@ sub _apply_op {
         return defined(_do($dbh, $sql, _local_epoch(time), $op->{dev_id}, $op->{file_timestamp})) ? 1 : 0;
     }
 
+    # --- SNMP inventory (engine 9.80) -----------------------------------------
+    # Every inventory op is gated on $inv_tables (probed at connect). When the
+    # device_inventory* tables are absent (web schema < 2.15) the op is a silent
+    # no-op, so a shared spool file's backup-history ops still commit - never a
+    # mid-transaction 42P01 that would poison the whole file.
+    if ($kind eq 'inv_current')   { return _apply_inv_current($dbh, $op); }
+
+    if ($kind eq 'inv_reset') {
+        return 1 unless $inv_tables;
+        return defined(_do($dbh,
+            'DELETE FROM device_inventory_component WHERE dev_id=?', $op->{dev_id})) ? 1 : 0;
+    }
+
+    if ($kind eq 'inv_component') {
+        return 1 unless $inv_tables;
+        my $prim = (defined($op->{is_primary}) && $op->{is_primary}) ? 't' : 'f';
+        if ($inv_comp_fw) {
+            # web schema >= 2.16: carry fw_version (ROMMON/firmware) too
+            return defined(_do($dbh,
+                'INSERT INTO device_inventory_component
+                   (dev_id, member_index, comp_class, comp_position, model, serial,
+                    sw_version, fw_version, hw_rev, is_primary)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                $op->{dev_id}, $op->{member_index}, $op->{comp_class}, $op->{comp_position},
+                $op->{model}, $op->{serial}, $op->{sw_version}, $op->{fw_version},
+                $op->{hw_rev}, $prim)) ? 1 : 0;
+        }
+        return defined(_do($dbh,
+            'INSERT INTO device_inventory_component
+               (dev_id, member_index, comp_class, comp_position, model, serial,
+                sw_version, hw_rev, is_primary)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            $op->{dev_id}, $op->{member_index}, $op->{comp_class}, $op->{comp_position},
+            $op->{model}, $op->{serial}, $op->{sw_version}, $op->{hw_rev}, $prim)) ? 1 : 0;
+    }
+
     # Device-id rename (--rename-device-id): move every row of the device from
     # the old id to the new one, in the same transaction as any neighbouring
     # ops. Idempotent: once applied, WHERE dev_id=<old> matches nothing and the
-    # three UPDATEs are 0-row no-ops. The table names are fixed, never input.
-    # Needs GRANT UPDATE (dev_id) on the three tables (fetchconfig-web schema).
+    # UPDATEs are 0-row no-ops. The table names are fixed, never input. Needs
+    # GRANT UPDATE (dev_id) on the backup tables (fetchconfig-web schema); the
+    # inventory tables are updated too (schema 2.15) when present.
     if ($kind eq 'rename') {
         for my $tbl (qw(backup_current backup_runs backup_versions)) {
             my $r = _do($dbh, "UPDATE $tbl SET dev_id=? WHERE dev_id=?",
                         $op->{new_dev_id}, $op->{old_dev_id});
             return 0 unless defined($r);
+        }
+        if ($inv_tables) {
+            for my $tbl (qw(device_inventory device_inventory_component device_inventory_history)) {
+                my $r = _do($dbh, "UPDATE $tbl SET dev_id=? WHERE dev_id=?",
+                            $op->{new_dev_id}, $op->{old_dev_id});
+                return 0 unless defined($r);
+            }
         }
         return 1;
     }
@@ -892,6 +984,7 @@ sub _connect {
         return undef;
     }
     _probe_delta_cols($dbh);
+    _probe_inv_tables($dbh);
     $dbh;
 }
 
@@ -911,6 +1004,203 @@ sub _probe_delta_cols {
     }
 }
 
+# Do the inventory tables exist (web schema >= 2.15)? Probed once per connection
+# with pg_class (which always exists, so the probe can never poison a
+# transaction). When absent, every inventory op is skipped (see _apply_op), so an
+# inventory-aware engine against an un-migrated DB leaves backup history intact.
+sub _probe_inv_tables {
+    my ($dbh) = @_;
+    my $r = _row_exists($dbh,
+        "SELECT 1 FROM pg_class WHERE relname = 'device_inventory' AND relkind = 'r'");
+    $inv_tables = (defined($r) && $r) ? 1 : 0;
+    if (!$inv_tables && $log) {
+        $log->info("DB: device_inventory tables absent"
+                   . " - run the fetchconfig-web 2.15 upgrade to enable SNMP inventory");
+    }
+
+    # device_inventory_component.fw_version (web schema 2.16, ROMMON/firmware per
+    # component). pg_attribute/pg_class always exist, so this probe can never
+    # poison a transaction. When absent, inv_component omits the column.
+    $inv_comp_fw = 0;
+    if ($inv_tables) {
+        my $c = _row_exists($dbh,
+            "SELECT 1 FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid"
+          . " WHERE c.relname = 'device_inventory_component'"
+          . " AND a.attname = 'fw_version' AND a.attnum > 0 AND NOT a.attisdropped");
+        $inv_comp_fw = (defined($c) && $c) ? 1 : 0;
+    }
+
+    # device_inventory.sysname (web schema 2.17, with syslocation/syscontact). Same
+    # catalog probe; when absent, the inv_current upsert omits the three sys* columns.
+    $inv_sys = 0;
+    if ($inv_tables) {
+        my $c = _row_exists($dbh,
+            "SELECT 1 FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid"
+          . " WHERE c.relname = 'device_inventory'"
+          . " AND a.attname = 'sysname' AND a.attnum > 0 AND NOT a.attisdropped");
+        $inv_sys = (defined($c) && $c) ? 1 : 0;
+    }
+}
+
+# Two strings differ? (undef treated as empty.) Used for inventory change-detection.
+sub _sdiff {
+    my ($a, $b) = @_;
+    $a = '' unless defined $a;
+    $b = '' unless defined $b;
+    return $a ne $b;
+}
+
+# Interpret an on/off-ish flag carried in a spool op (1/on/yes/true), with a default.
+sub _flag {
+    my ($v, $default) = @_;
+    return $default unless defined($v) && length($v);
+    return (lc($v) eq 'on' || $v eq '1' || lc($v) eq 'yes' || lc($v) eq 'true') ? 1 : 0;
+}
+
+# op=inv_current: drain-derived upsert of the device_inventory headline + the
+# change-triggered history row. Captures the prior hw_set/os_version BEFORE the
+# upsert (so the change test is meaningful), then upserts, then conditionally
+# inserts a history row. All in the current transaction. See
+# fetchconfig-inventory-db-schema.md.
+sub _apply_inv_current {
+    my ($dbh, $op) = @_;
+    return 1 unless $inv_tables;
+
+    my $dev     = $op->{dev_id};
+    my $status  = defined($op->{status}) ? $op->{status} : 'disabled';
+    my $run_end = $op->{run_end};
+
+    # Capture prior state before any write.
+    my ($prior_hw, $prior_os, $exists);
+    {
+        my $sth = $dbh->prepare('SELECT hw_set, os_version FROM device_inventory WHERE dev_id = ?');
+        return 0 unless $sth && defined $sth->execute($dev);
+        my $r = $sth->fetchrow_arrayref;
+        $sth->finish;
+        if ($r) { $exists = 1; ($prior_hw, $prior_os) = @$r; } else { $exists = 0; }
+    }
+
+    if ($status eq 'disabled') {
+        # UPDATE-only: flip a previously-enabled row; never INSERT a never-inventory
+        # device. Leaves prior data and last_attempt_at untouched.
+        return defined(_do($dbh,
+            'UPDATE device_inventory SET status=? WHERE dev_id=?', 'disabled', $dev)) ? 1 : 0;
+    }
+
+    if ($status eq 'failed') {
+        # Keep last-good data; record the failure + attempt time.
+        my $r = _do($dbh,
+            'UPDATE device_inventory SET status=?, source=?, last_attempt_at=? WHERE dev_id=?',
+            'failed', $op->{source}, $run_end, $dev);
+        return 0 unless defined($r);
+        return 1 if $r > 0;
+        return defined(_do($dbh,
+            'INSERT INTO device_inventory (dev_id, status, source, last_attempt_at) VALUES (?,?,?,?)',
+            $dev, 'failed', $op->{source}, $run_end)) ? 1 : 0;
+    }
+
+    # successful
+    my $new_hw = $op->{hw_set};
+    my $new_os = $op->{os_version};
+    my $changed = (!$exists) || _sdiff($new_hw, $prior_hw) || _sdiff($new_os, $prior_os);
+
+    my @cols = qw(status source vendor vendor_raw model serial os_version
+                  member_count hw_set last_attempt_at last_success_at);
+    my @vals = ('successful', $op->{source}, $op->{vendor}, $op->{vendor_raw}, $op->{model},
+                $op->{serial}, $op->{os_version}, $op->{member_count}, $op->{hw_set},
+                $run_end, $run_end);
+    # sysName/sysLocation/sysContact (web schema 2.17) only when the columns exist;
+    # otherwise an engine against a pre-2.17 DB would hit a 42703 and poison the txn.
+    if ($inv_sys) {
+        push @cols, 'sysname', 'syslocation', 'syscontact';
+        push @vals, $op->{sysname}, $op->{syslocation}, $op->{syscontact};
+    }
+    if ($changed) { push @cols, 'changed_at'; push @vals, $run_end; }
+
+    my $set = join(', ', map { "$_=?" } @cols);
+    my $r = _do($dbh, "UPDATE device_inventory SET $set WHERE dev_id=?", @vals, $dev);
+    return 0 unless defined($r);
+    if ($r == 0) {
+        # First row for this device: insert the same column set (dev_id + @cols);
+        # changed_at is always present here (a new row => $changed is true).
+        my @icols = ('dev_id', @cols);
+        my @ivals = ($dev, @vals);
+        unless (grep { $_ eq 'changed_at' } @icols) {
+            push @icols, 'changed_at'; push @ivals, $run_end;
+        }
+        my $cl = join(', ', @icols);
+        my $ph = join(', ', ('?') x @icols);
+        return 0 unless defined(_do($dbh,
+            "INSERT INTO device_inventory ($cl) VALUES ($ph)", @ivals));
+    }
+
+    if ($changed && _flag($op->{history_on}, 1)) {
+        my $note = (!$exists || !defined($prior_hw) || !length($prior_hw)) ? 'initial'
+                 : (_sdiff($new_hw, $prior_hw) && _sdiff($new_os, $prior_os)) ? 'both'
+                 : _sdiff($new_hw, $prior_hw) ? 'members' : 'os';
+        return 0 unless defined(_do($dbh,
+            'INSERT INTO device_inventory_history
+               (dev_id, changed_at, hw_set, member_serials, os_version, note)
+             SELECT ?, ?, ?, ?, ?, ?
+             WHERE NOT EXISTS (SELECT 1 FROM device_inventory_history
+                                WHERE dev_id = ? AND changed_at = ?)',
+            $dev, $run_end, $op->{hw_set}, $op->{member_serials}, $op->{os_version}, $note,
+            $dev, $run_end));
+    }
+    return 1;
+}
+
+# Append the SNMP inventory ops (op=inv_current, and for a successful run
+# op=inv_reset + op=inv_component per part) to the per-repo op list built from the
+# backup results. Mailer holds the per-device inventory records (worker/parent
+# split, same as results/expires). run_end uses the same local-wall-clock epoch
+# as the backup ops.
+sub _add_inv_ops {
+    my ($by_repo) = @_;
+    my @cur = fetchconfig::Mailer->inv_current;
+    return unless @cur;
+
+    my %comp_by_dev;
+    for my $c (fetchconfig::Mailer->inv_components) {
+        push @{ $comp_by_dev{$c->{dev_id}} }, $c;
+    }
+
+    for my $c (@cur) {
+        my $repo = $c->{repository};
+        next unless defined($repo) && length($repo);
+
+        my $elapsed = (defined($c->{elapsed}) && $c->{elapsed} =~ /^\d+$/) ? $c->{elapsed} : 0;
+        my $end_ts  = (defined($c->{ts}) && $c->{ts} =~ /^\d+$/) ? $c->{ts} + $elapsed : time;
+        my $run_end = _local_epoch($end_ts);
+
+        push @{ $by_repo->{$repo} }, {
+            op => 'inv_current', dev_id => $c->{dev_id},
+            status => $c->{status}, source => $c->{source}, run_end => $run_end,
+            vendor => $c->{vendor}, vendor_raw => $c->{vendor_raw}, model => $c->{model},
+            serial => $c->{serial}, os_version => $c->{os_version},
+            sysname => $c->{sysname}, syslocation => $c->{syslocation},
+            syscontact => $c->{syscontact},
+            member_count => $c->{member_count}, member_serials => $c->{member_serials},
+            hw_set => $c->{hw_set}, history_on => $c->{history_on},
+        };
+
+        next unless defined($c->{status}) && $c->{status} eq 'successful';
+
+        # snapshot-replace: one DELETE then the per-part inserts.
+        push @{ $by_repo->{$repo} }, { op => 'inv_reset', dev_id => $c->{dev_id} };
+        for my $comp (@{ $comp_by_dev{$c->{dev_id}} || [] }) {
+            push @{ $by_repo->{$repo} }, {
+                op => 'inv_component', dev_id => $c->{dev_id},
+                member_index => $comp->{member_index}, comp_class => $comp->{comp_class},
+                comp_position => $comp->{comp_position}, model => $comp->{model},
+                serial => $comp->{serial}, sw_version => $comp->{sw_version},
+                fw_version => $comp->{fw_version},
+                hw_rev => $comp->{hw_rev}, is_primary => $comp->{is_primary},
+            };
+        }
+    }
+}
+
 # The spool files of one repository, oldest-first. A name is .db-<pid>-<stamp>;
 # sort by stamp then pid (timestamp is the order, pid the tiebreaker). The .tmp
 # in-progress files are skipped.
@@ -925,6 +1215,71 @@ sub _spool_files {
         closedir $dh;
     }
     sort { $a->{stamp} cmp $b->{stamp} || $a->{pid} <=> $b->{pid} } @out;
+}
+
+# Claim a spool file for this drainer by atomically renaming it to a private
+# in-progress name (<path>.draining.<pid>). rename() is atomic, so exactly one
+# concurrent drainer wins a given file. Returns ($work_path, 'ok', '') on success;
+# (undef, 'lost', '') when the file is already gone (another drainer took it); or
+# (undef, 'error', <errstr>) on any other rename failure.
+sub _claim {
+    my ($path) = @_;
+    my $work = "$path.draining.$$";
+    return ($work, 'ok', '') if rename($path, $work);
+    my $err = "$!";                                   # capture before the -e stat
+    return (undef, (-e $path) ? 'error' : 'lost', $err);
+}
+
+# Is $pid a live process on this host? kill(0,...) succeeds for a signalable
+# process; EPERM means it exists but is owned by another user (still alive); only
+# ESRCH (no such process) means dead. An unknown/garbled pid is treated as alive
+# so its file is never stolen. On platforms where kill 0 is unreliable (Windows) a
+# dead owner may read as alive -- harmless: the file then waits for the
+# retention-age drop instead of the fast reclaim.
+sub _pid_alive {
+    my ($pid) = @_;
+    return 1 unless defined($pid) && $pid =~ /^\d+$/ && $pid > 0;
+    return 1 if kill(0, $pid);
+    return 1 if $!{EPERM};
+    return 0;
+}
+
+# Before draining a repo, recover any in-progress spool files a drainer left
+# behind by crashing between claim and COMMIT. Name: <repo>/<base>.draining.<pid>,
+# where <base> is .db-<pid>-<stamp>. Policy:
+#   - older than retention       -> drop (as a stale base spool would be);
+#   - owner process dead (ESRCH) -> rename back to <base> (re-queued; re-apply is
+#                                   safe, every op is idempotent);
+#   - owner alive, within window -> leave it (actively draining, or a harmless
+#                                   pid-reuse linger the retention drop will catch).
+sub _reclaim_orphans {
+    my ($repo, $max_age) = @_;
+    opendir(my $dh, $repo) or return;
+    my @orphans;
+    while (my $name = readdir $dh) {
+        next unless $name =~ /^(\.db-\d+-(\d{8}_\d{6}))\.draining\.(\d+)$/;
+        push @orphans, { path => "$repo/$name", base => "$repo/$1",
+                         stamp => $2, owner => $3 };
+    }
+    closedir $dh;
+    for my $o (@orphans) {
+        my $epoch = _stamp_epoch($o->{stamp});
+        if (defined($epoch) && $epoch < $max_age) {
+            _warn("dropping stale in-progress DB spool older than "
+                  . "$db_cfg{db_max_outbox_days} days: $o->{path}");
+            unlink $o->{path};
+            next;
+        }
+        next if _pid_alive($o->{owner});          # active, or pid-reuse linger
+        if (-e $o->{base}) {
+            # a base spool with the same pid+stamp already exists (pid reuse in the
+            # same second): keep that one, drop the duplicate orphan.
+            unlink $o->{path};
+        }
+        elsif (!rename($o->{path}, $o->{base})) {
+            _warn("cannot reclaim orphaned DB spool $o->{path}: $!");
+        }
+    }
 }
 
 sub _stamp_epoch {

@@ -1,0 +1,57 @@
+<svg class="railroad-diagram" height="202" viewBox="0 0 957.0 202" width="957.0" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g transform="translate(.5 .5)">
+<g>
+<path d="M20 21v20m10 -20v20m-10 -10h20" /></g><path d="M40 31h10" /><g class="terminal ">
+<path d="M50 31h0.0" /><path d="M138.0 31h0.0" /><rect height="22" rx="10" ry="10" width="88" x="50" y="20"></rect><text x="94" y="35">override</text></g><path d="M138.0 31h10" /><g>
+<path d="M148.0 31h0.0" /><path d="M293.0 31h0.0" /><path d="M148.0 31h20" /><g class="terminal ">
+<path d="M168.0 31h21.25" /><path d="M251.75 31h21.25" /><rect height="22" rx="10" ry="10" width="62.5" x="189.25" y="20"></rect><text x="220.5" y="35">model</text></g><path d="M273.0 31h20" /><path d="M148.0 31a10 10 0 0 1 10 10v10a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M168.0 61h17.0" /><path d="M256.0 61h17.0" /><rect height="22" rx="10" ry="10" width="71" x="185" y="50"></rect><text x="220.5" y="65">serial</text></g><path d="M273.0 61a10 10 0 0 0 10 -10v-10a10 10 0 0 1 10 -10" /><path d="M148.0 31a10 10 0 0 1 10 10v40a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M168.0 91h0.0" /><path d="M273.0 91h0.0" /><rect height="22" rx="10" ry="10" width="105" x="168" y="80"></rect><text x="220.5" y="95">os_version</text></g><path d="M273.0 91a10 10 0 0 0 10 -10v-40a10 10 0 0 1 10 -10" /></g><g>
+<path d="M293.0 31h0.0" /><path d="M506.0 31h0.0" /><path d="M293.0 31h20" /><g class="non-terminal ">
+<path d="M313.0 31h4.25" /><path d="M481.75 31h4.25" /><rect height="22" width="164.5" x="317.25" y="20"></rect><text x="399.5" y="35">enterprise number</text></g><path d="M486.0 31h20" /><path d="M293.0 31a10 10 0 0 1 10 10v10a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M313.0 61h29.75" /><path d="M456.25 61h29.75" /><rect height="22" width="113.5" x="342.75" y="50"></rect><text x="399.5" y="65">sysObjectID</text></g><path d="M486.0 61a10 10 0 0 0 10 -10v-10a10 10 0 0 1 10 -10" /><path d="M293.0 31a10 10 0 0 1 10 10v40a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M313.0 91h0.0" /><path d="M486.0 91h0.0" /><rect height="22" width="173" x="313" y="80"></rect><text x="399.5" y="95">sysObjectID prefix</text></g><path d="M486.0 91a10 10 0 0 0 10 -10v-40a10 10 0 0 1 10 -10" /></g><g>
+<path d="M506.0 31h0.0" /><path d="M746.5 31h0.0" /><path d="M506.0 31h20" /><g class="terminal ">
+<path d="M526.0 31h56.25" /><path d="M670.25 31h56.25" /><rect height="22" rx="10" ry="10" width="88" x="582.25" y="20"></rect><text x="626.25" y="35">sysdescr</text></g><path d="M726.5 31h20" /><path d="M506.0 31a10 10 0 0 1 10 10v10a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M526.0 61h56.25" /><path d="M670.25 61h56.25" /><rect height="22" rx="10" ry="10" width="88" x="582.25" y="50"></rect><text x="626.25" y="65">entdescr</text></g><path d="M726.5 61a10 10 0 0 0 10 -10v-10a10 10 0 0 1 10 -10" /><path d="M506.0 31a10 10 0 0 1 10 10v40a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M526.0 91h56.25" /><path d="M670.25 91h56.25" /><rect height="22" rx="10" ry="10" width="88" x="582.25" y="80"></rect><text x="626.25" y="95">entmodel</text></g><path d="M726.5 91a10 10 0 0 0 10 -10v-40a10 10 0 0 1 10 -10" /><path d="M506.0 31a10 10 0 0 1 10 10v70a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M526.0 121h52.0" /><path d="M674.5 121h52.0" /><rect height="22" rx="10" ry="10" width="96.5" x="578" y="110"></rect><text x="626.25" y="125">entserial</text></g><path d="M726.5 121a10 10 0 0 0 10 -10v-70a10 10 0 0 1 10 -10" /><path d="M506.0 31a10 10 0 0 1 10 10v100a10 10 0 0 0 10 10" /><g>
+<path d="M526.0 151h0.0" /><path d="M726.5 151h0.0" /><g class="non-terminal ">
+<path d="M526.0 151h0.0" /><path d="M639.5 151h0.0" /><rect height="22" width="113.5" x="526" y="140"></rect><text x="582.75" y="155">numeric OID</text></g><path d="M639.5 151h10" /><g>
+<path d="M649.5 151h0.0" /><path d="M726.5 151h0.0" /><path d="M649.5 151h20" /><g>
+<path d="M669.5 151h37.0" /></g><path d="M706.5 151h20" /><path d="M649.5 151a10 10 0 0 1 10 10v0a10 10 0 0 0 10 10" /><g class="terminal ">
+<path d="M669.5 171h0.0" /><path d="M706.5 171h0.0" /><rect height="22" rx="10" ry="10" width="37" x="669.5" y="160"></rect><text x="688" y="175">.*</text></g><path d="M706.5 171a10 10 0 0 0 10 -10v0a10 10 0 0 1 10 -10" /></g></g><path d="M726.5 151a10 10 0 0 0 10 -10v-100a10 10 0 0 1 10 -10" /></g><g>
+<path d="M746.5 31h0.0" /><path d="M917.0 31h0.0" /><path d="M746.5 31h20" /><g>
+<path d="M766.5 31h130.5" /></g><path d="M897.0 31h20" /><path d="M746.5 31a10 10 0 0 1 10 10v0a10 10 0 0 0 10 10" /><g class="non-terminal ">
+<path d="M766.5 51h0.0" /><path d="M897.0 51h0.0" /><rect height="22" width="130.5" x="766.5" y="40"></rect><text x="831.75" y="55">extract regex</text></g><path d="M897.0 51a10 10 0 0 0 10 -10v0a10 10 0 0 1 10 -10" /></g><path d="M 917.0 31 h 20 m -10 -10 v 20 m 10 -20 v 20"></path></g><style>/* <![CDATA[ */
+	svg.railroad-diagram {
+		background-color:hsl(30,20%,95%);
+	}
+	svg.railroad-diagram path {
+		stroke-width:3;
+		stroke:black;
+		fill:rgba(0,0,0,0);
+	}
+	svg.railroad-diagram text {
+		font:bold 14px monospace;
+		text-anchor:middle;
+	}
+	svg.railroad-diagram text.label{
+		text-anchor:start;
+	}
+	svg.railroad-diagram text.comment{
+		font:italic 12px monospace;
+	}
+	svg.railroad-diagram rect{
+		stroke-width:3;
+		stroke:black;
+		fill:hsl(120,100%,90%);
+	}
+	svg.railroad-diagram rect.group-box {
+		stroke: gray;
+		stroke-dasharray: 10 5;
+		fill: none;
+	}
+
+/* ]]> */
+</style></svg>

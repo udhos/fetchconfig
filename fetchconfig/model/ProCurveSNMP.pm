@@ -62,6 +62,7 @@ use Net::SNMP;
 use Net::TFTP;
 use File::Temp qw(tempfile);
 use fetchconfig::model::Abstract;
+use fetchconfig::SNMPInventory;
 
 @fetchconfig::model::ProCurveSNMP::ISA = qw(fetchconfig::model::Abstract);
 
@@ -126,7 +127,8 @@ sub snmp_set_tftp_mode {
     if (!defined($result)) {
 	my $err = $session->error;
 	$self->debug_line("SNMP set error: $err");
-	$self->log_error("SNMP set failed ($what): $err");
+	$self->log_error("SNMP set failed ($what): $err"
+	    . " - for procurve-snmp the snmp_community must be read-WRITE");
 	return undef;
     }
 
@@ -156,19 +158,12 @@ sub do_fetch {
 	return;
     }
 
-    # The credential here is the SNMP read-write community, not
-    # user/pass: the write is what arms the TFTP export.
-    my $dev_community = $self->dev_option($dev_opt_tab, "community");
-    if (!defined($dev_community)) {
-	$self->log_error("SNMP read-write community needed but not provided (community=...)");
-	return;
-    }
-
-    my $dev_timeout = $self->dev_option($dev_opt_tab, "timeout");
-    # (a missing timeout is defaulted to 30 s centrally by dev_option)
-
+    # The credential here is the SNMP read-WRITE community (the write arms the
+    # TFTP export), built through the shared session builder: snmp_write_community
+    # if set, else snmp_community (which must then be read-WRITE for this model).
+    my $dev_timeout = $self->dev_option_posint($dev_opt_tab, 'snmp_timeout', 5, 0) || 5;
     my $dev_version = $self->dev_option($dev_opt_tab, "snmp_version");
-    $dev_version = $DEFAULT_SNMP_VERSION unless defined($dev_version);
+    $dev_version = '2c' unless defined($dev_version);
 
     my $dev_oid = $self->dev_option($dev_opt_tab, "oid");
     $dev_oid = $DEFAULT_OID unless defined($dev_oid);
@@ -192,11 +187,8 @@ sub do_fetch {
 
     $self->debug_line("host=$dev_host version=$dev_version oid=$dev_oid remote_file=$dev_remote timeout=$dev_timeout");
 
-    my ($session, $error) = Net::SNMP->session(
-	-hostname  => $dev_host,
-	-community => $dev_community,
-	-version   => $dev_version,
-	-timeout   => $dev_timeout);
+    my ($session, $error) = fetchconfig::SNMPInventory->open_snmp_session(
+	$self, $dev_host, $dev_opt_tab, want_write => 1);
 
     if (!defined($session)) {
 	$self->debug_line("SNMP session error: $error");

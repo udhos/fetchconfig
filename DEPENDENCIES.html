@@ -246,6 +246,12 @@
   figure.diagram{margin:1.5rem 0;text-align:center;}
   .diagram-svg{display:block;}
   .diagram-svg svg{max-width:100%;height:auto;}
+  /* Railroad (syntax) diagrams are static SVG with black connectors and light
+     green boxes, so they sit on a light panel in BOTH themes (readable either
+     way) and scroll horizontally if a line is wide. */
+  figure.railroad{margin:1.6rem 0;}
+  figure.railroad .diagram-svg{background:#fbfbf7;border:1px solid #d9d9cf;border-radius:8px;padding:16px 14px;overflow-x:auto;text-align:left;}
+  figure.railroad figcaption{font-size:0.85rem;color:var(--text-muted);margin-top:8px;text-align:left;}
   /* keep raw mermaid source hidden until rendered */
   .mermaid:not([data-processed]){display:none;}
   .mermaid[data-processed]{display:block;}
@@ -504,10 +510,13 @@
   }
 
   @media print{
+    /* smaller, print-native type -- match the fetchconfig-web docs on paper */
+    html{font-size:10pt;}
+    body{font-size:10pt;}
     .sidebar,.mobile-bar{display:none !important;}
     .layout{display:block;}
     a{color:inherit;text-decoration:none;}
-    pre{white-space:pre-wrap;}
+    pre{font-size:8.5pt;white-space:pre-wrap;}
   }
 </style>
 
@@ -532,12 +541,12 @@
       <span class="brand-name">fetchconfig</span>
     </div>
     <div class="brand-meta">
-      <span class="pill">v9.78</span>
+      <span class="pill">v9.80</span>
       <span class="pill">GPL&#8209;2.0+</span>
     </div>
 
     <nav>
-<div class="nav-group"><div class="nav-group-label">Runtime dependencies by feature (Perl core vs CPAN)</div><a href="#base-always----core-except-nettelnet">Base (always) -- core except Net::Telnet</a><a href="#e-mail-summary-mailer----all-core">E-mail summary (Mailer) -- all core</a><a href="#ssh-models-cisco-ios-ssh-cisco-asa-ssh-comware-ssh-procurve-ssh-planet-ssh-aruba-cx-ssh-nexus-ssh-mediant-sbc">SSH models (cisco-ios-ssh, cisco-asa-ssh, comware-ssh, procurve-ssh, planet-ssh, aruba-cx-ssh, nexus-ssh, mediant-sbc)</a><a href="#web-ui-models-tplink-web-sg105e-procurve-web-1700">Web-UI models (tplink-web-sg105e, procurve-web-1700)</a><a href="#backup-history-db-writer-optional-db">Backup-history DB writer (optional, &quot;db:&quot;)</a><a href="#snmptftp-model-procurve-snmp">SNMP+TFTP model (procurve-snmp)</a></div>
+<div class="nav-group"><div class="nav-group-label">Runtime dependencies by feature (Perl core vs CPAN)</div><a href="#base-always----core-except-nettelnet">Base (always) -- core except Net::Telnet</a><a href="#e-mail-summary-mailer----all-core">E-mail summary (Mailer) -- all core</a><a href="#ssh-models-cisco-ios-ssh-cisco-asa-ssh-comware-ssh-procurve-ssh-planet-ssh-aruba-cx-ssh-nexus-ssh-mediant-sbc">SSH models (cisco-ios-ssh, cisco-asa-ssh, comware-ssh, procurve-ssh, planet-ssh, aruba-cx-ssh, nexus-ssh, mediant-sbc)</a><a href="#web-ui-models-tplink-web-sg105e-procurve-web-1700">Web-UI models (tplink-web-sg105e, procurve-web-1700)</a><a href="#backup-history-db-writer-optional-db">Backup-history DB writer (optional, &quot;db:&quot;)</a><a href="#snmp-procurve-snmp-model--snmp-device-inventory">SNMP (procurve-snmp model + SNMP device inventory)</a></div>
 <div class="nav-group"><div class="nav-group-label">OS packages by feature (RHEL 9 / SLES 15 / Ubuntu 24.04 LTS)</div><a href="#base-perl-package-per-distro">Base perl package per distro</a></div>
 <div class="nav-group"><div class="nav-group-label">AIX 7.2</div><a href="#option-a----system-perl-usrbinperl-perlrte-528">Option A -- system Perl (/usr/bin/perl, perl.rte 5.28)</a><a href="#option-b----aix-toolbox-perl-dnf-perl-530">Option B -- AIX Toolbox Perl (dnf perl, 5.30+)</a></div>
 <div class="nav-group"><a href="#install-commands-layered">Install commands (layered)</a></div>
@@ -582,9 +591,9 @@
 <p>Loaded only when a &quot;db:&quot; line is set in the device table (default: level). With no &quot;db:&quot; the modules are never required and fetchconfig stays file-based.</p>
 <div class="table-wrap"><table><thead><tr><th>Module</th><th>5.26</th><th>5.28</th><th>5.40</th><th>Used for</th></tr></thead><tbody><tr><td><code>DBI</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>database access layer</td></tr><tr><td><code>DBD::Pg</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>PostgreSQL driver</td></tr></tbody></table></div>
 <p>An old <code>DBD::Pg</code> talks to an old server fine; the writer targets PostgreSQL 8.2+. The schema and the writer role are created by fetchconfig-web, not the engine.</p>
-<h3 id="snmptftp-model-procurve-snmp">SNMP+TFTP model (procurve-snmp)</h3>
-<div class="table-wrap"><table><thead><tr><th>Module</th><th>5.26</th><th>5.28</th><th>5.40</th><th>Used for</th></tr></thead><tbody><tr><td><code>Net::SNMP</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>SNMP (arm the TFTP export)</td></tr><tr><td><code>Net::TFTP</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>fetch the exported file</td></tr></tbody></table></div>
-<p>Net::SNMP&#x27;s own prerequisites: Carp, Errno, Exporter, IO::Socket, Math::BigInt, Digest::MD5 are core. SNMPv3 is loaded at runtime only: <code>Crypt::DES</code> (DES privacy) and <code>Digest::HMAC</code> (HMAC auth) are CPAN; AES privacy additionally needs <code>Crypt::Rijndael</code> (CPAN). SNMP v1/v2c load none of them. Net::SNMP 6.x uses core <code>Digest::SHA</code> for SNMPv3 SHA auth, so the old <code>Digest::SHA1</code> module is not required (and is no longer packaged on Debian/Ubuntu). <code>Crypt::DES</code>/<code>Crypt::Rijndael</code> are loaded by name -- CryptX does not provide those namespaces and cannot substitute for them.</p>
+<h3 id="snmp-procurve-snmp-model--snmp-device-inventory">SNMP (procurve-snmp model + SNMP device inventory)</h3>
+<div class="table-wrap"><table><thead><tr><th>Module</th><th>5.26</th><th>5.28</th><th>5.40</th><th>Used for</th></tr></thead><tbody><tr><td><code>Net::SNMP</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>SNMP: the <code>procurve-snmp</code> TFTP trigger <strong>and</strong> the SNMP device inventory (9.80), which any model can use</td></tr><tr><td><code>Net::TFTP</code></td><td>CPAN</td><td>CPAN</td><td>CPAN</td><td>fetch the exported file (<code>procurve-snmp</code> only)</td></tr></tbody></table></div>
+<p>As of 9.80 <code>Net::SNMP</code> is needed whenever SNMP device inventory is enabled on <strong>any</strong> model (not just <code>procurve-snmp</code>); <code>Net::TFTP</code> remains <code>procurve-snmp</code>-only. Net::SNMP&#x27;s own prerequisites: Carp, Errno, Exporter, IO::Socket, Math::BigInt, Digest::MD5 are core. SNMPv3 is loaded at runtime only: <code>Crypt::DES</code> (DES privacy) and <code>Digest::HMAC</code> (HMAC auth) are CPAN; AES privacy additionally needs <code>Crypt::Rijndael</code> (CPAN). These are required for a SNMPv3 device -- whether that is a <code>procurve-snmp</code> device or any model doing SNMPv3 inventory. SNMP v1/v2c load none of them. Net::SNMP 6.x uses core <code>Digest::SHA</code> for SNMPv3 SHA auth, so the old <code>Digest::SHA1</code> module is not required (and is no longer packaged on Debian/Ubuntu). <code>Crypt::DES</code>/<code>Crypt::Rijndael</code> are loaded by name -- CryptX does not provide those namespaces and cannot substitute for them.</p>
 </section>
 <section id="os-packages-by-feature-rhel-9--sles-15--ubuntu-2404-lts">
 <div class="section-kicker">02</div>
@@ -607,7 +616,7 @@ Ubuntu     apt install perl       (perl-base + perl-modules-5.38)</code></pre>
 <ul><li>System Perl (<code>perl.rte</code>): the default <code>/usr/bin/perl</code>. On AIX 7.2 TL5 this is Perl 5.28 -- the interpreter fetchconfig uses out of the box.</li><li>AIX Toolbox Perl (<code>dnf install perl</code>): a separate, newer Perl (5.30+) under <code>/opt/freeware</code>, managed by dnf.</li></ul>
 <p>They do NOT share a module path: the Toolbox <code>perl-*</code> RPMs install into the Toolbox perl&#x27;s @INC (<code>/opt/freeware/lib/perl5/...</code>), which <code>perl.rte</code> does not search. A Toolbox <code>perl-Net-SSLeay</code> is therefore invisible to <code>/usr/bin/perl</code>. Pick one interpreter and install all non-core modules for that one (and make fetchconfig&#x27;s <code>#!</code> line point at it).</p>
 <p>All &quot;core&quot; modules above ship with both Perls; only the non-core modules below need installing (same set as the Linux matrix):</p>
-<div class="table-wrap"><table><thead><tr><th>Module</th><th>Type</th><th>Feature</th></tr></thead><tbody><tr><td><code>Net::Telnet</code></td><td>pure-Perl</td><td>base (telnet + SSH pty)</td></tr><tr><td><code>Net::OpenSSH</code></td><td>pure-Perl</td><td>SSH models (+ <code>ssh</code> binary)</td></tr><tr><td><code>IO::Pty</code> (<code>IO::Tty</code>)</td><td>XS</td><td>SSH models</td></tr><tr><td><code>LWP::UserAgent</code> + <code>HTTP::Request::Common</code></td><td>pure-Perl</td><td>web models</td></tr><tr><td><code>LWP::Protocol::https</code></td><td>pure-Perl</td><td>web models (HTTPS)</td></tr><tr><td><code>IO::Socket::SSL</code></td><td>pure-Perl</td><td>web HTTPS, SMTP TLS</td></tr><tr><td><code>Net::SSLeay</code></td><td>XS</td><td>web HTTPS, SMTP TLS</td></tr><tr><td><code>Net::SNMP</code></td><td>pure-Perl</td><td>procurve-snmp</td></tr><tr><td><code>Net::TFTP</code></td><td>pure-Perl</td><td>procurve-snmp</td></tr><tr><td><code>Digest::HMAC</code></td><td>pure-Perl</td><td>procurve-snmp (SNMPv3 auth)</td></tr><tr><td><code>Crypt::DES</code></td><td>XS</td><td>procurve-snmp (SNMPv3 DES)</td></tr><tr><td><code>Crypt::Rijndael</code></td><td>XS</td><td>procurve-snmp (SNMPv3 AES)</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Module</th><th>Type</th><th>Feature</th></tr></thead><tbody><tr><td><code>Net::Telnet</code></td><td>pure-Perl</td><td>base (telnet + SSH pty)</td></tr><tr><td><code>Net::OpenSSH</code></td><td>pure-Perl</td><td>SSH models (+ <code>ssh</code> binary)</td></tr><tr><td><code>IO::Pty</code> (<code>IO::Tty</code>)</td><td>XS</td><td>SSH models</td></tr><tr><td><code>LWP::UserAgent</code> + <code>HTTP::Request::Common</code></td><td>pure-Perl</td><td>web models</td></tr><tr><td><code>LWP::Protocol::https</code></td><td>pure-Perl</td><td>web models (HTTPS)</td></tr><tr><td><code>IO::Socket::SSL</code></td><td>pure-Perl</td><td>web HTTPS, SMTP TLS</td></tr><tr><td><code>Net::SSLeay</code></td><td>XS</td><td>web HTTPS, SMTP TLS</td></tr><tr><td><code>Net::SNMP</code></td><td>pure-Perl</td><td>procurve-snmp + SNMP inventory (any model)</td></tr><tr><td><code>Net::TFTP</code></td><td>pure-Perl</td><td>procurve-snmp</td></tr><tr><td><code>Digest::HMAC</code></td><td>pure-Perl</td><td>SNMPv3 auth (procurve-snmp or SNMP inventory)</td></tr><tr><td><code>Crypt::DES</code></td><td>XS</td><td>SNMPv3 DES (procurve-snmp or SNMP inventory)</td></tr><tr><td><code>Crypt::Rijndael</code></td><td>XS</td><td>SNMPv3 AES (procurve-snmp or SNMP inventory)</td></tr></tbody></table></div>
 <p>XS modules must be compiled; pure-Perl modules install without a compiler. Net::SMTP (libnet) and Digest::SHA are core in both Perls, so the e-mail summary needs no extra module -- only TLS adds Net::SSLeay + IO::Socket::SSL.</p>
 <h3 id="option-a----system-perl-usrbinperl-perlrte-528">Option A -- system Perl (/usr/bin/perl, perl.rte 5.28)</h3>
 <p>The Toolbox <code>perl-*</code> RPMs do not apply here; install every non-core module from CPAN against the system perl. XS modules need a C compiler (IBM XL C, or gcc from the AIX Toolbox) and, for Net::SSLeay, OpenSSL development headers (IBM <code>openssl.base</code>, or <code>openssl-devel</code> from the Toolbox).</p>
@@ -620,7 +629,8 @@ cpan install Net::Telnet
 cpan install Net::OpenSSH IO::Tty
 <span class="c"># + web-UI models (HTTPS)</span>
 cpan install LWP::UserAgent LWP::Protocol::https IO::Socket::SSL Net::SSLeay
-<span class="c"># + procurve-snmp (SNMPv3 crypto as needed)</span>
+<span class="c"># + procurve-snmp OR SNMP inventory on any model (Net::TFTP is procurve-snmp</span>
+<span class="c">#   only; the SNMPv3 crypto only if a device uses SNMPv3)</span>
 cpan install Net::SNMP Net::TFTP Digest::HMAC Crypt::DES Crypt::Rijndael
 <span class="c"># + SMTP over TLS: IO::Socket::SSL + Net::SSLeay (as above)</span></code></pre>
 <h3 id="option-b----aix-toolbox-perl-dnf-perl-530">Option B -- AIX Toolbox Perl (dnf perl, 5.30+)</h3>
@@ -638,7 +648,8 @@ cpan install Net::Telnet
 cpan install Net::OpenSSH IO::Tty
 <span class="c"># + web-UI models (HTTPS)</span>
 cpan install LWP::UserAgent LWP::Protocol::https
-<span class="c"># + procurve-snmp (SNMPv3 crypto as needed)</span>
+<span class="c"># + procurve-snmp OR SNMP inventory on any model (Net::TFTP is procurve-snmp</span>
+<span class="c">#   only; the SNMPv3 crypto only if a device uses SNMPv3)</span>
 cpan install Net::SNMP Net::TFTP Digest::HMAC Crypt::DES Crypt::Rijndael</code></pre>
 </section>
 <section id="install-commands-layered">
@@ -705,6 +716,8 @@ apt install libio-socket-ssl-perl libnet-ssleay-perl</code></pre>
 + web models HTTPS   LWP::Protocol::https, IO::Socket::SSL, Net::SSLeay
 + procurve-snmp      Net::SNMP, Net::TFTP           (+ Crypt::DES, Digest::HMAC,
                                                      Crypt::Rijndael for SNMPv3)
++ SNMP inventory     Net::SNMP                      (any model; + the SNMPv3
+                                                     crypto above if SNMPv3)
 + SMTP over TLS      IO::Socket::SSL, Net::SSLeay
 + DB history (db:)   DBI, DBD::Pg</code></pre>
 </section>

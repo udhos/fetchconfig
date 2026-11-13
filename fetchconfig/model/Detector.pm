@@ -25,6 +25,7 @@ use strict;
 use warnings;
 use Text::ParseWords ();
 use fetchconfig::Mailer;
+use fetchconfig::SNMPInventory;
 use fetchconfig::model::GenericTemplate;
 use fetchconfig::model::CiscoIOS;
 use fetchconfig::model::CiscoIOSSSH;
@@ -64,6 +65,7 @@ use fetchconfig::model::ProCurveSNMP;
 my $logger;
 my $default_lock_dir;       # <dir of fetchconfig.pl>/.lock, set by init()
 my $lock_dir_failed = 0;    # set if a device's lock dir could not be used (-> driver exits 10)
+my $snmp_fatal_failed = 0;  # set if an snmp_fatal=on device's inventory failed (-> driver exits 11)
 my %model_table;
 my %dev_id_table;
 my @dev_order;          # dev_ids in device-table order (for the sequential fetch phase)
@@ -84,6 +86,13 @@ my $dir_allow_report_none = 0;      # set by "directory: report none" (reporting
 my @dir_allow_rows;      # ordered [type, tag, path] for --list-allowed-dirs
 my @dir_allow_errors;    # [reason] for each rejected directory: line (for the linter)
 
+# pw: credential aliases (engine 9.80), modelled on directory: tags.
+#   %pw_tag : $Alias -> { kind => 'user'|'pass', value => ... }
+# Referenced as the whole value of a credential option (user=/pass=/enable=/
+# snmp_*); resolved read-time in Abstract::dev_option. See the 9.80 CR.
+my %pw_tag;
+my @pw_errors;           # [reason] for each rejected pw: line (for the linter)
+
 #
 # Only non-whitespace characters that are also safe to use unquoted
 # in a filesystem path (dev_id ends up as part of a directory/file
@@ -101,9 +110,45 @@ my $DEV_ID_RE = qr/^[\w.-]+$/;
 sub mask_secrets {
     my ($line) = @_;
 
-    (my $masked = $line) =~ s/\b(pass|enable|community)=[^,\s]*/$1=***/gi;
+    (my $masked = $line) =~ s/\b(pass|enable|community|snmp_community|snmp_write_community|snmp_authpass|snmp_privpass)=[^,\s]*/$1=***/gi;
 
     $masked;
+}
+
+# Read the inventory_* lines back out of an existing <dev_id>.status file, mapped
+# to the inv_* arg names record_result/write_status_file use (inventory=X ->
+# inv_status=X, inventory_at=N -> inv_at=N, ...). Used by snmp_inventory_interval
+# to decide whether to skip this run's SNMP read and carry the last result
+# forward. Returns () when the file or an inventory record is absent.
+my %INV_STATUS_KEY = (
+    inventory              => 'inv_status',
+    inventory_source       => 'inv_source',
+    inventory_vendor       => 'inv_vendor',
+    inventory_model        => 'inv_model',
+    inventory_serial       => 'inv_serial',
+    inventory_os_version   => 'inv_os_version',
+    inventory_sysname      => 'inv_sysname',
+    inventory_syslocation  => 'inv_syslocation',
+    inventory_syscontact   => 'inv_syscontact',
+    inventory_member_count => 'inv_member_count',
+    inventory_hw_set       => 'inv_hw_set',
+    inventory_at           => 'inv_at',
+);
+sub _status_inventory {
+    my ($path) = @_;
+    open(my $fh, '<', $path) or return ();
+    my %s;
+    while (my $ln = <$fh>) {
+	$ln =~ s/[\r\n]+$//;
+	$s{$1} = $2 if $ln =~ /^([A-Za-z_]+)=(.*)$/;
+    }
+    close $fh;
+    return () unless defined $s{inventory};
+    my %r;
+    for my $k (keys %INV_STATUS_KEY) {
+	$r{ $INV_STATUS_KEY{$k} } = $s{$k} if exists $s{$k};
+    }
+    return %r;
 }
 
 sub parse {
@@ -142,6 +187,17 @@ sub parse {
     #
     if ($line =~ /^\s*directory:\s*(.*)$/) {
 	$class->parse_directory_line($file, $num, $1);
+	return;
+    }
+
+    #
+    ## credential aliases (optional). Define a username/password once and
+    ## reference it as $Alias on any default:/device line, like directory: tags.
+    # pw: user $User1 username
+    # pw: pass $Pass1 secret
+    #
+    if ($line =~ /^\s*pw:\s*(.*)$/) {
+	$class->parse_pw_line($file, $num, $1);
 	return;
     }
 
@@ -480,18 +536,158 @@ sub fetch_device {
     my $fetch_elap = time - $fetch_ts_start;
     $logger->info("dev=$dev_id host=$dev_host: config retrieval took $fetch_elap secs");
 
+    # --- SNMP device inventory (engine 9.80) ---------------------------------
+    # Model-independent; runs regardless of the config fetch outcome (an SNMP-only
+    # or backup-failed device still gets inventory). Writes to the dashboard DB via
+    # the outbox (fetchconfig::History); never affects the config backup. A failed
+    # attempt is a device error only when snmp_fatal=on (exit 11).
+    my %inv_status_fields;   # merged into record_result so the .status file carries the result
+    {
+	# snmp_inventory_interval (seconds; 0 = every run, the default): on a device
+	# whose ENTITY-MIB is slow to serve (large Comware IRF stacks), skip the SNMP
+	# read when the last successful inventory is younger than the interval and
+	# carry that result forward into this run's .status -- so config backups stay
+	# fast while inventory refreshes on its own cadence. The DB row is left as the
+	# last successful collection; a failed/absent prior forces a fresh read.
+	my $inv_interval = $mod->dev_option_posint($dev_opt_tab, 'snmp_inventory_interval', 0, 0) || 0;
+	my %prior;
+	if ($inv_interval > 0) {
+	    my $repo = $mod->dev_option($dev_opt_tab, "repository");
+	    %prior = _status_inventory("$repo/$dev_id.status")
+		if defined($repo) && length($repo);
+	}
+	my $within = ($inv_interval > 0
+	    && defined($prior{inv_status}) && $prior{inv_status} eq 'successful'
+	    && defined($prior{inv_at}) && $prior{inv_at} =~ /^\d+$/
+	    && ($fetch_ts_start - $prior{inv_at}) >= 0
+	    && ($fetch_ts_start - $prior{inv_at}) < $inv_interval
+	    && fetchconfig::SNMPInventory->mode($mod, $dev_opt_tab) eq 'on');
+
+	if ($within) {
+	    # Within the interval: reuse the last inventory, skip the slow SNMP read.
+	    %inv_status_fields = %prior;
+	    # Mark this run's SNMP read as skipped-by-interval so the summary mail can
+	    # show "not due" rather than the carried-forward "success". This flag reaches
+	    # record_result (-> the @results row) but is NOT one of the fixed inventory_*
+	    # keys write_status_file persists, so it never lands in .status.
+	    $inv_status_fields{inv_notdue} = 1;
+	    my $age = $fetch_ts_start - $prior{inv_at};
+	    $logger->info("dev=$dev_id host=$dev_host: SNMP inventory skipped "
+			  . "(snmp_inventory_interval=${inv_interval}s; last read ${age}s ago)");
+	}
+	else {
+	my $inv_ts   = time;
+	my $inv      = fetchconfig::SNMPInventory->collect($mod, $dev_id, $dev_host, $dev_opt_tab);
+	my $inv_elap = time - $inv_ts;
+	my $inv_status = defined($inv->{status}) ? $inv->{status} : 'none';
+
+	# Carry the inventory result into the per-device .status file (via
+	# record_result below), in addition to the DB. 'none' writes nothing.
+	if ($inv_status ne 'none') {
+	    %inv_status_fields = (
+		inv_status       => $inv_status,
+		inv_source       => $inv->{source},
+		inv_vendor       => $inv->{vendor},
+		inv_model        => $inv->{model},
+		inv_serial       => $inv->{serial},
+		inv_os_version   => $inv->{os_version},
+		inv_sysname      => $inv->{sysname},
+		inv_syslocation  => $inv->{syslocation},
+		inv_syscontact   => $inv->{syscontact},
+		inv_member_count => $inv->{member_count},
+		inv_hw_set       => $inv->{hw_set},
+	    );
+	    $inv_status_fields{inv_at} = $fetch_ts_start
+		if $inv_status eq 'successful' || $inv_status eq 'failed';
+	}
+
+	# One per-device summary line for the SNMP inventory outcome, like the
+	# "config retrieval took N secs" line above, so every run shows what the
+	# inventory did for each device, including its own elapsed time (the
+	# config-retrieval figure does not include the SNMP work). 'none' (device
+	# not configured for inventory at all) stays silent.
+	if ($inv_status eq 'successful') {
+	    my $nc = scalar(@{ $inv->{components} || [] });
+	    my @d;
+	    push @d, "vendor=$inv->{vendor}"        if defined($inv->{vendor})       && length($inv->{vendor});
+	    push @d, "model=$inv->{model}"          if defined($inv->{model})        && length($inv->{model});
+	    push @d, "serial=$inv->{serial}"        if defined($inv->{serial})       && length($inv->{serial});
+	    push @d, "members=$inv->{member_count}" if defined($inv->{member_count}) && length($inv->{member_count});
+	    push @d, "components=$nc";
+	    $logger->info("dev=$dev_id host=$dev_host: SNMP inventory read successful ("
+			  . join(' ', @d) . ") in $inv_elap secs");
+	}
+	elsif ($inv_status eq 'failed') {
+	    my $e = (defined($inv->{error}) && length($inv->{error}))
+		  ? $inv->{error} : 'no usable inventory';
+	    $logger->info("dev=$dev_id host=$dev_host: SNMP inventory read failed after $inv_elap secs: $e");
+	}
+	elsif ($inv_status eq 'disabled') {
+	    $logger->info("dev=$dev_id host=$dev_host: SNMP inventory disabled for this device "
+			  . "(snmp_inventory=off, or credentials incomplete; last-good data kept)");
+	}
+
+	if ($inv_status ne 'none') {
+	    my $inv_repo = $mod->dev_option($dev_opt_tab, "repository");
+	    fetchconfig::Mailer->record_inventory(
+		dev_id         => $dev_id,
+		repository     => $inv_repo,
+		ts             => $fetch_ts_start,
+		elapsed        => (time - $fetch_ts_start),
+		status         => $inv_status,
+		source         => $inv->{source},
+		vendor         => $inv->{vendor},
+		vendor_raw     => $inv->{vendor_raw},
+		model          => $inv->{model},
+		serial         => $inv->{serial},
+		os_version     => $inv->{os_version},
+		sysname        => $inv->{sysname},
+		syslocation    => $inv->{syslocation},
+		syscontact     => $inv->{syscontact},
+		member_count   => $inv->{member_count},
+		member_serials => $inv->{member_serials},
+		hw_set         => $inv->{hw_set},
+		history_on     => fetchconfig::SNMPInventory->flag($mod, $dev_opt_tab, 'snmp_inventory_history', 1),
+	    );
+	    if ($inv_status eq 'successful') {
+		for my $c (@{ $inv->{components} || [] }) {
+		    fetchconfig::Mailer->record_inventory_component(
+			dev_id        => $dev_id,
+			repository    => $inv_repo,
+			member_index  => $c->{member_index},
+			comp_class    => $c->{comp_class},
+			comp_position => $c->{comp_position},
+			model         => $c->{model},
+			serial        => $c->{serial},
+			sw_version    => $c->{sw_version},
+			fw_version    => $c->{fw_version},
+			hw_rev        => $c->{hw_rev},
+			is_primary    => $c->{is_primary},
+		    );
+		}
+	    }
+	    if ($inv_status eq 'failed'
+		&& fetchconfig::SNMPInventory->flag($mod, $dev_opt_tab, 'snmp_fatal', 0)) {
+		$snmp_fatal_failed = 1;
+		$logger->error("dev=$dev_id host=$dev_host: SNMP inventory failed and snmp_fatal=on");
+	    }
+	}
+	}   # end else (inventory not skipped by snmp_inventory_interval)
+    }
+
     if (!defined($config_dir)) {
 	fetchconfig::Mailer->record_result(
 	    dev_id       => $dev_id,
 	    dev_host     => $dev_host,
 	    ts           => $fetch_ts_start,
-	    elapsed      => $fetch_elap,
+	    elapsed      => time - $fetch_ts_start,   # config fetch + SNMP inventory
 	    repository   => $mod->dev_option($dev_opt_tab, "repository"),
 	    changes_only => $dev_changes_only,
 	    success      => 0,
 	    size         => undef,
 	    changed      => 'n/a',
 	    to           => $dev_email_to,
+	    %inv_status_fields,
 	    );
 	return;
     }
@@ -519,13 +715,14 @@ sub fetch_device {
 	    dev_id       => $dev_id,
 	    dev_host     => $dev_host,
 	    ts           => $fetch_ts_start,
-	    elapsed      => $fetch_elap,
+	    elapsed      => time - $fetch_ts_start,   # config fetch + SNMP inventory
 	    repository   => $mod->dev_option($dev_opt_tab, "repository"),
 	    changes_only => $dev_changes_only,
 	    success      => 0,
 	    size         => $backup_size,
 	    changed      => 'n/a',
 	    to           => $dev_email_to,
+	    %inv_status_fields,
 	    );
 	return;
     }
@@ -568,7 +765,7 @@ sub fetch_device {
 	dev_id       => $dev_id,
 	dev_host     => $dev_host,
 	ts           => $fetch_ts_start,
-	elapsed      => $fetch_elap,
+	elapsed      => time - $fetch_ts_start,   # config fetch + SNMP inventory + compare
 	repository   => $mod->dev_option($dev_opt_tab, "repository"),
 	changes_only => $dev_changes_only,
 	success      => 1,
@@ -590,6 +787,7 @@ sub fetch_device {
 	    lines_removed  => $lines_removed,
 	) : ()),
 	to           => $dev_email_to,
+	%inv_status_fields,
 	);
 
     if ($dev_run) {
@@ -817,6 +1015,104 @@ sub dir_allowlist_rows { return @dir_allow_rows; }
 # Parse-time errors for invalid directory: lines (for the linter).
 sub dir_allowlist_errors { return @dir_allow_errors; }
 
+# --- pw: credential aliases (engine 9.80) ---------------------------------
+
+# Parse one "pw:" line body: "<kind> $Alias <value>", kind = user|pass. The value
+# follows the same quoting rules as an inline user=/pass= value, so an alias is a
+# drop-in for what you'd write inline. pass-kind values are masked in any log.
+sub parse_pw_line {
+    my ($class, $file, $num, $body) = @_;
+
+    unless ($body =~ /^\s*(\S+)\s+(\S+)\s+(\S.*?)\s*$/) {
+        my $m = "pw: unrecognized (expected 'pw: user|pass \$Alias value')";
+        $logger->error("$m at file=$file line=$num") if $logger;
+        push @pw_errors, $m;
+        return;
+    }
+    my ($kind, $alias, $value) = ($1, $2, $3);
+
+    # A pass-kind value must never reach the log in clear.
+    my $safe = ($kind eq 'pass') ? "pw: $kind $alias ***" : "pw: $kind $alias $value";
+
+    if ($kind ne 'user' && $kind ne 'pass') {
+        my $m = "pw: kind must be 'user' or 'pass' (got '$kind')";
+        $logger->error("$m at file=$file line=$num: $safe") if $logger;
+        push @pw_errors, $m; return;
+    }
+    if ($alias !~ /^\$[A-Za-z_][A-Za-z0-9_]*$/) {
+        my $m = "pw: alias must look like \$NAME (got '$alias')";
+        $logger->error("$m at file=$file line=$num: $safe") if $logger;
+        push @pw_errors, $m; return;
+    }
+    if (exists $pw_tag{$alias}) {
+        my $m = "pw: duplicate alias '$alias'";
+        $logger->error("$m at file=$file line=$num: $safe") if $logger;
+        push @pw_errors, $m; return;
+    }
+    if (exists $dir_allow_tag{$alias}) {
+        my $m = "pw: alias '$alias' clashes with a directory: tag";
+        $logger->error("$m at file=$file line=$num: $safe") if $logger;
+        push @pw_errors, $m; return;
+    }
+
+    $value = fetchconfig::model::Abstract::dequote_value($value);
+    if (!length($value)) {
+        my $m = "pw: empty value for alias '$alias'";
+        $logger->error("$m at file=$file line=$num") if $logger;
+        push @pw_errors, $m; return;
+    }
+
+    $pw_tag{$alias} = { kind => $kind, value => $value };
+}
+
+# Is any pw: alias configured? (used by --list-credentials)
+sub pw_present { return %pw_tag ? 1 : 0; }
+
+# Look up a pw: alias: returns ($kind, $value), or () if undefined.
+sub pw_alias {
+    my ($class, $alias) = @_;
+    my $e = $pw_tag{$alias} or return ();
+    return ($e->{kind}, $e->{value});
+}
+
+sub pw_errors { return @pw_errors; }
+
+# Ordered rows for --list-credentials: ([kind, alias], ...). Values are NEVER
+# included - pass-kind values are secret.
+sub pw_rows {
+    return map { [ $pw_tag{$_}{kind}, $_ ] } sort keys %pw_tag;
+}
+
+# Cross-table lint for --list-credentials: every credential-slot value that is an
+# unquoted $Name reference must resolve to a defined alias of the right kind.
+# Returns human-readable error strings (empty if clean). Quoted literals and
+# escaped/ordinary values are skipped - only $Name references are checked.
+sub pw_reference_errors {
+    my ($class) = @_;
+    my @errs;
+    my @slots = fetchconfig::model::Abstract::pw_slots();
+    for my $dev_id (@dev_order) {
+        my $info = $dev_info_table{$dev_id} or next;
+        my $mod  = $info->{model};
+        my $tab  = $info->{dev_opt_tab} || {};
+        for my $slot (@slots) {
+            my $raw = exists $tab->{$slot} ? $tab->{$slot}
+                    : ($mod && $mod->can('default_option') ? $mod->default_option($slot) : undef);
+            next unless defined $raw;
+            next if $raw =~ /^".*"$/s;                          # quoted literal
+            next unless $raw =~ /^\$[A-Za-z_][A-Za-z0-9_]*$/;   # only $Name references
+            my ($kind) = $class->pw_alias($raw);
+            my $want = fetchconfig::model::Abstract::pw_slot_kind($slot);
+            if (!defined $kind) {
+                push @errs, "dev=$dev_id: $slot=$raw refers to an undefined pw: alias";
+            } elsif (defined($want) && $kind ne $want) {
+                push @errs, "dev=$dev_id: $slot=$raw is a '$kind' alias, not '$want'";
+            }
+        }
+    }
+    return @errs;
+}
+
 # Resolve/allow a repository= or template_dir= value against the allowlist.
 # $type is 'repository' or 'template'. Returns ($ok, $resolved_path_or_reason):
 #   - if the allowlist is not present: (1, $value) unchanged (no enforcement)
@@ -948,6 +1244,7 @@ sub valid_dev_id {
 # driver turns this into exit 10.
 #
 sub lock_dir_failed { return $lock_dir_failed; }
+sub snmp_fatal_failed { return $snmp_fatal_failed; }
 
 #
 # Returns a sorted list of every dev_id resolved so far by
@@ -1003,6 +1300,9 @@ sub init {
     @dir_allow_rows  = ();
     @dir_allow_errors = ();
     %warned_unlisted_dir = ();
+    %pw_tag = ();
+    @pw_errors = ();
+    $snmp_fatal_failed = 0;
 
     fetchconfig::Mailer->init($log);
 

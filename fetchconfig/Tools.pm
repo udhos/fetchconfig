@@ -1109,6 +1109,48 @@ sub list_allowed_dirs {
     exit($lint_fail ? 2 : 0);
 }
 
+# --list-credentials: list the pw: credential aliases (kind + name; values are
+# secret and never shown) and lint them - malformed pw: lines plus a cross-table
+# check that every credential reference resolves to a defined alias of the right
+# kind. Mirrors list_allowed_dirs: exits 2 on any problem, 1 if none configured.
+sub list_credentials {
+    my ($out_file) = @_;
+    $log->debug("list credential aliases");
+    if (!fetchconfig::model::Detector->pw_present) {
+        $log->info("no pw: credential aliases configured");
+        emit_content('ALL', '', $out_file,
+                     "no pw: credential aliases configured",
+                     "no pw: credential aliases configured");
+        exit(1);
+    }
+    my @rows = fetchconfig::model::Detector->pw_rows;   # [kind, alias]
+    @rows = sort { $a->[0] cmp $b->[0] || $a->[1] cmp $b->[1] } @rows;
+
+    my $lint_fail = 0;
+    my @parse_errs = fetchconfig::model::Detector->pw_errors;
+    $lint_fail += scalar(@parse_errs);   # already logged at parse time
+    for my $e (fetchconfig::model::Detector->pw_reference_errors) {
+        $log->error($e);
+        ++$lint_fail;
+    }
+
+    my $out = '';
+    my $id = 0;
+    for my $r (@rows) {
+        ++$id;
+        # ID <tab> kind <tab> alias   (values are secret and never listed)
+        $out .= join("\t", $id, $r->[0], $r->[1]) . "\n";
+    }
+    my $n_user = grep { $_->[0] eq 'user' } @rows;
+    my $n_pass = grep { $_->[0] eq 'pass' } @rows;
+    my $summary = "found " . scalar(@rows) . " credential alias(es): $n_user user, $n_pass pass"
+        . ($lint_fail ? " - $lint_fail problem(s) found" : "");
+    if ($lint_fail) { $log->error($summary); } else { $log->debug($summary); }
+    emit_content('ALL', $out, $out_file,
+                 "listing of " . scalar(@rows) . " credential alias(es)", $summary);
+    exit($lint_fail ? 2 : 0);
+}
+
 # Expand a template_dir value: if it is a directory: allowlist $TAG of the
 # template type, return its path; otherwise return it unchanged. This lets
 # -t work when a device table uses template_dir=$TPL1 (the same tags the

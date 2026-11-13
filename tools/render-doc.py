@@ -381,6 +381,12 @@ STYLE = r"""<style>
   figure.diagram{margin:1.5rem 0;text-align:center;}
   .diagram-svg{display:block;}
   .diagram-svg svg{max-width:100%;height:auto;}
+  /* Railroad (syntax) diagrams are static SVG with black connectors and light
+     green boxes, so they sit on a light panel in BOTH themes (readable either
+     way) and scroll horizontally if a line is wide. */
+  figure.railroad{margin:1.6rem 0;}
+  figure.railroad .diagram-svg{background:#fbfbf7;border:1px solid #d9d9cf;border-radius:8px;padding:16px 14px;overflow-x:auto;text-align:left;}
+  figure.railroad figcaption{font-size:0.85rem;color:var(--text-muted);margin-top:8px;text-align:left;}
   /* keep raw mermaid source hidden until rendered */
   .mermaid:not([data-processed]){display:none;}
   .mermaid[data-processed]{display:block;}
@@ -639,10 +645,13 @@ STYLE = r"""<style>
   }
 
   @media print{
+    /* smaller, print-native type -- match the fetchconfig-web docs on paper */
+    html{font-size:10pt;}
+    body{font-size:10pt;}
     .sidebar,.mobile-bar{display:none !important;}
     .layout{display:block;}
     a{color:inherit;text-decoration:none;}
-    pre{white-space:pre-wrap;}
+    pre{font-size:8.5pt;white-space:pre-wrap;}
   }
 </style>
 """
@@ -747,6 +756,19 @@ def _mermaid_svg(src):
     keyed by the diagram source. Regenerate with tools/gen-mermaid-svg.py."""
     key=_hashlib.sha1(src.encode('utf-8')).hexdigest()[:16]
     path=os.path.join(os.path.dirname(os.path.abspath(__file__)),'mermaid-cache',key+'.svg')
+    try:
+        with io.open(path,encoding='utf-8') as f: return f.read()
+    except (IOError,OSError):
+        return ''
+
+
+def _railroad_svg(name):
+    """Return the pre-generated railroad (syntax) diagram SVG named by a ```railroad
+    fence, or '' if none is cached. Cache: tools/syntax-cache/<name>.svg, written by
+    tools/gen-syntax-diagrams.py. Railroad diagrams are static SVG (no runtime lib),
+    so this is the figure itself, not just a fallback."""
+    safe=re.sub(r'[^A-Za-z0-9_.-]','',name)
+    path=os.path.join(os.path.dirname(os.path.abspath(__file__)),'syntax-cache',safe+'.svg')
     try:
         with io.open(path,encoding='utf-8') as f: return f.read()
     except (IOError,OSError):
@@ -1130,6 +1152,22 @@ def render_body(body):
                     while j < n and not re.match(r'^\s*```', body[j]):
                         j += 1
                     i = j + 1  # consume the twin incl. its closing fence
+                continue
+            # Railroad (IBM-style syntax) fence: the body's first line names a
+            # pre-generated SVG in tools/syntax-cache/ (built by
+            # tools/gen-syntax-diagrams.py); any further lines are the caption. The
+            # SVG is static (no runtime library), so it is embedded directly.
+            if lang == 'railroad':
+                _name = code[0].strip() if code else ''
+                _caption = ' '.join(c.strip() for c in code[1:] if c.strip())
+                _svg = _railroad_svg(_name)
+                if _svg:
+                    _cap = ('<figcaption>%s</figcaption>' % inline(_caption)) if _caption else ''
+                    out.append('<figure class="diagram railroad">'
+                               '<div class="diagram-svg">%s</div>%s</figure>' % (_svg, _cap))
+                else:
+                    out.append('<pre><code>[syntax diagram: %s]</code></pre>'
+                               % html.escape(_name))
                 continue
             if lang:
                 label = {'sql':'sql','sh':'shell','bash':'shell','perl':'perl','text':'text','apache':'Apache config','conf':'Apache config'}.get(lang, lang)

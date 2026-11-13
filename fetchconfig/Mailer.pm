@@ -23,9 +23,10 @@ package fetchconfig::Mailer; # fetchconfig/Mailer.pm
 #
 # Collects per-device backup results over the course of a run and, at
 # the end of it, e-mails a summary: a small statistics table (State:
-# success/failed counts; Changes: changed/unchanged/n-a counts)
-# followed by the full per-device table ("Device-ID", "Date", "Time",
-# "State", "Size", "Changes"):
+# success/failed counts; Changes: changed/unchanged/n-a counts), a small
+# SNMP-inventory counts table (success/failed/N-A/not-due), and then the
+# full per-device table ("Device-ID", "Date", "Time", "State", "Size",
+# "Changes", "Inventory"):
 #
 #   - the globally configured recipient (email: to=...) always gets a
 #     summary of every device processed in the run;
@@ -67,11 +68,15 @@ my %email_config;   # from=, to=, smtp=, user=, password=
 my @results; # list of { dev_id, dev_host, ts, success, size, changed, to }
 my @expires; # list of { dev_id, repository, file_timestamp } - expired backups
              # for the optional DB history writer (see fetchconfig::History)
+my @inv_cur; # op=inv_current records (headline + status) for SNMP inventory
+my @inv_comp;# op=inv_component records (serial-bearing parts), successful runs only
 
 # Accessors for the optional DB history writer (fetchconfig::History), read in
 # the parent after run_fetch_phase has replayed all worker results.
 sub results { @results }
 sub expires { @expires }
+sub inv_current { @inv_cur }
+sub inv_components { @inv_comp }
 my ($rep_email_diffs, $rep_n_changed, $rep_max_diff, $rep_url, $rep_mask);  # change-report e-mail material
 my @report_hide;  # accumulated report_hide=<regex> patterns (custom masking)
 
@@ -299,7 +304,6 @@ my $HEADER_BG = '#1f4e79';   # match the mail card header
 # removes the 1px seam Word drew between bordered rows.
 my @ROW_BG    = ('#e9ebee', '#d8dce1');
 my $FAILED_FG  = '#c0272d';
-my $CHANGED_FG = '#1f50c8';
 
 #
 # remove heading and trailing blanks (same rule as
@@ -406,13 +410,45 @@ sub colour_state {
     return $text;
 }
 
-sub blue_if_changed {
-    my ($text) = @_;
-
-    return $text unless defined($text) && $text eq 'changed';
-
-    "<span style=\"color: $CHANGED_FG;\">changed</span>";
+#
+# The SNMP-inventory state for a result row, as shown in the summary mail's
+# Inventory column and count table: 'success' | 'failed' | 'N/A' | 'not due'.
+#
+#   not due  - an snmp_inventory_interval skip (Detector set inv_notdue): the SNMP
+#              read was not due this run, the last result was carried forward.
+#   success  - inv_status 'successful'
+#   failed   - inv_status 'failed'
+#   N/A      - inv_status 'disabled' or 'none', or no inventory configured at all.
+#
+# Every result row maps to exactly one of the four, so the count table sums to the
+# device total.
+#
+sub inv_state {
+    my ($row) = @_;
+    return 'not due' if $row->{inv_notdue};
+    my $s = $row->{inv_status};
+    return 'N/A' unless defined($s) && length($s);
+    return 'success' if $s eq 'successful';
+    return 'failed'  if $s eq 'failed';
+    return 'N/A';
 }
+
+#
+# Colour the Inventory word: success green, failed red, "not due" amber, N/A
+# muted grey. Colour only (no bold/italic) - a styled run on a dark zebra row is
+# what Word drew a 1px seam under, the same reason red_if_failed/colour_state are
+# colour-only.
+#
+sub colour_inv {
+    my ($text) = @_;
+    return $text unless defined($text);
+    return '<span style="color: #2e7d32;">success</span>' if $text eq 'success';
+    return "<span style=\"color: $FAILED_FG;\">failed</span>" if $text eq 'failed';
+    return '<span style="color: #b06a00;">not due</span>' if $text eq 'not due';
+    return '<span style="color: #8a929b;">N/A</span>'     if $text eq 'N/A';
+    return escape_html($text);
+}
+
 
 sub header_row_html {
     my (@cols) = @_;
@@ -593,6 +629,33 @@ sub record_expire {
     push @expires, { %args };
 }
 
+# Record SNMP inventory for the optional DB writer (the full headline + every
+# component + the change-history). Same worker/parent split as record_result;
+# tagged _op=inv_cur / inv_comp in the sink so the replay can dispatch it. This
+# method itself does NOT touch the .status file; the per-device .status carries
+# the inventory STATE and headline separately, written by write_status_file from
+# the inv_* fields record_result is given (see Detector::fetch_device). So the DB
+# holds the full inventory and components; the .status mirrors the headline.
+sub record_inventory {
+    my ($class, %args) = @_;
+    if (defined($result_sink)) {
+	$args{_op} = 'inv_cur';
+	$class->_sink_append(\%args);
+	return;
+    }
+    push @inv_cur, { %args };
+}
+
+sub record_inventory_component {
+    my ($class, %args) = @_;
+    if (defined($result_sink)) {
+	$args{_op} = 'inv_comp';
+	$class->_sink_append(\%args);
+	return;
+    }
+    push @inv_comp, { %args };
+}
+
 sub replay_result_file {
     my ($class, $path) = @_;
 
@@ -611,12 +674,10 @@ sub replay_result_file {
 	    $args{$k} = $v;
 	}
 	my $op = delete $args{_op};
-	if (defined($op) && $op eq 'expire') {
-	    $class->record_expire(%args);
-	}
-	else {
-	    $class->record_result(%args);
-	}
+	if    (defined($op) && $op eq 'expire')   { $class->record_expire(%args); }
+	elsif (defined($op) && $op eq 'inv_cur')  { $class->record_inventory(%args); }
+	elsif (defined($op) && $op eq 'inv_comp') { $class->record_inventory_component(%args); }
+	else                                      { $class->record_result(%args); }
     }
     close $fh;
 }
@@ -635,9 +696,23 @@ sub replay_result_file {
 #                           month lengths and DST are handled by the
 #                           time library, not by hand)
 #   backup_end_date/time    the end timestamp
-#   backup_duration_sec     integer seconds
+#   backup_duration_sec     integer seconds for the whole per-device run: the
+#                           config fetch PLUS the SNMP inventory collection (9.80)
+#                           and the change comparison. The config-retrieval log
+#                           line and the SNMP-inventory log line break it down.
 #   backup_state            success | failed | skipped
 #   backup_changed          unchanged | changed | initial | forced | unknown
+#   inventory               disabled | successful | failed  (only when the
+#                           device is configured for SNMP inventory; absent
+#                           otherwise). On successful/failed, these follow:
+#   inventory_source        snmp
+#   inventory_vendor/model/serial/os_version/sysname/syslocation/syscontact/
+#   member_count/hw_set
+#                           the headline (mirrors the DB device_inventory row;
+#                           empty values are omitted, disabled carries none)
+#   inventory_at            run epoch of the last actual SNMP read (successful or
+#                           failed); used by snmp_inventory_interval to decide
+#                           whether a run may skip the read and reuse this result
 #
 sub write_status_file {
     my ($class, $args) = @_;
@@ -729,6 +804,33 @@ sub write_status_file {
 	    . "backup_duration_sec=$duration\n"
 	    . "backup_state=$state\n"
 	    . "backup_changed=$changed\n";
+
+	# SNMP device inventory (9.80): the state and headline, when the device is
+	# configured for inventory (inv_status set by Detector; absent otherwise).
+	# These mirror the DB device_inventory row. A device not configured for
+	# inventory writes no inventory_* keys at all.
+	if (defined($args->{inv_status})) {
+	    $body .= "inventory=$args->{inv_status}\n";
+	    for my $pair (
+		[ 'inventory_source',       $args->{inv_source}       ],
+		[ 'inventory_vendor',       $args->{inv_vendor}       ],
+		[ 'inventory_model',        $args->{inv_model}        ],
+		[ 'inventory_serial',       $args->{inv_serial}       ],
+		[ 'inventory_os_version',   $args->{inv_os_version}   ],
+		[ 'inventory_sysname',      $args->{inv_sysname}      ],
+		[ 'inventory_syslocation',  $args->{inv_syslocation}  ],
+		[ 'inventory_syscontact',   $args->{inv_syscontact}   ],
+		[ 'inventory_member_count', $args->{inv_member_count} ],
+		[ 'inventory_hw_set',       $args->{inv_hw_set}       ],
+		[ 'inventory_at',           $args->{inv_at}           ],
+	    ) {
+		my ($k, $v) = @$pair;
+		next unless defined($v) && length($v);
+		$v =~ s/[\r\n]+/ /g;   # keep the INI one-key-per-line shape
+		$body .= "$k=$v\n";
+	    }
+	}
+
 	print $fh $body;
 	close($fh);
     }
@@ -794,6 +896,30 @@ sub build_stats_table_html {
     $html;
 }
 
+#
+# Small "Inventory"/"Count" table, a sibling of build_stats_table_html meant to
+# sit just below it. All four states are always shown (even at 0) so the table
+# reads as a complete breakdown that sums to the device total.
+#
+sub build_inv_stats_table_html {
+    my ($class, $rows_ref) = @_;
+
+    my %inv_count;
+    $inv_count{inv_state($_)}++ foreach @$rows_ref;
+
+    my $html = "<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse: collapse;\">\n";
+    $html .= header_row_html('Inventory', 'Count');
+
+    my $row_index = 0;
+    foreach my $key ('success', 'failed', 'N/A', 'not due') {
+	$html .= body_row_html($row_index++, colour_inv($key), $inv_count{$key} || 0);
+    }
+
+    $html .= "</table>\n";
+
+    $html;
+}
+
 # row_state - the effective State of a result row for the summary mail:
 # the explicit backup_state if the caller set one ("skipped"), else derived
 # from the success boolean. A lock-skip (or a system-dir/allowlist skip) is
@@ -812,7 +938,7 @@ sub build_device_table_html {
     # otherwise paint with the table background, which was the faint seam under the
     # darker band. No cell borders and no table-level overlay colour are needed.
     my $html = "<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse: collapse;\">\n";
-    $html .= header_row_html('Device-ID', 'Date', 'Time', 'State', 'Size', 'Changes');
+    $html .= header_row_html('Device-ID', 'Date', 'Time', 'State', 'Size', 'Changes', 'Inventory');
 
     my $row_index = 0;
 
@@ -826,7 +952,8 @@ sub build_device_table_html {
 				iso_time($row->{ts}),
 				red_if_failed($state),
 				escape_html($size),
-				colour_state(escape_html($row->{changed})));
+				colour_state(escape_html($row->{changed})),
+				colour_inv(inv_state($row)));
     }
 
     $html .= "</table>\n";
@@ -917,8 +1044,12 @@ sub build_report_html {
     $html .= $class->build_stats_table_html($rows_ref);
 
     # A CSS margin on <table> isn't reliably honored by Outlook's
-    # Word-based rendering engine, so the gap between the two tables
+    # Word-based rendering engine, so the gap between the tables
     # is an explicit spacer block instead.
+    $html .= '<div style="height: 16px; line-height: 16px; font-size: 1px;">&nbsp;</div>' . "\n";
+
+    # SNMP-inventory counts, directly under the backup statistics.
+    $html .= $class->build_inv_stats_table_html($rows_ref);
     $html .= '<div style="height: 16px; line-height: 16px; font-size: 1px;">&nbsp;</div>' . "\n";
 
     $html .= $class->build_device_table_html($rows_ref);
@@ -1332,8 +1463,16 @@ sub build_report_text {
 	$out .= sprintf("  %-10s %d\r\n", $k, $changed_count{$k});
     }
 
+    # SNMP-inventory counts (all four states, matching build_inv_stats_table_html).
+    my %inv_count;
+    $inv_count{inv_state($_)}++ for @$rows_ref;
+    $out .= "\r\nInventory:\r\n";
+    for my $k ('success', 'failed', 'N/A', 'not due') {
+	$out .= sprintf("  %-10s %d\r\n", $k, $inv_count{$k} || 0);
+    }
+
     # Per-device table, auto-sized columns.
-    my @hdr = ('Device-ID', 'Date', 'Time', 'State', 'Size', 'Changes');
+    my @hdr = ('Device-ID', 'Date', 'Time', 'State', 'Size', 'Changes', 'Inventory');
     my @w   = map { length } @hdr;
     my @data;
     for my $row (@$rows_ref) {
@@ -1344,6 +1483,7 @@ sub build_report_text {
 	    row_state($row),
 	    defined($row->{size}) ? $row->{size} : '-',
 	    defined($row->{changed}) ? $row->{changed} : 'n/a',
+	    inv_state($row),
 	);
 	for my $i (0 .. $#d) { $w[$i] = length($d[$i]) if length($d[$i]) > $w[$i]; }
 	push @data, \@d;

@@ -1,6 +1,73 @@
 fetchconfig -- Changes
 ======================
 
+9.80
+====
+
++ SNMP device inventory: a new, model-independent collector reads
+  make/model/serial/OS (plus the device's own sysName/sysLocation/sysContact)
+  and stack members/FRUs over SNMP (ENTITY-MIB) during a backup and writes them
+  to the fetchconfig-web dashboard DB (web schema 2.15), the per-component
+  firmware/ROMMON rev to device_inventory_component.fw_version (web schema 2.16)
+  and sysName/sysLocation/sysContact to device_inventory (web schema 2.17) where
+  the DB has them, and the state + headline to the <dev_id>.status file. Off
+  unless an SNMP credential is set (snmp_community or snmp_write_community for
+  v1/v2c, snmp_user for v3); independent of the config backup and non-fatal
+  unless snmp_fatal=on. An agent that does not answer (wrong community, filtered,
+  or unreachable) fails fast after the first probe instead of timing out on
+  every request. A device that answers SNMP but has no ENTITY-MIB (e.g.
+  Hirschmann classic switches) still gets a one-line headline rather than
+  failing -- vendor/model/OS, optionally read from a vendor private MIB via new
+  "oid" lines in snmp-profiles.conf. An "override" directive in that file can
+  also REPLACE a wrong ENTITY value (e.g. a chipset codename a switch reports as
+  its model, like PLANET's "Luton26") from sysDescr or another OID; PLANET is
+  now a built-in vendor. A device that reports its identity on an ENTITY "stack"
+  entry rather than a chassis (e.g. Zyxel) has that stack entry promoted to a
+  chassis so its model/serial/OS are collected; Zyxel is a built-in vendor too.
+  Aruba WLAN (enterprise 14823: AOS-8 / Instant APs) is a built-in vendor; its model
+  comes from the sysDescr "(MODEL: nnn)" token. The "oid"/"override" rules now also
+  apply on the ENTITY-less headline path, and an "oid"/"override" OID ending in ".*"
+  is treated as a table-column base and walked (GETNEXT) to its first row, so a MAC-
+  or slot-indexed value needs no per-device index; the ".*" walk is opt-in per rule
+  and affects no other device. A new "members" directive records one chassis member
+  per row of a vendor private-MIB table - e.g. an Aruba virtual controller that lists
+  its member APs in AI-AP-MIB aiAPTable - so each member's serial/model/name is
+  inventoried like a stack member. String fields are read as text even when they
+  contain a non-ASCII byte (e.g. an AP name with an umlaut): the SNMP session
+  turns off OCTET STRING hex translation, so such a name is stored as its UTF-8
+  text rather than a "0x..." hex string. Many new snmp_* options control it (transport,
+  inventory depth, history, a per-device refresh interval -- see README).
+  backup_duration_sec now covers the config fetch plus the SNMP read. The
+  summary e-mail gains an Inventory column (per device: success/failed/N-A/
+  not-due) and an Inventory count table beside the backup statistics;
+  "not due" marks an snmp_inventory_interval skip.
++ tools/fc-snmp-inventory.pl: a read-only SNMP inventory probe. It drives the
+  same collector the backup uses, so it reports exactly what the inventory
+  feature would store (vendor/model/serial/OS, the per-member/part list), plus
+  the raw system group and ENTITY-MIB table and -- for onboarding a new device
+  or vendor -- which snmp-profiles.conf directive matched. See
+  README.fc-snmp-inventory.
++ pw: credential aliases: define a user/pass once (pw: user $U1 name /
+  pw: pass $P1 secret) and reference $U1/$P1 as the whole value of any
+  user=/pass=/enable=/snmp_* credential, like directory: tags; pass values are
+  masked. An unquoted $Name is an alias (an undefined or wrong-kind one is an
+  error, never a silent literal); to use a literal starting with $ or \, escape
+  the first character (\$ecret) or quote it ("$ecret"). A malformed pw: line
+  refuses the run, and new --list-credentials lists and validates the aliases.
++ procurve-snmp: its SNMP options moved to the snmp_* namespace
+  (community -> snmp_community, timeout -> snmp_timeout); update affected
+  device_table lines.
++ DB history outbox drain is now concurrency- and crash-safe without a lock, so
+  two fetchconfig runs may share a repository (e.g. overlapping cron jobs). Each
+  spool file is claimed by an atomic rename to <repo>/.db-<pid>-<ts>.draining.<pid>
+  before it is read, so exactly one drainer processes a file (no double-apply, and
+  no duplicate device_inventory_component rows); a failed drain renames the file
+  back and stops in order; a file orphaned by a crashed drainer is reclaimed on a
+  later run (dead-PID detection, with the db_max_outbox_days drop as backstop). No
+  config or schema change.
++ DEVELOPER-GUIDE: the "Call graph -- core <-> model <-> Abstract" diagram is now
+  a vertical layout that renders at full size (was shrunk to unreadable width).
+
 9.78
 ====
 

@@ -285,11 +285,38 @@ sub run {
         return 2;
     }
 
+    # 3b. Guard against moving files/DB rows under an in-flight backup of this
+    # device. A fetch releases the device-table lock after parsing, so it can be
+    # mid-backup of '$old' right now; when that device uses per-device locking it
+    # holds its own lock for the duration. Take that same lock (one non-blocking
+    # try); if a backup holds it, abort with a retryable message rather than race.
+    # Held through the mutation, released alongside the table lock. (lock=off
+    # devices keep the same same-device concurrency trade-off a fetch run has.)
+    my $dev_lock;
+    if (!$dry && $mod->dev_option_flag($tab, 'lock', 0)) {
+        my $lock_dir = $mod->lock_dir_resolve($tab,
+            fetchconfig::model::Detector->default_lock_dir);
+        if (defined($lock_dir)) {
+            my $lock_path = $mod->device_lock_path($lock_dir, $old);
+            my $got = $mod->acquire_device_lock($lock_path, $old, 0, 0);  # one try, no wait
+            if (defined($got) && $got eq 'locked') {
+                fetchconfig::Lock->release($lock);
+                $log->error("--rename-device-id: device '$old' is being backed up right now"
+                    . " (it holds its device lock) - try again once that run finishes");
+                return 2;
+            }
+            # a real filehandle: we hold it; undef (could not open) is tolerated,
+            # like Lock's 'nolock', so locking never blocks an otherwise-fine rename.
+            $dev_lock = $got if defined($got) && $got ne 'locked';
+        }
+    }
+
     my %did;
     my $locked_rc = eval {
         $class->_locked_phase($log, $old, $new, $file, $repo, $journal, $resuming, $dry, \%did);
     };
     my $perr = $@;
+    close($dev_lock) if $dev_lock;   # release the device lock (if taken)
     fetchconfig::Lock->release($lock);
 
     if (!defined($locked_rc)) {

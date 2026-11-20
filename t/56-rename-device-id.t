@@ -17,6 +17,8 @@ use strict;
 use warnings;
 use Test::More;
 use File::Temp qw(tempfile tempdir);
+use Fcntl qw(:flock O_RDWR O_CREAT);   # device-lock guard subtest
+use Digest::SHA qw(sha256_hex);        # device_lock_path keys on sha256(dev_id)
 
 require_ok('fetchconfig::Lock');
 require_ok('fetchconfig::History');
@@ -132,7 +134,7 @@ SKIP: {
         my $v = `$^X @{[ map { "-I$_" } @INC ]} fetchconfig.pl -v 2>/dev/null`;
         ($? == 0 && $v =~ /\d+\.\d+/) ? 1 : 0;
     };
-    skip "fetchconfig.pl model deps not loadable in this environment", 14 unless $have;
+    skip "fetchconfig.pl model deps not loadable in this environment", 18 unless $have;
 
     require File::Spec;
     my $run = sub {
@@ -192,6 +194,56 @@ SKIP: {
     # bad new id refused
     is($run->("-devices=$w/table", "--rename-device-id", "--old", "sw2", "--new", "bad/id"),
        2, 'invalid new id refused with exit 2');
+
+    # device-lock guard: a rename must not move files/DB rows under an in-flight
+    # backup of the same device. Hold that device's own lock (lock=on) in a
+    # separate process and prove the rename refuses (exit 2) and changes nothing.
+  SKIP: {
+        skip "fork not available", 4 if $^O eq 'MSWin32';
+
+        my $lrepo = "$w/lrepo";
+        my $ldir  = "$w/lockdir";
+        system("rm", "-rf", $lrepo, $ldir);
+        mkdir $lrepo; mkdir $ldir, 0700;
+        system("mkdir", "-p", "$lrepo/202601/20260115/lk1");
+        _spit("$lrepo/202601/20260115/lk1/lk1.run.20260115.120000", "v1\n");
+        _spit("$lrepo/lk1.status", "state=success\n");
+        _spit("$w/ltable",
+            "cisco-ios  lk1  1.1.1.9  user=u,pass=p,enable=p,repository=$lrepo,lock=on,lock_dir=$ldir,keep=10\n");
+
+        my $lockfile = "$ldir/" . sha256_hex('lk1') . ".lock";
+
+        pipe(my $ready_r, my $ready_w) or die "pipe: $!";
+        pipe(my $go_r,    my $go_w)    or die "pipe: $!";
+
+        my $holder = fork();
+        die "fork: $!" unless defined $holder;
+        if ($holder == 0) {
+            close $ready_r; close $go_w;
+            sysopen(my $fh, $lockfile, O_RDWR | O_CREAT, 0600) or exit 3;
+            flock($fh, LOCK_EX) or exit 4;         # simulate an in-flight backup
+            syswrite($ready_w, "ready\n");
+            my $go = <$go_r>;                        # block until the parent is done
+            flock($fh, LOCK_UN); close $fh;
+            exit 0;
+        }
+        close $ready_w; close $go_r;
+        my $ready = <$ready_r>;                      # wait until the lock is held
+
+        my $rc = $run->("-devices=$w/ltable", "--rename-device-id", "--old", "lk1", "--new", "core9");
+        is($rc, 2, 'rename refuses (exit 2) while the device backup lock is held');
+        ok(-d "$lrepo/202601/20260115/lk1", 'the old leaf dir was not moved');
+        my $lt = _slurp("$w/ltable");
+        ok($lt =~ /\blk1\b/ && $lt !~ /\bcore9\b/, 'the device table was not rewritten');
+
+        syswrite($go_w, "go\n");                     # let the holder release
+        waitpid($holder, 0);
+
+        # positive control: with the lock released the same rename now succeeds,
+        # proving the refusal above was the held lock and nothing else.
+        my $rc2 = $run->("-devices=$w/ltable", "--rename-device-id", "--old", "lk1", "--new", "core9");
+        is($rc2, 0, 'the same rename succeeds once the device lock is released');
+    }
 }
 
 done_testing();

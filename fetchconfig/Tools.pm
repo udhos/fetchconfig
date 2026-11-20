@@ -35,6 +35,45 @@ sub init {
     $me  = $arg{me};
 }
 
+# ---------------------------------------------------------------------------
+# Parallel work queue (-P): several worker processes pull device ids from ONE
+# shared pipe. A plain buffered read (<$fh>) is WRONG here - each reader's stdio
+# layer fills an ~8 KB buffer per read(), so one worker slurps a whole chunk
+# (hundreds of ids) while the others starve, and a chunk boundary can split a
+# line between two workers' reads, yielding a mangled id (a device silently
+# skipped or misprocessed). PIPE_BUF only makes the WRITER's "\n"-terminated
+# print atomic; it says nothing about multiple buffered readers. These two
+# helpers make the shared read correct:
+#   read_one_line() reads a single line UNBUFFERED - one byte at a time up to and
+#   including "\n", never past it - so the bytes left in the pipe are exactly the
+#   next whole line for the next reader;
+#   dequeue() serializes readers on an exclusive flock so only one reads at a
+#   time. Together with the writer's atomic per-line print, every reader gets
+#   whole, distinct lines. Returns the id (no newline), or undef when the queue
+#   is drained (the writer closed its end).
+# ---------------------------------------------------------------------------
+sub read_one_line {
+    my ($fh) = @_;
+    my $line = '';
+    while (1) {
+        my $c = '';
+        my $n = sysread($fh, $c, 1);
+        return undef unless defined $n;                      # read error
+        return (length($line) ? $line : undef) if $n == 0;   # EOF
+        last if $c eq "\n";
+        $line .= $c;
+    }
+    return $line;
+}
+
+sub dequeue {
+    my ($pipe_fh, $lock_fh) = @_;
+    flock($lock_fh, LOCK_EX) or return undef;
+    my $item = read_one_line($pipe_fh);
+    flock($lock_fh, LOCK_UN);
+    return $item;
+}
+
 #
 # Resolve $dev_id's model/repository (as recorded by a prior
 # lookup_only parse() call) and scan its repository for backups.

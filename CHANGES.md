@@ -65,6 +65,19 @@
   config or schema change.
 + DEVELOPER-GUIDE: the "Call graph -- core <-> model <-> Abstract" diagram is now
   a vertical layout that renders at full size (was shrunk to unreadable width).
++ -P parallel fetch: fixed the work distribution. Workers shared one pipe and read
+  it buffered, so one worker's stdio buffer could slurp a chunk (starving the rest)
+  and a chunk boundary could split a device id between two workers (a device
+  silently skipped or misprocessed) at fleet scale. Workers now pull one whole id
+  at a time under an exclusive lock, read unbuffered (fetchconfig::Tools::dequeue).
++ --rename-device-id no longer races an in-flight backup of the same device. A
+  fetch releases the device-table lock after parsing, so a rename could move a
+  device's files/.status and queue its DB rename while a backup of it was still
+  running. The rename now also takes that device's own backup lock (when lock=on)
+  and refuses (exit 2, retryable) if a backup holds it.
++ dump_config: a backup is no longer failed when make_path reports a benign error
+  for a shared date directory that a concurrent -P worker created at the same
+  instant (older File::Path); the directory existing is treated as success.
 
 ## 9.78
 

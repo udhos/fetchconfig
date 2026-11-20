@@ -1283,6 +1283,11 @@ sub model_by_label {
     return $model_table{$label};
 }
 
+# The default device-lock directory set by init() (<dir of fetchconfig.pl>/.lock).
+# Exposed so --rename-device-id can resolve a device's lock the same way a fetch
+# does, to avoid moving files under an in-flight backup.
+sub default_lock_dir { return $default_lock_dir; }
+
 sub init {
     my ($class, $log, $lock_dir) = @_;
 

@@ -1085,7 +1085,12 @@ sub dump_config {
 	# directory yourself if the host is shared.
 	make_path($dir_path, { error => \$mkdir_err });
 
-	if (@$mkdir_err) {
+	# Under -P two workers can create a shared parent (YYYYMM / YYYYMMDD) at the
+	# same instant; an older File::Path reports that benign EEXIST as an error
+	# even though the directory now exists. Treat "the directory is there" as
+	# success regardless of what make_path reported - only a genuinely absent
+	# directory is fatal.
+	if (@$mkdir_err && ! -d $dir_path) {
 	    my $detail = join('; ', map {
 		my ($failed_path, $mk_errmsg) = %$_;
 		"$failed_path: $mk_errmsg";

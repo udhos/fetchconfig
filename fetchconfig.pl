@@ -753,9 +753,16 @@ sub run_fetch_phase {
     require File::Temp;
     my $tmpdir = File::Temp::tempdir("fetchconfig-P-XXXXXX", TMPDIR => 1, CLEANUP => 1);
 
-    # Work distribution: the parent writes dev_ids into one shared pipe;
-    # workers read one line each. Each dev_id line is shorter than
-    # PIPE_BUF, so a line is read whole by exactly one worker.
+    # Lock file that serializes the shared work-queue readers (see below).
+    my $qlock = "$tmpdir/.workq.lock";
+    { open(my $lf, '>', $qlock) or die "create queue lock $qlock: $!"; close $lf; }
+
+    # Work distribution: the parent writes dev_ids into one shared pipe, one
+    # "\n"-terminated print each (one atomic write <= PIPE_BUF). Workers pull via
+    # fetchconfig::Tools::dequeue, which takes an exclusive flock and reads the
+    # line UNBUFFERED - so no worker's stdio buffer can slurp a chunk that starves
+    # the others or splits a dev_id across two readers. A plain <$work_r> shared by
+    # all workers would do exactly that at fleet scale.
     pipe(my $work_r, my $work_w) or die "pipe: $!";
     # Completion notifications: workers -> parent, one line per device
     # ("<dev_id>\t<status>").
@@ -774,8 +781,13 @@ sub run_fetch_phase {
 	    # ---- worker ----
 	    close $work_w; close $done_r;
 	    $SIG{INT} = $SIG{TERM} = 'DEFAULT';
-	    while (defined(my $dev_id = <$work_r>)) {
-		chomp $dev_id;
+	    # Open the queue lock ourselves: an inherited descriptor would share one
+	    # open-file-description (and thus one flock) across workers, defeating the
+	    # mutex. Read-write ("+<"): AIX emulates flock via fcntl, where an
+	    # exclusive lock needs a write-capable fd (Lock.pm opens its sidecar the
+	    # same way). Pull one whole dev_id at a time under that lock, unbuffered.
+	    open(my $qlock_fh, '+<', $qlock) or die "open queue lock $qlock: $!";
+	    while (defined(my $dev_id = fetchconfig::Tools::dequeue($work_r, $qlock_fh))) {
 		last if $dev_id eq '';
 		my $base = "$tmpdir/$dev_id";
 		# announce which device we hold (crash accounting), then
